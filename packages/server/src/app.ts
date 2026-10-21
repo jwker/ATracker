@@ -18,7 +18,7 @@ import {
 export interface ServerOptions {
   dbPath: string;
   pricingPath: string;
-  /** 前端静态目录，默认 packages/web/public */
+  /** 前端静态目录，默认 packages/web/dist（Vite 构建产物） */
   webDir?: string;
   port?: number;
   host?: string;
@@ -57,7 +57,7 @@ export class ATrackerServer {
       debounceMs: opts.debounceMs ?? 2000,
       pollMs: opts.pollMs ?? 5 * 60_000
     };
-    this.webDir = opts.webDir ?? join(dirname(fileURLToPath(import.meta.url)), '../../web/public');
+    this.webDir = opts.webDir ?? join(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
   }
 
   async start(): Promise<string> {
