@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker · 当日小票</title>
+<style>
+  :root[data-mode="light"] {
+    --desk:#cfd0cb; --paper:#f6f5f0; --ink:#17181a; --muted:#6c6e69; --faint:#a9aba5;
+    --rule:#c9cbc4; --accent:#bf3b22; --wash:#e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk:#0d0e0f; --paper:#1a1b1d; --ink:#ecebe4; --muted:#a2a39d; --faint:#6f716c;
+    --rule:#3b3c39; --accent:#ff6a4d; --wash:#232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    background:var(--desk); color:var(--ink);
+    font-family:"Courier New","SF Mono",Menlo,monospace;
+    font-size:12px; line-height:1.55; padding:22px 12px 46px;
+  }
+  button { font:inherit; color:inherit; }
+  .receipt {
+    max-width:600px; margin:0 auto; background:var(--paper);
+    padding:22px 30px 26px; position:relative;
+    box-shadow:0 18px 50px rgba(0,0,0,.16);
+  }
+  .receipt::before, .receipt::after {
+    content:""; position:absolute; left:0; right:0; height:10px; background-color:var(--paper);
+    background:
+      linear-gradient(135deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x,
+      linear-gradient(45deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x;
+  }
+  .receipt::before { top:-10px; }
+  .receipt::after { bottom:-10px; transform:rotate(180deg); }
+
+  .rhead { text-align:center; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  .rhead .name { font-size:24px; letter-spacing:.32em; font-weight:700; }
+  .rhead .sub { font-size:9px; letter-spacing:.26em; color:var(--muted); margin-top:3px; }
+  .rno { display:flex; justify-content:space-between; font-size:9.5px; color:var(--muted);
+         border-top:1px dashed var(--rule); border-bottom:1px dashed var(--rule); padding:4px 0; }
+  .toolbar { display:flex; align-items:center; gap:8px; margin:12px 0 2px; }
+  .ghost { border:1px dashed var(--rule); background:transparent; padding:3px 8px; font-size:9px;
+          letter-spacing:.1em; cursor:pointer; color:var(--muted); }
+  .ghost:hover { color:var(--ink); border-color:var(--ink); }
+  .sp { flex:1; }
+
+  .sec { margin-top:17px; }
+  .sec-h { display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--ink);
+           padding-bottom:3px; margin-bottom:9px; }
+  .sec-h b { font-size:10px; letter-spacing:.18em; }
+  .sec-h span { font-size:9px; color:var(--muted); }
+  .sec-h .r { margin-left:auto; font-size:9px; color:var(--muted); }
+
+  .big { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; }
+  .big .val { font-size:clamp(32px,7vw,54px); font-weight:700; letter-spacing:-.04em; line-height:1; }
+  .big .lab { font-size:9.5px; letter-spacing:.18em; color:var(--muted); margin-bottom:4px; }
+  .big .money { font-size:clamp(20px,3.4vw,30px); color:var(--accent); letter-spacing:-.03em; text-align:right; }
+  .big .tiny { font-size:9px; color:var(--muted); text-align:right; }
+
+  .cmp { margin-top:12px; }
+  .cmp .row { margin:7px 0; }
+  .cmp .lab { display:flex; justify-content:space-between; font-size:9.5px; color:var(--muted); }
+  .cmp .track { height:9px; background:var(--wash); margin-top:3px; }
+  .cmp .track i { display:block; height:9px; background:var(--t3); }
+  .cmp .lab .acc { color:var(--accent); }
+  .cmp .lab .sep { color:var(--faint); margin:0 5px; }
+  .cmpnote { font-size:8.5px; color:var(--faint); margin-top:3px; }
+
+  .kv { display:grid; grid-template-columns:1fr auto; gap:2px 10px; font-size:10px; margin-top:8px; }
+  .kv .k { color:var(--muted); }
+  .kv .v { text-align:right; font-variant-numeric:tabular-nums; }
+  /* 四桶。和首页一样用小票行：左边标签，中间点线，右边数字。 */
+  .leadrow { display:flex; align-items:baseline; gap:5px; padding:2px 0; }
+  .leadrow .nm { white-space:nowrap; }
+  .leadrow .dots { flex:1; border-bottom:1px dotted var(--faint); transform:translateY(-3px); }
+  .leadrow .v { white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+  /* 小时图。柱区固定高，柱子用百分比填，标签行固定 15px，和 React 版一致。 */
+  .hours { display:flex; align-items:flex-end; gap:2px; }
+  .hours .h { flex:1; display:flex; flex-direction:column; }
+  .hours .plot { display:flex; align-items:flex-end; height:96px; }
+  .hours .bar { width:100%; background:var(--t2); min-height:2px; }
+  .hours .h.peak .bar { background:var(--accent); }
+  .hours .h.empty .bar { background:var(--wash); }
+  .hours .h .lb { font-size:8px; color:var(--faint); height:15px; line-height:15px; margin-top:3px; text-align:center; }
+  .peak { display:flex; justify-content:space-between; font-size:9px; color:var(--muted); margin-top:6px; }
+  .matrix { width:100%; border-collapse:collapse; }
+  .matrix th, .matrix td { border:1px solid var(--rule); padding:4px 5px; font-size:9px; text-align:right; font-variant-numeric:tabular-nums; }
+  .matrix th { font-weight:700; color:var(--muted); border-bottom-color:var(--ink); }
+  .matrix th.l, .matrix td.l { text-align:left; }
+
+  table { width:100%; border-collapse:collapse; }
+  th, td { border-bottom:1px dotted var(--rule); padding:4px 3px; font-size:9.5px;
+           text-align:right; font-variant-numeric:tabular-nums; }
+  th { letter-spacing:.06em; color:var(--muted); border-bottom:1px solid var(--ink); font-weight:700; }
+  th.l, td.l { text-align:left; }
+  td .dot { display:inline-block; width:8px; height:8px; margin-right:5px; vertical-align:-1px; }
+  .meter { height:6px; background:var(--wash); margin-top:3px; }
+  .meter i { display:block; height:6px; background:var(--t2); }
+  .meter i.acc { background:var(--accent); }
+  .sess { border-bottom:1px dotted var(--rule); padding:6px 0; }
+  .sess .t { font-size:10px; }
+  .sess .t .ag { color:var(--muted); font-size:9px; }
+  .sess .m { font-size:9px; color:var(--muted); margin-top:2px; }
+  .sess .v { float:right; text-align:right; font-variant-numeric:tabular-nums; font-size:9.5px; }
+  .tag { border:1px solid var(--rule); padding:0 4px; font-size:8.5px; color:var(--muted); }
+  .tag.warn { border-color:var(--accent); color:var(--accent); }
+  .tear { text-align:center; font-size:8.5px; letter-spacing:.3em; color:var(--faint); margin:16px 0 8px; }
+  .foot { font-size:9px; color:var(--muted); }
+  .foot div { display:flex; justify-content:space-between; border-bottom:1px dotted var(--rule); padding:2px 0; }
+</style>
+</head>
+<body>
+<div class="receipt">
+  <div class="rhead">
+    <div class="name">ATRACKER</div>
+    <div class="sub">DAILY TOKEN RECEIPT · 当日小票</div>
+  </div>
+  <div class="rno">
+    <span id="no">NO. 00000000</span>
+    <span id="date">—</span>
+    <span id="cut">截至 —</span>
+  </div>
+
+  <div class="toolbar">
+    <button class="ghost" id="mode">切到深色</button>
+    <span class="sp"></span>
+    <span class="foot" id="live">本地库快照</span>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>今日合计</b><span>TOKENS</span><span class="r" id="events">—</span></div>
+    <div class="big">
+      <div>
+        <div class="lab">TOKEN 总量</div>
+        <div class="val" id="tokens">—</div>
+      </div>
+      <div>
+        <div class="money" id="cny">—</div>
+        <div class="tiny" id="usd">—</div>
+      </div>
+    </div>
+    <div class="cmp">
+      <div class="row">
+        <div class="lab"><span id="cmpL2">昨天同一时刻</span><span id="cmpV2" class="acc"></span></div>
+        <div class="track"><i id="cmpB2"></i></div>
+        <div class="cmpnote">满格是今天的总量</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>TOKEN 四桶</b><span id="bucketScope"></span><span class="r" id="bucketTotal"></span></div>
+    <div id="buckets"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>来源 × 模型</b><span>格内深浅表示量级</span><span class="r">点格下钻</span></div>
+    <table class="matrix" id="matrix"></table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>一天之内</b><span>BY HOUR</span><span class="r">Asia/Shanghai</span></div>
+    <div class="hours" id="hrs"></div>
+    <div class="peak" id="peak"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>按来源</b><span>BY AGENT</span></div>
+    <table id="agents"></table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>按模型</b><span>BY MODEL</span></div>
+    <table id="models"></table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>按目录</b><span>BY PROJECT</span></div>
+    <table id="dirs"></table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>今天的会话</b><span>SESSIONS</span><span class="r" id="sessN"></span></div>
+    <div id="sess"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>最贵的几次调用</b><span>TOP CALLS</span></div>
+    <table id="top"></table>
+  </div>
+
+  <div class="tear">— 存根 —</div>
+  <div class="foot" id="foot"></div>
+  <div class="foot" style="margin-top:10px; color:var(--faint);">
+    <div><span>口径</span><span>北京时间自然日 · 缓存命中单独计价</span></div>
+    <div><span>数据</span><span>本机本地库快照，不上传</span></div>
+  </div>
+</div>
+
+<script>
+const DATA = /*DATA*/;
+
+const AGENT_COLOR = { 'pi':'#c08a3e', 'claude-code':'#4aa38a', 'opencode':'#c76a6a', 'codex':'#4c7fd1', 'dsh':'#9a6fc4' };
+const BUCKETS = [
+  ['input','输入 / 未命中缓存'],
+  ['output','输出 / 含推理'],
+  ['cacheRead','缓存命中'],
+  ['cacheWrite','缓存写入 / 首次写入']
+];
+
+function n(x) {
+  return x.toLocaleString('zh-CN');
+}
+function money(x) {
+  return '¥' + x.toFixed(2);
+}
+function shortNum(x) {
+  if (x >= 1e8) return (x / 1e8).toFixed(2) + ' 亿';
+  if (x >= 1e4) return (x / 1e4).toFixed(1) + ' 万';
+  return n(x);
+}
+function dirName(p) {
+  if (!p) return '(未知目录)';
+  const parts = p.split('/').filter(Boolean);
+  return parts.slice(-2).join('/');
+}
+function el(id) { return document.getElementById(id); }
+
+function render() {
+  const d = DATA;
+  el('no').textContent = 'NO. ' + d.day.replace(/-/g, '');
+  el('date').textContent = d.day + ' ' + d.weekday;
+  el('cut').textContent = '截至 ' + d.cutoff;
+  el('events').textContent = d.today.events + ' 次调用';
+
+  el('tokens').textContent = shortNum(d.today.tokens);
+  el('cny').textContent = money(d.today.cny);
+  el('usd').textContent = '$' + d.today.usd.toFixed(2) + ' · 汇率 6.5';
+
+  // 对比只留一条：昨天同一时刻的量，条长以今天总量为满格，右边只放一个百分比。
+  const share = d.today.tokens ? d.prev.tokens / d.today.tokens : 0;
+  const ratio = d.prev.tokens ? d.today.tokens / d.prev.tokens : 0;
+  el('cmpL2').textContent = '昨天同一时刻（截至 ' + d.cutoff + '）';
+  el('cmpV2').innerHTML = shortNum(d.prev.tokens) +
+    '<span class="sep">/</span><span class="acc">' +
+    (ratio >= 1 ? '+' : '') + ((ratio - 1) * 100).toFixed(0) + '%</span>';
+  el('cmpB2').style.width = (share * 100) + '%';
+
+  const t = d.today;
+  const buckets = el('buckets');
+  buckets.innerHTML = '';
+  BUCKETS.forEach(([key, label]) => {
+    const row = document.createElement('div');
+    row.className = 'leadrow';
+    const name = key === 'cacheRead'
+      ? label + ' / ' + (t.tokens ? (t.cacheRead / t.tokens * 100).toFixed(1) : '0.0') + '%'
+      : label;
+    row.innerHTML = '<span class="nm">' + name + '</span><span class="dots"></span>' +
+      '<span class="v">' + shortNum(t[key]) + '</span>';
+    buckets.appendChild(row);
+  });
+  el('bucketScope').textContent = '当天 / 截至 ' + d.cutoff + ' / 思考 ' + shortNum(t.reasoning);
+  el('bucketTotal').textContent = shortNum(t.tokens);
+
+  const hrs = el('hrs'), peak = el('peak');
+  hrs.innerHTML = '';
+  const hmax = Math.max(...d.hours.map(h => h.tokens));
+  const peakHour = d.hours.slice().sort((a, b) => b.tokens - a.tokens)[0].hour;
+  for (let h = 0; h < 24; h++) {
+    const found = d.hours.find(x => parseInt(x.hour, 10) === h);
+    const div = document.createElement('div');
+    div.className = 'h' + (found && found.hour === peakHour ? ' peak' : '') + (!found ? ' empty' : '');
+    const plot = document.createElement('div');
+    plot.className = 'plot';
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.height = found ? Math.max(2, found.tokens / hmax * 100) + '%' : '1.5%';
+    bar.title = found ? h + ':00 · ' + shortNum(found.tokens) + ' · ' + money(found.cny) : h + ':00 无数据';
+    plot.appendChild(bar);
+    const lb = document.createElement('div');
+    lb.className = 'lb';
+    lb.textContent = h;
+    div.appendChild(plot);
+    div.appendChild(lb);
+    hrs.appendChild(div);
+  }
+  const top = d.hours.slice().sort((a, b) => b.tokens - a.tokens)[0];
+  peak.innerHTML = '<span>高峰 ' + top.hour + ':00 · ' + shortNum(top.tokens) + ' token</span>' +
+    '<span>活跃 ' + d.hours.length + ' 小时</span>';
+
+  // 来源 × 模型
+  const mx = el('matrix');
+  mx.innerHTML = '';
+  const mHead = document.createElement('tr');
+  mHead.innerHTML = '<th class="l">模型</th>' +
+    d.cross.agents.map(a => '<th>' + a.id + '</th>').join('') + '<th>合计</th>';
+  mx.appendChild(mHead);
+  d.cross.models.forEach(m => {
+    const tr = document.createElement('tr');
+    const total = d.cross.agents.reduce((s, a) => s + (d.cross.cells[a.id]?.[m.id] ?? 0), 0);
+    tr.innerHTML = '<td class="l">' + m.id + '</td>' +
+      d.cross.agents.map(a => {
+        const v = d.cross.cells[a.id]?.[m.id] ?? 0;
+        if (!v) return '<td>-</td>';
+        const t = Math.min(1, v / (d.cross.maxCell || 1));
+        const pct = Math.round(8 + t * 84);
+        return '<td style="background:color-mix(in srgb, var(--ink) ' + pct + '%, transparent);' +
+          (t > 0.55 ? 'color:var(--paper);' : '') + '">' + shortNum(v) + '</td>';
+      }).join('') +
+      '<td>' + shortNum(total) + '</td>';
+    mx.appendChild(tr);
+  });
+  const mFoot = document.createElement('tr');
+  mFoot.innerHTML = '<td class="l">合计</td>' +
+    d.cross.agents.map(a => '<td>' + shortNum(d.cross.rowTotal[a.id] ?? 0) + '</td>').join('') +
+    '<td>' + shortNum(d.cross.agents.reduce((s, a) => s + (d.cross.rowTotal[a.id] ?? 0), 0)) + '</td>';
+  mx.appendChild(mFoot);
+
+  const rows = (tableId, items, render) => {
+    const t2 = el(tableId);
+    t2.innerHTML = '';
+    const head = document.createElement('tr');
+    head.innerHTML = '<th class="l">项</th><th>token</th><th>成本</th><th>占比</th>';
+    t2.appendChild(head);
+    const totalTok = items.reduce((s, x) => s + x.tokens, 0) || 1;
+    items.forEach(it => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = render(it, totalTok);
+      t2.appendChild(tr);
+    });
+  };
+
+  rows('agents', d.agents, (a, total) =>
+    '<td class="l"><span class="dot" style="background:' + (AGENT_COLOR[a.agent] || '#888') + '"></span>' + a.agent +
+    '<div class="meter"><i style="width:' + (a.tokens / total * 100) + '%;background:' + (AGENT_COLOR[a.agent] || '#888') + '"></i></div></td>' +
+    '<td>' + shortNum(a.tokens) + '</td><td>' + money(a.cny) + '</td><td>' + (a.tokens / total * 100).toFixed(1) + '%</td>');
+
+  rows('models', d.models, (m, total) =>
+    '<td class="l">' + m.model + '<div class="meter"><i class="' + (m.noprice ? 'acc' : '') + '" style="width:' + (m.tokens / total * 100) + '%"></i></div></td>' +
+    '<td>' + shortNum(m.tokens) + '</td><td>' + (m.noprice ? '未定价' : money(m.cny)) + '</td><td>' + (m.tokens / total * 100).toFixed(1) + '%</td>');
+
+  rows('dirs', d.dirs, (x, total) =>
+    '<td class="l"><span class="dot" style="background:' + (d.colors[x.cwd] || '#888') + '"></span>' + dirName(x.cwd) +
+    '<div class="meter"><i style="width:' + (x.tokens / total * 100) + '%;background:' + (d.colors[x.cwd] || '#888') + '"></i></div></td>' +
+    '<td>' + shortNum(x.tokens) + '</td><td>' + money(x.cny) + '</td><td>' + x.sess + ' 会话</td>');
+
+  el('sessN').textContent = d.sessions.length + ' 个';
+  const sc = el('sess');
+  sc.innerHTML = '';
+  d.sessions.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'sess';
+    div.innerHTML =
+      '<div class="v">' + shortNum(s.tokens) + '<br>' + money(s.cny) + '</div>' +
+      '<div class="t">' + (s.title ? s.title : '(无标题)') +
+      ' <span class="ag">· ' + s.agent + ' · ' + s.n + ' 次</span></div>' +
+      '<div class="m"><span class="dot" style="background:' + (d.colors[s.cwd] || '#888') + '"></span>' + dirName(s.cwd) + '</div>' +
+      '<div class="m">' + s.first + ' → ' + s.last + ' · <span class="tag">' + s.session_id.slice(0, 8) + '</span></div>';
+    sc.appendChild(div);
+  });
+
+  const tp = el('top');
+  tp.innerHTML = '';
+  const th = document.createElement('tr');
+  th.innerHTML = '<th class="l">时间</th><th class="l">模型</th><th>token</th><th>成本</th>';
+  tp.appendChild(th);
+  d.top.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td class="l">' + t.time + '</td><td class="l">' + t.model +
+      '<div style="color:var(--muted);font-size:8.5px">' + t.agent + ' · ' + dirName(t.cwd) + '</div></td>' +
+      '<td>' + shortNum(t.i + t.o + t.cr) + '</td><td>' + money(t.cny) + '</td>';
+    tp.appendChild(tr);
+  });
+
+  el('foot').innerHTML =
+    '<div><span>扫描批次</span><span>' + d.batches.n + ' 次</span></div>' +
+    '<div><span>写入事件</span><span>' + n(d.batches.written) + '</span></div>' +
+    '<div><span>采集错误</span><span>' + (d.batches.err ? d.batches.err + ' 条' : '无') + '</span></div>' +
+    '<div><span>缺价事件</span><span>' + (d.unpriced ? d.unpriced + ' 条' : '无') + '</span></div>' +
+    '<div><span>快照时间</span><span>' + d.day + ' ' + d.cutoff + '</span></div>';
+}
+
+render();
+
+el('mode').onclick = () => {
+  const dark = document.documentElement.dataset.mode === 'dark';
+  document.documentElement.dataset.mode = dark ? 'light' : 'dark';
+  el('mode').textContent = dark ? '切到深色' : '切到浅色';
+};
+</script>
+</body>
+</html>

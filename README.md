@@ -9,9 +9,10 @@ npm install          # 安装 React/Vite 构建依赖；服务端运行时仍零
 npm run scan         # 扫描本机日志，写入 data/atracker.db
 npm run stats        # 看累计用量和成本
 npm run pricing      # 看哪些模型缺价
+node packages/cli/src/index.ts pricing reload   # 改了价格表后重算成本
 node packages/cli/src/index.ts doctor     # 看各来源是否可读
 node packages/cli/src/index.ts reconcile  # 拿各来源自带的汇总数据对账
-npm run serve       # 构建前端并起本地服务，默认 http://127.0.0.1:4178
+npm run serve       # 构建前端并起本地服务，默认端口 4178
 ```
 
 Node 24 以上直接跑服务端 TypeScript，不需要构建步骤。前端是 React + Vite，`npm run serve` 会先构建，构建产物在 `packages/web/dist`。
@@ -24,6 +25,7 @@ Node 24 以上直接跑服务端 TypeScript，不需要构建步骤。前端是 
 | `doc/TECH.md` | 技术设计。采集触发、价格兜底、聚合刷新、代码规则、接口 |
 | `doc/PLAN.md` | 规划。各来源核实结果、里程碑、待定项 |
 | `design/v3/` | 界面设计。`02-receipt.html` 是已定的主题 |
+| `design/today/` | 当日详情页设计稿 |
 | `design/wireframe/` | 功能线框原型 |
 
 ## 日常使用
@@ -34,6 +36,18 @@ npm run dev:web     # 只起 Vite 开发服务器，/api 代理到 4178
 npm run scan        # 手动扫一次（服务在跑的时候不用，文件变了会自动扫）
 node packages/cli/src/index.ts doctor    # 看各来源状态和缺价模型
 ```
+
+## 局域网访问
+
+`npm run serve` 默认监听 `0.0.0.0`，启动时会把本机在局域网里的地址打出来，例如 `http://192.168.3.25:4178`。同一个 Wi-Fi 下的手机、平板可以直接打开这个地址，页面和接口都能用，开发服务器 `npm run dev:web` 也是监听所有网卡的。
+
+只给本机看就加 `--host 127.0.0.1`：
+
+```bash
+node packages/cli/src/index.ts serve --host 127.0.0.1
+```
+
+注意这个服务是只读的，但里面是本机所有 agent 的用量和目录路径。同一局域网内的设备都能打开，不在可信网络里的时候用 `--host 127.0.0.1` 关掉。
 
 服务端会监听五个来源目录，文件变了自动采集；每 5 分钟兜底轮询一次，监听丢的事件由它补上。扫描是增量的，第二次只花 50 毫秒左右。
 
@@ -65,7 +79,7 @@ packages/
     src/
       main.tsx   挂载
       App.tsx    页面状态、取数、路由参数
-      views/     总账 / 会话 / 日志三个视图
+      views/     总账 / 今日 / 会话 / 日志四个视图
       components/ 页头等公共组件
       receipt.css 主题变量与组件样式（热敏小票）
     dist/        构建产物，服务端直接托管
@@ -92,11 +106,15 @@ data/atracker.db     运行时生成
 
 - 五个采集器都已实现并对账通过：codex 和 opencode 与来源自带的汇总精确一致，Claude Code、pi、DeepSeek Harness 在双方都覆盖的会话上全部一致。
 - 接口已完成：`atracker serve` 提供只读接口、文件监听自动扫描和 SSE 推送。清单见 `doc/TECH.md` 第 6.4 节。
-- 前端已完成：React 19 + Vite 实现，保留 `design/v3/02-receipt.html`（热敏小票）的样式，三个视图都接了真数据。
+- 前端已完成：React 19 + Vite 实现，保留 `design/v3/02-receipt.html`（热敏小票）的样式，总账、今日、会话、日志四个视图都接了真数据。会话页是两级菜单：上面一条目录，下面一条该目录下的会话，选中的目录写进 URL。
 
 ## 价格
 
 成本表 `config/pricing.json` 是唯一生效的定价来源，手写维护。`cache_write` 填 0 表示厂商不单独收缓存写入费，这部分 token 按输入价计费。
+
+价格表里带 `currency: CNY` 的条目（比如 MiniMax 全系）以表里的官方人民币价为准，不采用来源自报的美元成本：pi 的模型目录是按 6.694 的汇率从人民币价折出来的，再按 6.5 折回来会差 3% 左右。价格表用美元定价的模型仍然优先用来源自报的值。
+
+改完价格表跑 `node packages/cli/src/index.ts pricing reload`，它会按新价重算所有事件成本并重建聚合表，不用重新采集日志。
 
 ## 采集器的版本号
 

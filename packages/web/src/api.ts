@@ -5,6 +5,7 @@ import type {
   CalendarPayload,
   ConversationDetail,
   ConversationsPayload,
+  DayPayload,
   DoctorPayload,
   LogsPayload,
   MatrixPayload,
@@ -29,6 +30,7 @@ export const api = {
   calendar: (month: string) => request<CalendarPayload>('/api/calendar', { month }),
   aggregate: (from: string, to: string) => request<AggregatePayload>('/api/aggregate', { from, to }),
   matrix: (from: string, to: string) => request<MatrixPayload>('/api/matrix', { from, to }),
+  day: (date: string) => request<DayPayload>('/api/day', { date }),
   conversations: (filter: {
     dir?: string | null;
     agent?: string | null;

@@ -12,7 +12,7 @@ import { Pricing } from '../../core/src/pricing.ts';
 import { loadCollectors, runScan } from '../../collectors/src/scanner.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
-  logPayload, matrixPayload, totalPayload
+  dayPayload, logPayload, matrixPayload, totalPayload
 } from './queries.ts';
 
 export interface ServerOptions {
@@ -52,7 +52,7 @@ export class ATrackerServer {
     this.pricing = Pricing.load(opts.pricingPath);
     this.opts = {
       port: opts.port ?? 4178,
-      host: opts.host ?? '127.0.0.1',
+      host: opts.host ?? '0.0.0.0',
       watch: opts.watch ?? true,
       debounceMs: opts.debounceMs ?? 2000,
       pollMs: opts.pollMs ?? 5 * 60_000
@@ -218,6 +218,7 @@ export class ATrackerServer {
       if (p === '/api/calendar') return json(calendarPayload(this.repo, q.get('month') ?? new Date().toISOString().slice(0, 7)));
       if (p === '/api/aggregate') return json(aggregatePayload(this.repo, q.get('from'), q.get('to')));
       if (p === '/api/matrix') return json(matrixPayload(this.repo, q.get('from'), q.get('to')));
+      if (p === '/api/day') return json(dayPayload(this.repo, q.get('date')));
       if (p === '/api/conversations') {
         return json(conversationsPayload(this.repo, {
           dir: q.get('dir'), agent: q.get('agent'), model: q.get('model'), q: q.get('q')

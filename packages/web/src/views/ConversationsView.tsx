@@ -9,6 +9,9 @@ interface ConversationsViewProps {
   filter: ConversationFilter;
   q: string;
   unit: Unit;
+  /** 一级菜单选中的目录，null 表示全部目录 */
+  dirPath: string | null;
+  onSelectDir: (path: string | null) => void;
   onSelect: (id: string) => void;
   onSearch: (q: string) => void;
   onClear: () => void;
@@ -28,21 +31,65 @@ function LeadRow({ label, value }: { label: string; value: string }) {
 export function ConversationsView(props: ConversationsViewProps) {
   const { conv, detail, filter, q, unit } = props;
   const tok = (n: number) => fmtTok(n, unit);
-  const flat = conv.groups.flatMap(g => g.list);
-  const cur = flat.find(c => c.id === props.convId) ?? flat[0] ?? null;
 
-  let strip = (
+  // 一级：目录，按 token 降序
+  const groups = conv.groups;
+  const maxTotal = groups[0]?.total || 1;
+  const allTokens = groups.reduce((s, g) => s + g.total, 0);
+
+  // 二级：选中目录下的会话。没选目录就是全部。
+  const selected = props.dirPath ? groups.find(g => g.dir.path === props.dirPath) ?? null : null;
+  const list = selected ? selected.list : groups.flatMap(g => g.list);
+  const cur = list.find(c => c.id === props.convId) ?? list[0] ?? null;
+
+  const strip = (
     <div className="filterline">
-      <span>会话 {flat.length} 条</span>
-      {filter.dir && <span className="pill">{filter.dir}</span>}
+      <span>会话 {list.length} 条</span>
       {filter.agent && <span className="pill">{filter.agent}</span>}
       {filter.model && <span className="pill">{filter.model}</span>}
-      {(filter.dir || filter.agent || filter.model) && (
+      {(filter.agent || filter.model) && (
         <button className="clear" onClick={props.onClear}>清除筛选</button>
       )}
     </div>
   );
 
+  // 一级菜单：目录
+  const dirLevel = (
+    <div className="dirlvl">
+      <button
+        className={'d' + (props.dirPath === null ? ' on' : '')}
+        onClick={() => props.onSelectDir(null)}
+      >
+        <span className="nm">全部目录</span>
+        <span className="mt">{groups.length} 个目录 / {tok(allTokens)}</span>
+        <span className="bar"><i style={{ width: '100%' }} /></span>
+      </button>
+      {groups.map(g => {
+        const cost = g.list.reduce((s, x) => s + x.costCny, 0);
+        return (
+          <button
+            key={g.dir.path}
+            className={'d' + (g.dir.path === props.dirPath ? ' on' : '')}
+            onClick={() => props.onSelectDir(g.dir.path)}
+            title={g.dir.path}
+          >
+            <span className="nm">
+              <span className="sw" style={{ background: g.dir.color }} />
+              {g.dir.name}
+            </span>
+            <span className="mt">
+              {g.list.length} 个会话 / {tok(g.total)} / {money(cost)}
+            </span>
+            <span className="bar">
+              <i style={{ width: (g.total / maxTotal * 100).toFixed(1) + '%' }} />
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  // 二级菜单：会话
   const picker = (
     <>
       {strip}
@@ -52,23 +99,27 @@ export function ConversationsView(props: ConversationsViewProps) {
         value={q}
         onChange={e => props.onSearch(e.target.value)}
       />
+      {dirLevel}
+      <div className="sec-h" style={{ marginTop: 10 }}>
+        <b>{selected ? selected.dir.name : '全部会话'}</b>
+        <span>二级 / {list.length} 个会话</span>
+        <span className="r">{tok(list.reduce((s, c) => s + c.tokens, 0))}</span>
+      </div>
       <div className="pick">
-        {conv.groups.map(g =>
-          g.list.map(cv => (
-            <button
-              key={cv.id}
-              className="stub"
-              data-cv={cv.id}
-              onClick={() => props.onSelect(cv.id)}
-              aria-current={cv.id === cur?.id}
-            >
-              <span className="t">{cv.title || cv.sessionId.slice(0, 8)}</span>
-              <span className="m">
-                {cv.firstTs ? dayOf(cv.firstTs) : '—'} / {cv.agent} / {tok(cv.tokens)}
-              </span>
-            </button>
-          ))
-        )}
+        {list.map(cv => (
+          <button
+            key={cv.id}
+            className="stub"
+            data-cv={cv.id}
+            onClick={() => props.onSelect(cv.id)}
+            aria-current={cv.id === cur?.id}
+          >
+            <span className="t">{cv.title || cv.sessionId.slice(0, 8)}</span>
+            <span className="m">
+              {cv.firstTs ? dayOf(cv.firstTs) : '—'} / {cv.agent} / {tok(cv.tokens)}
+            </span>
+          </button>
+        ))}
       </div>
     </>
   );

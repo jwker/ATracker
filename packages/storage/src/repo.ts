@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { TZ_SQL_OFFSET } from '../../core/src/time.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -386,5 +387,90 @@ export class Repo {
       ? this.db.prepare(sql).all(sessionId, limit)
       : this.db.prepare(sql).all(sessionId)) as any[];
     return { events: rows.reverse(), total };
+  }
+
+  /* ---------- 单日查询。当日详情页用 ---------- */
+
+  /**
+   * 某一天的总量和四个桶。cutoff 给了就只算到该时刻为止，
+   * 用来和前一天同一时刻做同口径比较。
+   */
+  dayTotals(day: string, cutoff?: number): any {
+    const rows = this.db.prepare(
+      `SELECT COUNT(*) events,
+              COALESCE(SUM(input_tokens),0) input,
+              COALESCE(SUM(output_tokens),0) output,
+              COALESCE(SUM(cache_read_tokens),0) cache_read,
+              COALESCE(SUM(cache_write_tokens),0) cache_write,
+              COALESCE(SUM(reasoning_tokens),0) reasoning,
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) tokens,
+              COALESCE(SUM(cost_cny),0) cost_cny,
+              SUM(cost_cny IS NULL) unpriced
+       FROM usage_event WHERE local_day = ?${cutoff === undefined ? '' : ' AND ts <= ?'}`
+    ).get(...(cutoff === undefined ? [day] : [day, cutoff])) as any;
+    return {
+      events: rows.events ?? 0,
+      input: rows.input,
+      output: rows.output,
+      cacheRead: rows.cache_read,
+      cacheWrite: rows.cache_write,
+      reasoning: rows.reasoning,
+      tokens: rows.tokens,
+      costCny: rows.cost_cny,
+      unpriced: rows.unpriced ?? 0
+    };
+  }
+
+  /** 某一天按小时的用量。小时按本机时区折算。 */
+  hourly(day: string): any[] {
+    return this.db.prepare(
+      `SELECT CAST(strftime('%H', ts / 1000, 'unixepoch', ${TZ_SQL_OFFSET}) AS INTEGER) hour,
+              COUNT(*) events,
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) tokens,
+              COALESCE(SUM(cost_cny),0) cost_cny
+       FROM usage_event WHERE local_day = ?
+       GROUP BY hour ORDER BY hour`
+    ).all(day);
+  }
+
+  /** 某一天的来源 × 模型交叉表。 */
+  dayMatrix(day: string): any[] {
+    return this.db.prepare(
+      `SELECT agent, model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny
+       FROM agg_day_agent_model WHERE day = ?
+       GROUP BY agent, model`
+    ).all(day);
+  }
+
+  /** 某一天的会话列表，按 token 降序。 */
+  daySessions(day: string): any[] {
+    return this.db.prepare(
+      `SELECT agent, session_id, MIN(cwd) cwd, COUNT(*) events,
+              SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) tokens,
+              COALESCE(SUM(cost_cny),0) cost_cny,
+              MIN(ts) first_ts, MAX(ts) last_ts
+       FROM usage_event WHERE local_day = ?
+       GROUP BY agent, session_id ORDER BY tokens DESC`
+    ).all(day);
+  }
+
+  /** 某一天最贵的几次调用。没有成本的行排在后面。 */
+  dayTopCalls(day: string, limit = 8): any[] {
+    return this.db.prepare(
+      `SELECT ts, agent, model, provider, cwd,
+              input_tokens + output_tokens + cache_read_tokens + cache_write_tokens tokens,
+              cost_cny
+       FROM usage_event WHERE local_day = ?
+       ORDER BY cost_cny IS NULL, cost_cny DESC LIMIT ?`
+    ).all(day, limit);
+  }
+
+  /** 某一天的扫描批次统计。 */
+  dayBatches(day: string): any {
+    return this.db.prepare(
+      `SELECT COUNT(*) count, COALESCE(SUM(errors),0) errors,
+              COALESCE(SUM(events_written),0) events_written
+       FROM scan_batch WHERE date(started_at / 1000, 'unixepoch', ${TZ_SQL_OFFSET}) = ?`
+    ).get(day) as any;
   }
 }

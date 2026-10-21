@@ -2,6 +2,15 @@
 
 const TZ = 'Asia/Shanghai';
 
+/** 导出的时区名。SQL 里按固定偏移折算时用它对齐。 */
+export const TIME_ZONE = TZ;
+
+/**
+ * SQL 里用的固定偏移。Asia/Shanghai 全年 UTC+8，没有夏令时，
+ * 所以可以用固定偏移折算小时和自然日，不用逐行走 Intl。
+ */
+export const TZ_SQL_OFFSET = "'+8 hours'";
+
 /** 本机时区下的 YYYY-MM-DD。 */
 export function localDay(ts: number): string {
   const d = new Date(ts);

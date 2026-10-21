@@ -8,6 +8,24 @@ function colorMap(repo: Repo): Map<string, string> {
   return repo.dirColors();
 }
 import { RATE } from '../../core/src/money.ts';
+import { localDay } from '../../core/src/time.ts';
+
+const WEEKDAYS = '日一二三四五六';
+
+/** 星期几。date 是本机时区的自然日，直接按 UTC 取星期不会跨日。 */
+function weekdayOf(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return '星期' + WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+/** 日期加减一天。 */
+function shiftDay(date: string, delta: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const t = Date.UTC(y, m - 1, d) + delta * 86400000;
+  const nd = new Date(t);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${nd.getUTCFullYear()}-${p(nd.getUTCMonth() + 1)}-${p(nd.getUTCDate())}`;
+}
 
 export const AGENTS = [
   { id: 'codex', label: 'codex', color: '#4c7fd1' },
@@ -175,8 +193,10 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
     byDir.get(it.dir)!.push(it);
   }
 
+  // 目录颜色跟首页一致：用 dir_color 表里已经分配好的，没有才临时算。
+  const colors = colorMap(repo);
   const groups = [...byDir.entries()].map(([dir, its]) => ({
-    dir: { path: dir, name: dirName(dir), color: dirColor(dir) },
+    dir: { path: dir, name: dirName(dir), color: colors.get(dir) ?? dirColor(dir) },
     total: its.reduce((s, x) => s + x.tokens, 0),
     list: its.sort((a, b) => (b.lastTs ?? 0) - (a.lastTs ?? 0))
   })).sort((a, b) => b.total - a.total);
@@ -245,5 +265,123 @@ export function logPayload(repo: Repo, filter: { batch?: number | null; level?: 
       q: filter.q ?? undefined,
       limit: 1000
     })
+  };
+}
+
+/**
+ * 单日详情。date 是本机时区的自然日，今天的数据截至此刻。
+ * 和前一天比较时两边截到同一时刻，否则拿半天比一整天会夸大差距。
+ */
+export function dayPayload(repo: Repo, dateQ?: string | null) {
+  const today = localDay(Date.now());
+  const date = dateQ && /^\d{4}-\d{2}-\d{2}$/.test(dateQ) ? dateQ : today;
+  const isToday = date === today;
+
+  // 截止时刻。今天取现在，其他天取当天最后一条事件的时间。
+  const lastTs = (repo.db.prepare(
+    'SELECT MAX(ts) m FROM usage_event WHERE local_day = ?'
+  ).get(date) as any)?.m ?? null;
+  const cutoff = isToday ? Date.now() : (lastTs ?? Date.now());
+  const prevDate = shiftDay(date, -1);
+  // 固定 UTC+8，每一天等长，减一天就是前一天的同一时刻。
+  const prevCutoff = cutoff - 86400000;
+
+  const shape = (t: any) => ({
+    events: t.events,
+    tokens: t.tokens,
+    buckets: {
+      input: t.input,
+      output: t.output,
+      cacheRead: t.cacheRead,
+      cacheWrite: t.cacheWrite,
+      reasoning: t.reasoning
+    },
+    costCny: t.costCny,
+    costUsd: t.costCny / RATE,
+    unpriced: t.unpriced
+  });
+
+  const bd = repo.breakdown(date, date);
+  const colors = repo.dirColors();
+  const sessions = repo.daySessions(date);
+  const titles = repo.sessionTitles();
+  const sessionsPerDir = new Map<string, number>();
+  for (const s of sessions) {
+    sessionsPerDir.set(s.cwd, (sessionsPerDir.get(s.cwd) ?? 0) + 1);
+  }
+
+  // 来源 × 模型交叉表
+  const cells: Record<string, Record<string, number>> = {};
+  for (const a of AGENTS) cells[a.id] = {};
+  const colTotal: Record<string, number> = {};
+  const rowTotal: Record<string, number> = {};
+  let maxCell = 1;
+  for (const row of repo.dayMatrix(date)) {
+    if (!cells[row.agent]) cells[row.agent] = {};
+    cells[row.agent][row.model] = row.tokens;
+    colTotal[row.model] = (colTotal[row.model] ?? 0) + row.tokens;
+    rowTotal[row.agent] = (rowTotal[row.agent] ?? 0) + row.tokens;
+    if (row.tokens > maxCell) maxCell = row.tokens;
+  }
+  const models = Object.entries(colTotal)
+    .map(([id, tokens]) => ({ id, tokens }))
+    .sort((a, b) => b.tokens - a.tokens);
+
+  const hourFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+
+  return {
+    date,
+    weekday: weekdayOf(date),
+    isToday,
+    cutoff: hourFmt.format(new Date(cutoff)),
+    today: shape(repo.dayTotals(date, cutoff)),
+    prev: shape(repo.dayTotals(prevDate, prevCutoff)),
+    prevFull: shape(repo.dayTotals(prevDate)),
+    hourly: repo.hourly(date).map((h: any) => ({
+      hour: h.hour, events: h.events, tokens: h.tokens, costCny: h.cost_cny
+    })),
+    byAgent: repo.byAgent(date, date).map((a: any) => ({
+      agent: a.agent, tokens: a.tokens, costCny: a.cost_cny
+    })),
+    byModel: bd.byModel.map((m: any) => ({
+      model: m.model, vendor: m.vendor, tokens: m.tokens, costCny: m.cost_cny
+    })),
+    byDir: bd.byDir.map((d: any) => ({
+      path: d.dir,
+      name: dirName(d.dir),
+      tokens: d.tokens,
+      costCny: d.cost_cny,
+      sessions: sessionsPerDir.get(d.dir) ?? 0,
+      color: colors.get(d.dir) ?? dirColor(d.dir)
+    })),
+    matrix: { agents: AGENTS, models, cells, rowTotal, colTotal, maxCell },
+    sessions: sessions.map((s: any) => ({
+      id: `${s.agent}:${s.session_id}`,
+      agent: s.agent,
+      sessionId: s.session_id,
+      title: titles.get(`${s.agent}:${s.session_id}`)?.title ?? null,
+      dir: s.cwd,
+      dirName: dirName(s.cwd),
+      color: colors.get(s.cwd) ?? dirColor(s.cwd),
+      events: s.events,
+      tokens: s.tokens,
+      costCny: s.cost_cny,
+      firstTs: s.first_ts,
+      lastTs: s.last_ts
+    })),
+    topCalls: repo.dayTopCalls(date, 8).map((e: any) => ({
+      ts: e.ts,
+      time: hourFmt.format(new Date(e.ts)),
+      agent: e.agent,
+      model: e.model,
+      vendor: e.provider,
+      dir: e.cwd,
+      dirName: dirName(e.cwd),
+      tokens: e.tokens,
+      costCny: e.cost_cny
+    })),
+    batches: repo.dayBatches(date)
   };
 }

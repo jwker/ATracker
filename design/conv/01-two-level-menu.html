@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker · 会话页两级菜单 · 布局设计</title>
+<style>
+  :root[data-mode="light"] {
+    --desk:#cfd0cb; --paper:#f6f5f0; --ink:#17181a; --muted:#6c6e69; --faint:#a9aba5;
+    --rule:#c9cbc4; --accent:#bf3b22; --wash:#e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk:#0d0e0f; --paper:#1a1b1d; --ink:#ecebe4; --muted:#a2a39d; --faint:#6f716c;
+    --rule:#3b3c39; --accent:#ff6a4d; --wash:#232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    background:var(--desk); color:var(--ink);
+    font-family:"Courier New","SF Mono",Menlo,monospace;
+    font-size:12px; line-height:1.55; padding:22px 12px 46px;
+  }
+  button { font:inherit; color:inherit; }
+  .receipt {
+    max-width:820px; margin:0 auto; background:var(--paper);
+    padding:22px 30px 26px; position:relative;
+    box-shadow:0 18px 50px rgba(0,0,0,.16);
+  }
+  .receipt::before, .receipt::after {
+    content:""; position:absolute; left:0; right:0; height:10px; background-color:var(--paper);
+    background:
+      linear-gradient(135deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x,
+      linear-gradient(45deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x;
+  }
+  .receipt::before { top:-10px; }
+  .receipt::after { bottom:-10px; transform:rotate(180deg); }
+  .rhead { text-align:center; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  .rhead .name { font-size:24px; letter-spacing:.32em; font-weight:700; }
+  .rhead .sub { font-size:9px; letter-spacing:.26em; color:var(--muted); margin-top:3px; }
+  .toolbar { display:flex; align-items:center; gap:8px; margin:12px 0 2px; }
+  .ghost { border:1px dashed var(--rule); background:transparent; padding:3px 8px; font-size:9px;
+          letter-spacing:.1em; cursor:pointer; color:var(--muted); }
+  .ghost:hover { color:var(--ink); border-color:var(--ink); }
+  .sp { flex:1; }
+  .sec { margin-top:18px; }
+  .sec-h { display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--ink);
+           padding-bottom:3px; margin-bottom:9px; }
+  .sec-h b { font-size:10px; letter-spacing:.18em; }
+  .sec-h span { font-size:9px; color:var(--muted); }
+  .sec-h .r { margin-left:auto; font-size:9px; color:var(--muted); }
+  .note { font-size:9px; color:var(--muted); line-height:1.8; }
+  .note b { color:var(--ink); font-weight:700; }
+  .tag { border:1px solid var(--rule); padding:0 4px; font-size:8.5px; color:var(--muted); }
+  .tag.plan { border-color:var(--accent); color:var(--accent); }
+
+  /* ---------- 一级：目录 ---------- */
+  .dirlvl { display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; border-bottom:1px dashed var(--rule); }
+  .dirlvl .d {
+    flex:0 0 auto; border:1px solid var(--rule); background:transparent; padding:5px 9px 6px;
+    cursor:pointer; text-align:left; min-width:132px; position:relative;
+  }
+  .dirlvl .d:hover { border-color:var(--ink); }
+  .dirlvl .d.on { border-color:var(--ink); box-shadow:inset 3px 0 0 var(--accent); background:var(--wash); }
+  .dirlvl .d .nm { display:block; font-size:10px; white-space:nowrap; }
+  .dirlvl .d .nm .sw { display:inline-block; width:8px; height:8px; margin-right:5px; vertical-align:0; }
+  .dirlvl .d .mt { display:block; font-size:8.5px; color:var(--muted); margin-top:3px; font-variant-numeric:tabular-nums; }
+  .dirlvl .d .bar { height:3px; background:var(--wash); margin-top:4px; }
+  .dirlvl .d .bar i { display:block; height:3px; background:var(--t3); }
+  .dirlvl .d.on .bar i { background:var(--accent); }
+
+  /* ---------- 二级：会话 ---------- */
+  .pick { display:flex; gap:10px; overflow-x:auto; padding:3px 0 8px; }
+  .stub { flex:0 0 200px; border:1px solid var(--rule); background:transparent; text-align:left;
+          padding:7px 8px; cursor:pointer; }
+  .stub:hover { border-color:var(--ink); }
+  .stub[aria-current="true"] { border-color:var(--ink); box-shadow:inset 3px 0 0 var(--accent); }
+  .stub .t { font-size:9.5px; line-height:1.35; display:block; height:26px; overflow:hidden; }
+  .stub .m { font-size:8.5px; color:var(--muted); display:block; margin-top:5px; }
+  .stub .v { font-size:8.5px; color:var(--muted); display:block; margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  /* ---------- 方案 B：纵向树 ---------- */
+  .tree { border-top:1px solid var(--rule); }
+  .tree .row { display:flex; align-items:baseline; gap:8px; padding:4px 2px; border-bottom:1px dotted var(--rule); }
+  .tree .row .tw { width:12px; color:var(--muted); font-size:9px; }
+  .tree .row .nm { font-size:10px; }
+  .tree .row .nm .sw { display:inline-block; width:8px; height:8px; margin-right:5px; }
+  .tree .row .dots { flex:1; border-bottom:1px dotted var(--faint); transform:translateY(-3px); }
+  .tree .row .v { font-size:9px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .tree .row.on .nm { font-weight:700; }
+  .tree .kids { padding-left:20px; }
+  .tree .kids .krow { display:flex; gap:8px; align-items:baseline; padding:3px 2px; font-size:9.5px;
+                      border-bottom:1px dotted var(--rule); cursor:pointer; }
+  .tree .kids .krow:hover { color:var(--accent); }
+  .tree .kids .krow .dots { flex:1; border-bottom:1px dotted var(--faint); transform:translateY(-3px); }
+  .tree .kids .krow .v { color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width: 700px) { .split { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="receipt">
+  <div class="rhead">
+    <div class="name">ATRACKER</div>
+    <div class="sub">SESSION MENU · 会话页两级菜单</div>
+  </div>
+  <div class="toolbar">
+    <button class="ghost" id="mode">切到深色</button>
+    <span class="sp"></span>
+    <span class="tag plan">方案 A 横向两级</span>
+  </div>
+
+  <!-- ============ 方案 A ============ -->
+  <div class="sec">
+    <div class="sec-h">
+      <b>目录</b>
+      <span>一级 / <span id="dirCount"></span> 个目录</span>
+      <span class="r" id="dirTotal"></span>
+    </div>
+    <div class="dirlvl" id="dirs"></div>
+
+    <div class="sec-h" style="margin-top:12px">
+      <b id="subTitle">会话</b>
+      <span id="subMeta"></span>
+      <span class="r" id="subTotal"></span>
+    </div>
+    <div class="pick" id="sess"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>怎么用</b><span>NOTES</span></div>
+    <div class="note">
+      <b>一级是目录</b>，横向一排，按 token 降序，色块沿用 <code>dir_color</code> 表里已经分配好的颜色，颜色跟目录走不跟排名走。
+      第一项是「全部」，等价于现在这个不分目录的平铺列表。<br>
+      <b>二级是会话</b>，只列当前选中目录下的会话，样式沿用现有的小票条（<code>.stub</code>）。切目录时二级整体替换，不跳页。<br>
+      <b>联动</b>：如果已经按目录、来源或模型筛过（<code>dir</code> / <code>agent</code> / <code>model</code>），一级默认选中对应目录，
+      筛选条件变化时一级高亮跟着走；筛掉的目录在一级里灰掉但不隐藏。<br>
+      <b>排序</b>：一级按 token 降序；二级按最后活跃时间降序，同一个会话多次出现只留一条。
+    </div>
+  </div>
+
+  <!-- ============ 方案 B ============ -->
+  <div class="sec">
+    <div class="sec-h">
+      <b>方案 B 纵向树</b>
+      <span>备选</span>
+      <span class="r">目录展开后列会话</span>
+    </div>
+    <div class="tree" id="tree"></div>
+    <div class="note" style="margin-top:8px">
+      纵向树的好处是层级关系一眼可见，坏处是目录多了要滚动，会话条从横排变成竖排，和现在的「小票横条」差别较大。
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>数据</b><span>NOTES</span></div>
+    <div class="note">
+      页面里的数字来自本机 <code>data/atracker.db</code>，是真实目录和会话，只截取了前几个。
+      一级每一项的高度固定，二级每一项的高度也固定，切换目录时整块不会跳。
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {
+  dirs: [
+    { path:'/Users/jiangjiang/Documents/host/pi-observer', name:'host/pi-observer', color:'#c9503f', sessions:7, tokens:460744401, cost:7.10 },
+    { path:'/Users/jiangjiang/Documents/host/nut-md', name:'host/nut-md', color:'#4f9e5c', sessions:1, tokens:300489601, cost:24.05 },
+    { path:'/Users/jiangjiang/Documents/host/ATracker', name:'host/ATracker', color:'#5f7a92', sessions:5, tokens:264167651, cost:33.55 },
+    { path:'/Users/jiangjiang/Documents/host/fastapi-base', name:'host/fastapi-base', color:'#a06a4a', sessions:2, tokens:100812661, cost:16.50 },
+    { path:'/Users/jiangjiang/Documents/host/minimax-test-fast-cli', name:'host/minimax-test-fast-cli', color:'#c05c9e', sessions:7, tokens:67527144, cost:33.99 },
+    { path:'/Users/jiangjiang/Documents/host/my-git', name:'host/my-git', color:'#6f9f46', sessions:8, tokens:59431310, cost:4.29 },
+    { path:'/Users/jiangjiang/Documents/host/ATracker/design/v3', name:'design/v3', color:'#6a63cc', sessions:1, tokens:56909785, cost:7.49 },
+    { path:'/Users/jiangjiang/Documents/host/my-git/GitDuo', name:'my-git/GitDuo', color:'#c9536f', sessions:1, tokens:51521278, cost:30.94 }
+  ],
+  sessions: {
+    'host/ATracker': [
+      { id:'pi:01a15942', title:'(无标题)', agent:'pi', day:'2026-10-19', tok:196853909, cost:27.56 },
+      { id:'pi:', title:'(无标题)', agent:'pi', day:'2026-10-21', tok:47046858, cost:4.86 },
+      { id:'opencode:ses_ea2dd', title:'Git 工作区状态检查', agent:'opencode', day:'2026-10-21', tok:12450113, cost:0 },
+      { id:'claude-code:9249f317', title:'可用的前端页面设计技能', agent:'claude-code', day:'2026-10-21', tok:7781872, cost:1.03 },
+      { id:'claude-code:381a1e4c', title:'(无标题)', agent:'claude-code', day:'2026-10-21', tok:34899, cost:0.10 }
+    ],
+    'host/pi-observer': [
+      { id:'opencode:ses_ead7ae', title:'pi-data-dashboard 重命名建议', agent:'opencode', day:'2026-10-21', tok:377299112, cost:1.74 },
+      { id:'pi:01a1545a', title:'(无标题)', agent:'pi', day:'2026-10-18', tok:77949552, cost:5.12 },
+      { id:'opencode:ses_eac05e', title:'仅答疑，不改代码', agent:'opencode', day:'2026-10-21', tok:5392843, cost:0.19 },
+      { id:'opencode:ses_ea7c11a', title:'关闭 4173 端口服务', agent:'opencode', day:'2026-10-20', tok:64208, cost:0 },
+      { id:'pi:01a158e9', title:'(无标题)', agent:'pi', day:'2026-10-19', tok:23258, cost:0 }
+    ],
+    'host/nut-md': [
+      { id:'dsh:session-9060cfc8', title:'你好', agent:'dsh', day:'2026-08-15', tok:300489601, cost:24.05 }
+    ],
+    'host/fastapi-base': [
+      { id:'dsh:session-56604911', title:'你好', agent:'dsh', day:'2026-08-18', tok:82145522, cost:7.24 },
+      { id:'dsh:session-fcfc424a', title:'你好', agent:'dsh', day:'2026-08-18', tok:18667139, cost:9.26 }
+    ]
+  }
+};
+
+function n(x) {
+  if (x >= 1e8) return (x / 1e8).toFixed(2) + ' 亿';
+  if (x >= 1e4) return (x / 1e4).toFixed(1) + ' 万';
+  return String(x);
+}
+function money(x) { return '¥' + x.toFixed(2); }
+function el(id) { return document.getElementById(id); }
+
+let cur = 'host/ATracker';
+
+function renderDirs() {
+  const box = el('dirs');
+  box.innerHTML = '';
+  const totalTok = DATA.dirs.reduce((s, d) => s + d.tokens, 0);
+  const max = Math.max(...DATA.dirs.map(d => d.tokens));
+
+  const all = document.createElement('button');
+  all.className = 'd' + (cur === '' ? ' on' : '');
+  all.innerHTML = '<span class="nm">全部目录</span>' +
+    '<span class="mt">' + DATA.dirs.length + ' 个目录 / ' + n(totalTok) + '</span>' +
+    '<span class="bar"><i style="width:100%"></i></span>';
+  all.onclick = () => { cur = ''; render(); };
+  box.appendChild(all);
+
+  for (const d of DATA.dirs) {
+    const b = document.createElement('button');
+    b.className = 'd' + (cur === d.name ? ' on' : '');
+    b.innerHTML = '<span class="nm"><span class="sw" style="background:' + d.color + '"></span>' + d.name + '</span>' +
+      '<span class="mt">' + d.sessions + ' 个会话 / ' + n(d.tokens) + ' / ' + money(d.cost) + '</span>' +
+      '<span class="bar"><i style="width:' + (d.tokens / max * 100).toFixed(1) + '%"></i></span>';
+    b.onclick = () => { cur = d.name; render(); };
+    box.appendChild(b);
+  }
+
+  el('dirCount').textContent = DATA.dirs.length;
+  el('dirTotal').textContent = n(totalTok);
+}
+
+function renderSessions() {
+  const box = el('sess');
+  box.innerHTML = '';
+  const list = cur === '' ? Object.values(DATA.sessions).flat() : (DATA.sessions[cur] || []);
+  const tok = list.reduce((s, x) => s + x.tok, 0);
+  const cost = list.reduce((s, x) => s + x.cost, 0);
+
+  el('subTitle').textContent = cur === '' ? '全部会话' : cur;
+  el('subMeta').textContent = list.length + ' 个会话';
+  el('subTotal').textContent = n(tok) + ' / ' + money(cost);
+
+  for (const s of list) {
+    const b = document.createElement('button');
+    b.className = 'stub';
+    b.setAttribute('aria-current', s.id === 'pi:01a15942' ? 'true' : 'false');
+    b.innerHTML = '<span class="t">' + (s.title || '(无标题)') + '</span>' +
+      '<span class="m">' + s.day + ' / ' + s.agent + '</span>' +
+      '<span class="v">' + n(s.tok) + ' / ' + money(s.cost) + '</span>';
+    box.appendChild(b);
+  }
+}
+
+function renderTree() {
+  const box = el('tree');
+  box.innerHTML = '';
+  for (const d of DATA.dirs) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span class="tw">▾</span>' +
+      '<span class="nm"><span class="sw" style="background:' + d.color + '"></span>' + d.name + '</span>' +
+      '<span class="dots"></span>' +
+      '<span class="v">' + d.sessions + ' 个会话 / ' + n(d.tokens) + ' / ' + money(d.cost) + '</span>';
+    box.appendChild(row);
+
+    const kids = document.createElement('div');
+    kids.className = 'kids';
+    for (const s of (DATA.sessions[d.name] || [])) {
+      const k = document.createElement('div');
+      k.className = 'krow';
+      k.innerHTML = '<span>↳ ' + (s.title || '(无标题)') + '</span>' +
+        '<span class="dots"></span>' +
+        '<span class="v">' + s.agent + ' / ' + n(s.tok) + '</span>';
+      kids.appendChild(k);
+    }
+    box.appendChild(kids);
+  }
+}
+
+function render() {
+  renderDirs();
+  renderSessions();
+}
+
+render();
+renderTree();
+
+el('mode').onclick = () => {
+  const dark = document.documentElement.dataset.mode === 'dark';
+  document.documentElement.dataset.mode = dark ? 'light' : 'dark';
+  el('mode').textContent = dark ? '切到深色' : '切到浅色';
+};
+</script>
+</body>
+</html>
