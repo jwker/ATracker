@@ -139,7 +139,7 @@ const TK = {
     const models = a.byModel.map(m => ({ id: m.model, v: m.tokens }));
     const dirs = a.byDir
       .filter(d => !S.offDirs.includes(d.path))
-      .map((d, i) => ({ name: d.name, path: d.path, slot: i, v: d.tokens }));
+      .map((d, i) => ({ name: d.name, path: d.path, slot: i, v: d.tokens, color: d.color }));
     return {
       agg: { total: a.total, buckets: a.buckets },
       comp, models, dirs,
@@ -166,7 +166,11 @@ const TK = {
   },
 
   legend() {
-    return { ranked: (D.cal?.dirs ?? []).map((d, i) => ({ path: d.path, name: d.name, v: d.tokens, slot: i })) };
+    return {
+      ranked: (D.cal?.dirs ?? []).map((d, i) => ({
+        path: d.path, name: d.name, v: d.tokens, slot: i, color: d.color
+      }))
+    };
   },
 
   dayItems(k) {
@@ -174,7 +178,9 @@ const TK = {
     if (!day) return [];
     const ranked = TK.legend().ranked.filter(r => !S.offDirs.includes(r.path) && (day.byDir[r.path] ?? 0) > 0);
     const sum = ranked.reduce((s, r) => s + day.byDir[r.path], 0) || 1;
-    return ranked.map(r => ({ slot: r.slot, v: day.byDir[r.path], pct: (day.byDir[r.path] / sum) * 100 }));
+    return ranked.map(r => ({
+      slot: r.slot, v: day.byDir[r.path], pct: (day.byDir[r.path] / sum) * 100, color: r.color
+    }));
   },
 
   convGroups() {
@@ -339,9 +345,9 @@ function homeView() {
     '<div class="sec"><div class="sec-h"><b>目录用量</b><span>点一行查看该目录的会话</span></div><div class="bars">' +
       d.dirs.map(x =>
         '<div class="row" data-dir="' + esc(x.path) + '" style="cursor:pointer"><div class="top">' +
-        '<span>' + esc(x.name) + '</span><span class="dots"></span>' +
+        '<span><span class="dot" style="background:' + (x.color || 'var(--ink)') + '"></span>' + esc(x.name) + '</span><span class="dots"></span>' +
         '<span class="v">' + fmtPct(x.v / (d.agg.total || 1)) + ' / ' + TK.fmtTok(x.v) + '</span></div>' +
-        '<div class="track"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%;background:' + tone(x.slot) + '"></i></div></div>').join('') +
+        '<div class="track"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%;background:' + (x.color || tone(x.slot)) + '"></i></div></div>').join('') +
     '</div></div>' +
     '<div class="sec"><div class="sec-h"><b>NOTE</b><span>口径</span></div>' +
       '<div style="font-size:9.5px;color:var(--muted)">四桶合计等于该范围的 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。价格来自 config/pricing.json，人民币按 6.5 折算。</div></div>';
@@ -361,7 +367,7 @@ function calendar() {
     const items = TK.dayItems(k);
     cells += '<button class="cell' + (isSel ? ' sel' : (inRange ? ' inrange' : '')) + '" data-day="' + k + '" title="' + k + (rec ? ' / ' + TK.fmtTok(rec.total) : ' / 无记录') + '">' +
       '<span class="d">' + day + '</span><span class="v">' + (rec ? TK.fmtTok(rec.total) : '--') + '</span>' +
-      '<span class="stack">' + items.map(x => '<i style="width:' + x.pct.toFixed(2) + '%;--c:' + tone(x.slot) + '"></i>').join('') + '</span></button>';
+      '<span class="stack">' + items.map(x => '<i style="width:' + x.pct.toFixed(2) + '%;--c:' + (x.color || tone(x.slot)) + '"></i>').join('') + '</span></button>';
   }
   return '<div class="sec"><div class="sec-h"><b>月历</b><span>' + meta.y + ' 年 ' + meta.m + ' 月 / ' + meta.dim + ' 天</span><span class="r">' + TK.scopeText() + '</span></div>' +
     '<div class="cal-tools"><button class="ghost" id="prev">PREV</button><button class="ghost" id="next">NEXT</button>' +
@@ -369,7 +375,7 @@ function calendar() {
     '<div class="legend">' + lg.ranked.map(x => {
       const off = S.offDirs.indexOf(x.path) >= 0;
       return '<button class="lg" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '">' +
-        '<span class="sw" style="--c:' + tone(x.slot) + '"></span>' + esc(x.name) + '<span class="n">' + TK.fmtTok(x.v) + '</span></button>';
+        '<span class="sw" style="--c:' + (x.color || tone(x.slot)) + '"></span>' + esc(x.name) + '<span class="n">' + TK.fmtTok(x.v) + '</span></button>';
     }).join('') + '</div>' +
     '<div class="wk">' + ['一', '二', '三', '四', '五', '六', '日'].map(w => '<div>' + w + '</div>').join('') + '</div>' +
     '<div class="cal">' + cells + '</div></div>';

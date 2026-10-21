@@ -2,6 +2,11 @@
 import { basename, dirname } from 'node:path';
 import type { Repo } from '../../storage/src/repo.ts';
 import { dirColor } from '../../core/src/palette.ts';
+
+/** 目录配色表。表里有就用表里的，没有就临时算一个。 */
+function colorMap(repo: Repo): Map<string, string> {
+  return repo.dirColors();
+}
 import { RATE } from '../../core/src/money.ts';
 
 export const AGENTS = [
@@ -49,6 +54,7 @@ export function totalPayload(repo: Repo) {
 
 export function calendarPayload(repo: Repo, month: string) {
   const { days, legend } = repo.calendar(month);
+  const colors = colorMap(repo);
   return {
     month,
     days: days.map(d => ({ day: d.day, total: d.tokens, costCny: d.cost_cny, byDir: d.byDir ?? {} })),
@@ -56,7 +62,7 @@ export function calendarPayload(repo: Repo, month: string) {
       path: d.dir,
       name: dirName(d.dir),
       tokens: d.tokens,
-      color: dirColor(d.dir)
+      color: colors.get(d.dir) ?? dirColor(d.dir)
     }))
   };
 }
@@ -66,6 +72,7 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
   const bd = repo.breakdown(from, to);
   const byAgent = repo.byAgent(from, to);
 
+  const colors = colorMap(repo);
   const cells: Record<string, Record<string, number>> = {};
   for (const a of AGENTS) {
     cells[a.id] = {};
@@ -87,7 +94,8 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
       cacheWrite: totals.cache_write ?? 0
     },
     byDir: bd.byDir.map((d: any) => ({
-      path: d.dir, name: dirName(d.dir), tokens: d.tokens, costCny: d.cost_cny, color: dirColor(d.dir)
+      path: d.dir, name: dirName(d.dir), tokens: d.tokens, costCny: d.cost_cny,
+      color: colors.get(d.dir) ?? dirColor(d.dir)
     })),
     byModel: bd.byModel.map((m: any) => ({
       model: m.model, vendor: m.vendor, tokens: m.tokens, costCny: m.cost_cny
