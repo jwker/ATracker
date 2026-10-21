@@ -73,8 +73,22 @@
   .sec-h b { font-size: 10px; letter-spacing: .18em; font-weight: 700; }
   .sec-h span { font-size: 9px; color: var(--muted); letter-spacing: .08em; }
   .sec-h .r { margin-left: auto; font-size: 9px; color: var(--muted); }
+  /* 当前范围。一块强调色底的标签，天数跟在后面。写在 .sec-h 下是为了压过 .sec-h span 的小灰字。 */
+  .sec-h .scope { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .sec-h .scope-pill { display: inline-block; font-size: 10px; background: var(--accent); color: var(--paper); padding: 1px 7px; letter-spacing: .02em; }
+  .sec-h .scope-pill span { color: inherit; }
+  .sec-h .scope-pill .arrow { opacity: .7; margin: 0 4px; }
+  .sec-h .scope-badge { display: inline-block; font-size: 8.5px; border: 1px solid var(--rule); color: var(--muted); padding: 0 4px; }
+  .sec-h .scope-x { background: none; border: 0; padding: 0; font-size: 9px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+  .sec-h .scope-x:hover { color: var(--accent); }
   .total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 4px; }
   .total-line .lab { font-size: 9.5px; letter-spacing: .18em; color: var(--muted); }
+  /* 范围 / 总量 分段切换器 */
+  .total-line .seg { margin-left: 8px; display: inline-flex; vertical-align: 1px; }
+  .total-line .seg button { border: 1px solid var(--rule); background: transparent; padding: 0 7px; font-size: 9.5px; line-height: 1.6; letter-spacing: .04em; color: var(--muted); cursor: pointer; }
+  .total-line .seg button + button { border-left: 0; }
+  .total-line .seg button.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .total-line .seg button:hover:not(.on) { color: var(--ink); border-color: var(--ink); }
   .total-line .val { font-size: clamp(34px, 6vw, 58px); font-weight: 700; letter-spacing: -.04em; line-height: 1; }
   .total-line .side { text-align: right; }
   .total-line .money { font-size: clamp(22px, 3.4vw, 34px); color: var(--accent); letter-spacing: -.03em; }
@@ -88,11 +102,10 @@
   .cal-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .cal-tools .scope { font-size: 10px; letter-spacing: .06em; }
   .legend { display: flex; flex-wrap: wrap; gap: 3px 13px; margin: 8px 0 9px; }
-  .lg { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; font-size: 9.5px; cursor: pointer; color: var(--ink); }
+  .lg { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; font-size: 9.5px; color: var(--ink); }
   .lg .sw { width: 10px; height: 10px; background: var(--c); border: 1px solid var(--paper); }
   .lg .n { color: var(--muted); margin-left: 3px; }
-  .lg[aria-pressed="false"] { color: var(--faint); text-decoration: line-through; }
-  .lg[aria-pressed="false"] .sw { opacity: .25; }
+  .legend-cap { font-size: 8.5px; letter-spacing: .14em; color: var(--muted); margin-right: 2px; }
   .wk, .cal { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 3px; }
   .wk div { font-size: 8.5px; letter-spacing: .18em; color: var(--muted); text-align: center; padding-bottom: 2px; }
   .wk div:nth-child(6), .wk div:nth-child(7) { color: var(--accent); }

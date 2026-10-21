@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker · 范围切换按钮 · 方案</title>
+<style>
+  :root[data-mode="light"] {
+    --desk:#cfd0cb; --paper:#f6f5f0; --ink:#17181a; --muted:#6c6e69; --faint:#a9aba5;
+    --rule:#c9cbc4; --accent:#bf3b22; --wash:#e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk:#0d0e0f; --paper:#1a1b1d; --ink:#ecebe4; --muted:#a2a39d; --faint:#6f716c;
+    --rule:#3b3c39; --accent:#ff6a4d; --wash:#232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    background:var(--desk); color:var(--ink);
+    font-family:"Courier New","SF Mono",Menlo,monospace;
+    font-size:12px; line-height:1.55; padding:22px 12px 46px;
+  }
+  button { font:inherit; color:inherit; }
+  .sheet { max-width:760px; margin:0 auto; background:var(--paper); padding:22px 28px 28px;
+           box-shadow:0 18px 50px rgba(0,0,0,.16); }
+  .rhead { text-align:center; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  .rhead .name { font-size:22px; letter-spacing:.30em; font-weight:700; }
+  .rhead .sub { font-size:9px; letter-spacing:.24em; color:var(--muted); margin-top:3px; }
+  .toolbar { display:flex; gap:8px; align-items:center; margin:12px 0 0; }
+  .ghost { border:1px dashed var(--rule); background:transparent; padding:3px 8px; font-size:9px;
+          letter-spacing:.1em; cursor:pointer; color:var(--muted); }
+  .ghost:hover { color:var(--ink); border-color:var(--ink); }
+  .sp { flex:1; }
+
+  .variant { margin-top:22px; }
+  .vhead { display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--ink);
+           padding-bottom:3px; margin-bottom:9px; }
+  .vhead b { font-size:11px; letter-spacing:.12em; }
+  .vhead span { font-size:9px; color:var(--muted); }
+  .vnote { font-size:9px; color:var(--muted); line-height:1.8; margin-top:8px; }
+  .vnote b { color:var(--ink); font-weight:700; }
+  .vnote code { color:var(--ink); }
+
+  /* ---------- 顶部大字那一块，和 packages/web/src/receipt.css 一致 ---------- */
+  .total-line { display:flex; justify-content:space-between; align-items:baseline; gap:16px; margin-top:4px; }
+  .total-line .lab { font-size:9.5px; letter-spacing:.18em; color:var(--muted); }
+  .total-line .val { font-size:clamp(34px,6vw,58px); font-weight:700; letter-spacing:-.04em; line-height:1; }
+  .total-line .side { text-align:right; }
+  .total-line .money { font-size:clamp(22px,3.4vw,34px); color:var(--accent); letter-spacing:-.03em; }
+  .total-line .tiny { font-size:9px; color:var(--muted); letter-spacing:.04em; }
+  .state { display:flex; align-items:baseline; gap:18px; margin:2px 0 10px; }
+  .state .tag { font-size:8.5px; letter-spacing:.14em; color:var(--faint); border:1px solid var(--rule); padding:0 4px; }
+
+  /* ================= 方案 0：现在的 ================= */
+  .v0 .swap { margin-left:8px; border:1px solid var(--ink); background:transparent; padding:1px 7px;
+              font-size:13px; line-height:1.4; letter-spacing:0; color:var(--ink); cursor:pointer; vertical-align:1px; }
+  .v0 .swap:hover { background:var(--accent); border-color:var(--accent); color:var(--paper); }
+
+  /* ================= 方案 A：长条图标 ================= */
+  .vA .swap { margin-left:8px; border:1px solid var(--ink); background:transparent; padding:0 16px;
+              min-width:52px; font-size:10px; line-height:1.55; letter-spacing:.2em; color:var(--ink); cursor:pointer; vertical-align:1px; }
+  .vA .swap:hover { background:var(--accent); border-color:var(--accent); color:var(--paper); }
+
+  /* ================= 方案 B：图标 + 当前口径 ================= */
+  .vB .swap { margin-left:8px; border:1px solid var(--rule); background:transparent; padding:0 6px;
+              font-size:9.5px; line-height:1.6; letter-spacing:.04em; color:var(--ink); cursor:pointer; vertical-align:1px;
+              display:inline-flex; align-items:center; gap:4px; }
+  .vB .swap .ic { font-size:11px; color:var(--muted); }
+  .vB .swap:hover { border-color:var(--ink); }
+  .vB .swap:hover .ic { color:var(--accent); }
+
+  /* ================= 方案 C：图标 + 要切到什么 ================= */
+  .vC .swap { margin-left:8px; border:1px solid var(--rule); background:transparent; padding:0 6px;
+              font-size:9.5px; line-height:1.6; letter-spacing:.04em; color:var(--muted); cursor:pointer; vertical-align:1px;
+              display:inline-flex; align-items:center; gap:4px; }
+  .vC .swap .ic { font-size:11px; }
+  .vC .swap:hover { border-color:var(--ink); color:var(--ink); }
+
+  /* ================= 方案 D：分段切换器 ================= */
+  .vD .seg { margin-left:8px; display:inline-flex; vertical-align:1px; }
+  .vD .seg button { border:1px solid var(--rule); background:transparent; padding:0 7px; font-size:9.5px;
+                    line-height:1.6; letter-spacing:.04em; color:var(--muted); cursor:pointer; }
+  .vD .seg button + button { border-left:0; }
+  .vD .seg button.on { background:var(--ink); border-color:var(--ink); color:var(--paper); }
+  .vD .seg button:hover:not(.on) { color:var(--ink); border-color:var(--ink); }
+
+  /* ================= 方案 E：文字按钮（无图标） ================= */
+  .vE .swap { margin-left:8px; border:1px solid var(--ink); background:transparent; padding:0 8px;
+              font-size:9.5px; line-height:1.6; letter-spacing:.1em; color:var(--ink); cursor:pointer; vertical-align:1px; }
+  .vE .swap:hover { background:var(--ink); color:var(--paper); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="rhead">
+    <div class="name">ATRACKER</div>
+    <div class="sub">SWAP BUTTON · 范围切换按钮方案</div>
+  </div>
+  <div class="toolbar">
+    <button class="ghost" id="mode">切到深色</button>
+    <span class="sp"></span>
+    <span style="font-size:9px;color:var(--muted)">高度都压到和那行小字一样，长度加宽</span>
+  </div>
+
+  <div id="root"></div>
+
+  <div class="variant">
+    <div class="vhead"><b>怎么读这页</b><span>NOTES</span></div>
+    <div class="vnote">
+      按钮的作用是在 <b>当前范围</b>（选中的那几天，或没选时的当月）和 <b>全部记录</b> 之间切换。
+      下面每个方案都给了两个状态：上面一行是正在看当前范围，下面一行是已经切到全部记录。<br>
+      约束有两条：按钮的高度和旁边那行 9.5px 的小字差不多（现在 13px 的版本太高了），长度要够、能看出是个能按的东西。<br>
+      每个方案下面都标了文字的含义。**「当前口径」和「目标口径」两种写法要分清**：前者按钮上写的是你现在看的是什么，后者写的是点了会变成什么。
+    </div>
+  </div>
+</div>
+
+<script>
+const VARIANTS = [
+  {
+    id: 'v0',
+    title: '方案 0 · 现在的（对照）',
+    sub: '13px 纯图标方块',
+    note: '现在的样子。23.8 × 22.2 px，比旁边那行字高出一截，方块也偏窄，视觉上是个小图标而不是按钮。'
+  },
+  {
+    id: 'vA',
+    title: '方案 A · 压扁的长条图标',
+    sub: '高度贴住文字，长度拉开',
+    note: '把高度压到和文字一样（行高 1.55），宽度用左右内边距拉开，字形缩回 10px。还是一个纯图标，靠长度和悬停变色表明它能按。'
+  },
+  {
+    id: 'vB',
+    title: '方案 B · 图标 + 当前口径',
+    sub: '按钮上写现在看的是什么',
+    note: '按钮文字是**当前口径**：「当前范围」或「全部记录」，图标在左边。不用点就知道现在看的是哪一段，但按钮上的字和标签上的字会重复（「当前范围 / 当前范围」）。'
+  },
+  {
+    id: 'vC',
+    title: '方案 C · 图标 + 目标口径',
+    sub: '按钮上写点了会变成什么',
+    note: '按钮文字是**目标口径**：正在看范围时写「看总量」，正在看总量时写「看范围」。这是最不容易误读的一种，点之前就知道会发生什么。'
+  },
+  {
+    id: 'vD',
+    title: '方案 D · 分段切换器',
+    sub: '两个小段，当前项反白',
+    note: '做成「当前范围 │ 全部记录」两段，选中的那段反白。语义最明确，两种口径同时可见，不用猜按钮是什么；代价是宽度最大，得放下两段文字。'
+  },
+  {
+    id: 'vE',
+    title: '方案 E · 纯文字按钮',
+    sub: '没有图标，只有动作词',
+    note: '不要图标，按钮上直接写「看总量」「看范围」。最省地方、语义最直白，悬停时整块反白。缺点是离图标远一点，不看字不知道它和范围有关。'
+  }
+];
+
+const RANGE = { label: '当前范围', tok: '10.42 亿', cny: '¥124.43', tiny: '全部记录 15.64 亿 / ¥214.80 / 覆盖 32 天' };
+const TOTAL = { label: '全部记录', tok: '15.64 亿', cny: '¥214.80', tiny: '当前范围 10.42 亿 / ¥124.43' };
+
+function button(vid, state) {
+  const isRange = state === 'range';
+  if (vid === 'vA') {
+    return `<button class="swap">⇄</button>`;
+  }
+  if (vid === 'vB') {
+    return `<button class="swap"><span class="ic">⇄</span>${isRange ? '当前范围' : '全部记录'}</button>`;
+  }
+  if (vid === 'vC') {
+    return `<button class="swap"><span class="ic">⇄</span>${isRange ? '看总量' : '看范围'}</button>`;
+  }
+  if (vid === 'vD') {
+    return `<span class="seg">
+      <button class="${isRange ? 'on' : ''}">当前范围</button>
+      <button class="${isRange ? '' : 'on'}">全部记录</button>
+    </span>`;
+  }
+  if (vid === 'vE') {
+    return `<button class="swap">${isRange ? '看总量' : '看范围'}</button>`;
+  }
+  return `<button class="swap">⇄</button>`;
+}
+
+function block(vid, state) {
+  const d = state === 'range' ? RANGE : TOTAL;
+  return `<div class="state">
+    <span class="tag">${state === 'range' ? '当前范围' : '全部记录'}</span>
+    <div class="total-line">
+      <div>
+        <div class="lab">TOKEN 总量 / ${d.label}${button(vid, state)}</div>
+        <div class="val">${d.tok}</div>
+        <div class="tiny">${d.tiny}</div>
+      </div>
+      <div class="side">
+        <div class="lab">ESTIMATED COST</div>
+        <div class="money">${d.cny}</div>
+        <div class="tiny">$33.05 / 汇率 6.5</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+const root = document.getElementById('root');
+root.innerHTML = VARIANTS.map(v => `
+  <div class="variant ${v.id}">
+    <div class="vhead"><b>${v.title}</b><span>${v.sub}</span></div>
+    ${block(v.id, 'range')}
+    ${block(v.id, 'total')}
+    <div class="vnote">${v.note}</div>
+  </div>
+`).join('');
+
+document.getElementById('mode').onclick = () => {
+  const dark = document.documentElement.dataset.mode === 'dark';
+  document.documentElement.dataset.mode = dark ? 'light' : 'dark';
+  document.getElementById('mode').textContent = dark ? '切到深色' : '切到浅色';
+};
+</script>
+</body>
+</html>

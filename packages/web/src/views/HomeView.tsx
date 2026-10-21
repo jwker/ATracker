@@ -7,15 +7,15 @@ import type {
 } from '../types.ts';
 import type { Selection, Unit } from '../state.ts';
 import { LeadRow } from '../components/LeadRow.tsx';
+import { ScopeTag } from '../components/ScopeTag.tsx';
 import {
-  abbr,
   fmtPct,
   fmtTok,
   money,
   moneyUsd,
   monthMeta,
-  pad,
-  scopeText
+  monthRange,
+  pad
 } from '../format.ts';
 
 interface HomeViewProps {
@@ -25,16 +25,25 @@ interface HomeViewProps {
   matrix: MatrixPayload;
   month: string;
   sel: Selection | null;
-  offDirs: string[];
   unit: Unit;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
   onSelectDay: (day: string) => void;
-  onToggleDir: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenCell: (agent: string, model: string) => void;
+  onClearSelection: () => void;
+  /** 顶部大字看当前范围还是全部记录 */
+  topScope: 'range' | 'total';
+  onTopScope: (scope: 'range' | 'total') => void;
 }
+
+/** 图例和日历色条里画的目录个数。剩下的合并成“其他”。 */
+const TOP_DIRS = 6;
+
+/** “其他”那一段用的灰。 */
+const OTHER_COLOR = 'var(--t4)';
+const OTHER_KEY = '__other__';
 
 function heatStyle(v: number, max: number): CSSProperties {
   if (!v) return { background: 'transparent' };
@@ -47,7 +56,7 @@ function heatStyle(v: number, max: number): CSSProperties {
 }
 
 export function HomeView(props: HomeViewProps) {
-  const { total, cal, agg, matrix, month, sel, offDirs, unit } = props;
+  const { total, cal, agg, matrix, month, sel, unit } = props;
   const tok = (n: number) => fmtTok(n, unit);
   const meta = monthMeta(month);
   const comp = [
@@ -56,25 +65,33 @@ export function HomeView(props: HomeViewProps) {
     { key: 'cacheRead', label: '缓存命中', v: agg.buckets.cacheRead },
     { key: 'cacheWrite', label: '缓存写入 / 首次写入', v: agg.buckets.cacheWrite }
   ];
-  const dirs = agg.byDir
-    .filter(d => !offDirs.includes(d.path))
-    .map((d, i) => ({ ...d, slot: i }));
   const models = agg.byModel;
   const miss = total.unpricedTokens > 0 ? 1 : 0;
+
+  // 顶部大字可以切：当前范围，或者全部记录。两个数都在屏幕上，只是强调哪个。
+  const showTotal = props.topScope === 'total';
+  const headTokens = showTotal ? total.total : agg.total;
+  const headCost = showTotal ? total.costCny : agg.costCny;
+
+  // 图例和日历色条只画当前范围的前 6 名目录，其余合并成“其他”。
+  // 排名跟着范围走：没选日期就是当月，选了就是选中的那几天。
+  const topDirs = agg.byDir.slice(0, TOP_DIRS);
+  const otherCount = Math.max(0, agg.byDir.length - topDirs.length);
+  const otherTokens = agg.total - topDirs.reduce((s, d) => s + d.tokens, 0);
+  const range = sel ? { from: sel.a, to: sel.b } : monthRange(month);
 
   const dayItems = (day: string) => {
     const rec = cal.days.find(d => d.day === day);
     if (!rec) return [];
-    const ranked = cal.dirs.filter(
-      d => !offDirs.includes(d.path) && (rec.byDir[d.path] ?? 0) > 0
-    );
-    const sum = ranked.reduce((s, d) => s + (rec.byDir[d.path] ?? 0), 0) || 1;
-    return ranked.map(d => ({
-      path: d.path,
-      color: d.color,
-      v: rec.byDir[d.path] ?? 0,
-      pct: ((rec.byDir[d.path] ?? 0) / sum) * 100
-    }));
+    // 范围外的日子不画色条。那个范围的目录排名和那天没关系，画了也是误导。
+    if (day < range.from || day > range.to) return [];
+    const total = rec.total || 1;
+    const items = topDirs
+      .map(d => ({ path: d.path, color: d.color, v: rec.byDir[d.path] ?? 0 }))
+      .filter(x => x.v > 0);
+    const rest = total - items.reduce((s, x) => s + x.v, 0);
+    if (rest > 0) items.push({ path: OTHER_KEY, color: OTHER_COLOR, v: rest });
+    return items.map(x => ({ ...x, pct: (x.v / total) * 100 }));
   };
 
   const daysByKey = new Map(cal.days.map(d => [d.day, d]));
@@ -88,17 +105,39 @@ export function HomeView(props: HomeViewProps) {
       <div className="sec" style={{ marginTop: 4 }}>
         <div className="total-line">
           <div>
-            <div className="lab">TOTAL TOKENS / 全部记录</div>
-            <div className="val">{tok(total.total)}</div>
+            <div className="lab">
+              TOKEN 总量
+              <span className="seg">
+                <button
+                  className={showTotal ? '' : 'on'}
+                  onClick={() => props.onTopScope('range')}
+                  title="看当前范围"
+                >
+                  当前范围
+                </button>
+                <button
+                  className={showTotal ? 'on' : ''}
+                  onClick={() => props.onTopScope('total')}
+                  title="看全部记录"
+                >
+                  全部记录
+                </button>
+              </span>
+            </div>
+            <div className="val">{tok(headTokens)}</div>
             <div className="tiny">
-              {abbr(total.total)} / 覆盖 {total.days ?? 0} 天 / 四桶合计
+              {showTotal ? (
+                <>当前范围 {tok(agg.total)} / {money(agg.costCny)}</>
+              ) : (
+                <>全部记录 {tok(total.total)} / {money(total.costCny)} / 覆盖 {total.days ?? 0} 天</>
+              )}
             </div>
           </div>
           <div className="side">
             <div className="lab">ESTIMATED COST</div>
-            <div className="money">{money(total.costCny)}</div>
+            <div className="money">{money(headCost)}</div>
             <div className="tiny">
-              {moneyUsd(total.costCny)} / 汇率 6.5
+              {moneyUsd(headCost)} / 汇率 6.5
               {miss ? ` / ${miss} 个模型无价格` : ''}
             </div>
           </div>
@@ -108,7 +147,7 @@ export function HomeView(props: HomeViewProps) {
       <div className="sec">
         <div className="sec-h">
           <b>TOKEN 四桶</b>
-          <span>当前范围 {scopeText(sel, month)}</span>
+          <ScopeTag sel={sel} month={month} onClear={props.onClearSelection} />
           <span className="r">{tok(agg.total)}</span>
         </div>
         <LeadRow label={comp[0].label} value={tok(comp[0].v)} />
@@ -126,7 +165,11 @@ export function HomeView(props: HomeViewProps) {
           <span>
             {meta.y} 年 {meta.m} 月 / {meta.dim} 天
           </span>
-          <span className="r">{scopeText(sel, month)}</span>
+          <span className="r">
+            {sel ? (
+              <ScopeTag sel={sel} month={month} onClear={props.onClearSelection} />
+            ) : null}
+          </span>
         </div>
         <div className="cal-tools">
           <button className="ghost" onClick={props.onPrevMonth}>PREV</button>
@@ -135,22 +178,21 @@ export function HomeView(props: HomeViewProps) {
           <span className="scope">点击一天选中，再点另一天成区间</span>
         </div>
         <div className="legend">
-          {cal.dirs.map(d => {
-            const off = offDirs.includes(d.path);
-            return (
-              <button
-                key={d.path}
-                className="lg"
-                data-legend={d.path}
-                onClick={() => props.onToggleDir(d.path)}
-                aria-pressed={!off}
-              >
-                <span className="sw" style={{ background: d.color }} />
-                {d.name}
-                <span className="n">{tok(d.tokens)}</span>
-              </button>
-            );
-          })}
+          <span className="legend-cap">当前范围前 {TOP_DIRS} 名</span>
+          {topDirs.map(d => (
+            <span className="lg" key={d.path}>
+              <span className="sw" style={{ background: d.color }} />
+              {d.name}
+              <span className="n">{tok(d.tokens)}</span>
+            </span>
+          ))}
+          {otherCount > 0 && (
+            <span className="lg">
+              <span className="sw" style={{ background: OTHER_COLOR }} />
+              其他 {otherCount} 个目录
+              <span className="n">{tok(otherTokens)}</span>
+            </span>
+          )}
         </div>
         <div className="wk">
           {['一', '二', '三', '四', '五', '六', '日'].map(w => (
@@ -274,7 +316,7 @@ export function HomeView(props: HomeViewProps) {
           <span>点一行查看该目录的会话</span>
         </div>
         <div className="bars">
-          {dirs.map(x => (
+          {agg.byDir.map(x => (
             <div
               className="row"
               key={x.path}

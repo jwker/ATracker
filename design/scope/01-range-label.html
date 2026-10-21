@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker · 当前范围提示 · 方案</title>
+<style>
+  :root[data-mode="light"] {
+    --desk:#cfd0cb; --paper:#f6f5f0; --ink:#17181a; --muted:#6c6e69; --faint:#a9aba5;
+    --rule:#c9cbc4; --accent:#bf3b22; --wash:#e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk:#0d0e0f; --paper:#1a1b1d; --ink:#ecebe4; --muted:#a2a39d; --faint:#6f716c;
+    --rule:#3b3c39; --accent:#ff6a4d; --wash:#232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    background:var(--desk); color:var(--ink);
+    font-family:"Courier New","SF Mono",Menlo,monospace;
+    font-size:12px; line-height:1.55; padding:22px 12px 46px;
+  }
+  button { font:inherit; color:inherit; }
+  .sheet { max-width:760px; margin:0 auto; background:var(--paper); padding:22px 28px 28px;
+           box-shadow:0 18px 50px rgba(0,0,0,.16); }
+  .rhead { text-align:center; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  .rhead .name { font-size:22px; letter-spacing:.30em; font-weight:700; }
+  .rhead .sub { font-size:9px; letter-spacing:.24em; color:var(--muted); margin-top:3px; }
+  .toolbar { display:flex; gap:8px; align-items:center; margin:12px 0 0; }
+  .ghost { border:1px dashed var(--rule); background:transparent; padding:3px 8px; font-size:9px;
+          letter-spacing:.1em; cursor:pointer; color:var(--muted); }
+  .ghost:hover { color:var(--ink); border-color:var(--ink); }
+  .sp { flex:1; }
+
+  .variant { margin-top:22px; }
+  .vhead { display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--ink);
+           padding-bottom:3px; margin-bottom:9px; }
+  .vhead b { font-size:11px; letter-spacing:.12em; }
+  .vhead span { font-size:9px; color:var(--muted); }
+  .vnote { font-size:9px; color:var(--muted); line-height:1.8; margin-top:8px; }
+  .vnote b { color:var(--ink); font-weight:700; }
+  .vnote code { color:var(--ink); }
+
+  /* ---------- 现状的标题行，和 packages/web/src/receipt.css 一致 ---------- */
+  .sec { margin-top: 16px; }
+  .sec-h { display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--ink);
+           padding-bottom:3px; margin-bottom:9px; }
+  .sec-h b { font-size:10px; letter-spacing:.18em; font-weight:700; }
+  .sec-h span { font-size:9px; color:var(--muted); }
+  .sec-h .r { margin-left:auto; font-size:9px; color:var(--muted); }
+  .leadrow { display:flex; align-items:baseline; gap:5px; padding:2px 0; }
+  .leadrow .nm { white-space:nowrap; }
+  .leadrow .dots { flex:1; border-bottom:1px dotted var(--faint); transform:translateY(-3px); }
+  .leadrow .v { white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+  /* ================= 方案 0：现状 ================= */
+  .v0 .sec-h span { font-size:9px; color:var(--muted); }
+
+  /* ================= 方案 A：范围条 ================= */
+  .vA .rbar {
+    display:flex; align-items:center; gap:10px; border:1px solid var(--rule);
+    background:var(--wash); padding:5px 9px; margin-bottom:9px;
+  }
+  .vA .rbar .lab { font-size:8.5px; letter-spacing:.16em; color:var(--muted); }
+  .vA .rbar .rng { font-size:11px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .vA .rbar .n { font-size:9px; color:var(--accent); border:1px solid var(--accent); padding:0 4px; }
+  .vA .rbar .x { margin-left:auto; font-size:8.5px; color:var(--muted); text-decoration:underline; }
+
+  /* ================= 方案 B：面包屑 ================= */
+  .vB .crumb { display:flex; align-items:baseline; gap:7px; font-size:10px; }
+  .vB .crumb .up { color:var(--faint); }
+  .vB .crumb .up::after { content:"›"; margin-left:7px; color:var(--faint); }
+  .vB .crumb .now { color:var(--ink); font-weight:700; }
+  .vB .crumb .n { font-size:8.5px; color:var(--accent); border:1px solid var(--accent); padding:0 4px; }
+
+  /* ================= 方案 C：胶囊 ================= */
+  .vC .pill {
+    display:inline-block; font-size:10px; background:var(--accent); color:var(--paper);
+    padding:1px 7px; letter-spacing:.02em;
+  }
+  .vC .pill .sep { opacity:.7; margin:0 4px; }
+  .vC .badge {
+    display:inline-block; font-size:8.5px; border:1px solid var(--rule); color:var(--muted);
+    padding:0 4px; margin-left:5px;
+  }
+  .vC .x { font-size:9px; color:var(--muted); margin-left:6px; text-decoration:underline; }
+
+  /* ================= 方案 D：结账行 ================= */
+  .vD .ledger { margin:2px 0 10px; }
+  .vD .ledger .row { border-bottom:1px dotted var(--rule); padding:3px 0; }
+  .vD .ledger .row .lab { font-size:9.5px; color:var(--muted); letter-spacing:.1em; }
+  .vD .ledger .row .dots { flex:1; border-bottom:1px dotted var(--faint); transform:translateY(-3px); margin:0 6px; }
+  .vD .ledger .row .val { font-size:11px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .vD .ledger .sub { font-size:8.5px; color:var(--muted); padding:2px 0 0; }
+
+  /* ================= 方案 E：标题行内强化 ================= */
+  .vE .sec-h { border-bottom-width:2px; }
+  .vE .sec-h .rng { font-size:10px; color:var(--ink); letter-spacing:0; }
+  .vE .sec-h .rng .arrow { color:var(--accent); margin:0 3px; }
+  .vE .sec-h .rng .days { color:var(--accent); font-size:9px; margin-left:4px; }
+
+  /* ================= 方案 F：范围条 + 月历标题联动 ================= */
+  .vF .rbar {
+    display:flex; align-items:center; gap:10px; border-left:3px solid var(--accent);
+    background:var(--wash); padding:5px 9px; margin-bottom:9px;
+  }
+  .vF .rbar .rng { font-size:11px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .vF .rbar .n { font-size:9px; color:var(--accent); }
+  .vF .rbar .sum { margin-left:auto; font-size:9px; color:var(--muted); }
+  .vF .rbar .x { font-size:8.5px; color:var(--muted); text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="rhead">
+    <div class="name">ATRACKER</div>
+    <div class="sub">CURRENT RANGE · 范围提示方案</div>
+  </div>
+  <div class="toolbar">
+    <button class="ghost" id="mode">切到深色</button>
+    <span class="sp"></span>
+    <span style="font-size:9px;color:var(--muted)">示例：选中了 2026-10-02 到 2026-10-03，页面下方所有数字都跟着这个范围走</span>
+  </div>
+
+  <div id="root"></div>
+
+  <div class="variant">
+    <div class="vhead"><b>怎么读这页</b><span>NOTES</span></div>
+    <div class="vnote">
+      现在这个范围提示写在标题行里：<code>TOKEN 四桶　当前范围 2026-10-02 → 2026-10-03 / 2 天</code>，
+      字号 9px、颜色是灰的 <code>--muted</code>，和右侧那个合计数一样弱，看不出它是"当前在看哪一段"。<br>
+      范围其实是这一页最重要的上下文：下面的四桶、来源 × 模型、目录用量全跟着它走。所以它值得单独占一行，
+      或者至少在标题行里换成一个认得出来的样子。<br>
+      六个方案都只用现有的 CSS 变量，深色主题自动跟着变。没选日期时的范围是
+      <code>2026 年 10 月 / 31 天</code>，各方案都要能放下这一种。
+    </div>
+  </div>
+</div>
+
+<script>
+const RANGE = '2026-10-02 → 2026-10-03';
+const DAYS = 2;
+const TOTAL = '3.84 亿';
+
+const VARIANTS = [
+  {
+    id: 'v0',
+    title: '方案 0 · 现状（对照）',
+    sub: '标题行里一行小灰字',
+    note: '现在的样子。范围和右边的合计数用的是同一套小灰字样式，扫一眼分不出谁是上下文、谁是结果。'
+  },
+  {
+    id: 'vA',
+    title: '方案 A · 独立范围条',
+    sub: '标题行下面加一条带边框的横条',
+    note: '范围从标题行里拿出来，单独占一条：左边「范围」小标签，中间是范围本身，右边是「2 天」的红框徽章，最右是「清除」。范围成了有边界的一块东西，比一行灰字重得多，也不占标题行的宽度。'
+  },
+  {
+    id: 'vB',
+    title: '方案 B · 面包屑',
+    sub: '本月 › 当前范围',
+    note: '用面包屑的层级表达范围：上级「2026 年 10 月」是浅灰的，当前选中的那段是墨色加粗，天数是小红框徽章。好处是「这是在哪个月里选的」一眼就懂，坏处是单选一天的时候面包屑只有一级，略显多余。'
+  },
+  {
+    id: 'vC',
+    title: '方案 C · 强调色胶囊',
+    sub: '范围做成一块红底标签',
+    note: '范围本身做成强调色底、纸色字的胶囊，天数用描边徽章跟在后面。最像「贴上去的标签」，也最容易在整页里被一眼抓住。代价是这一页的强调色被范围占了，下面其他地方的红色就相对弱了。'
+  },
+  {
+    id: 'vD',
+    title: '方案 D · 结账行',
+    sub: '用小票那种点线行单列一行',
+    note: '照搬首页四桶那种「标签 … 点线 … 值」的行，单独一行放在最上面：左边「范围」，右边点线连到日期，下面一行小字写「共 2 天 · 合计 3.84 亿 token」。和这一页其他地方的排版完全一致，是最不动声色的加强。'
+  },
+  {
+    id: 'vE',
+    title: '方案 E · 标题行内强化',
+    sub: '不新增块，把那一行加重',
+    note: '不加任何新块，只把标题行里的范围从 9px 灰字换成墨色 10px（去掉字距），箭头用强调色，天数用强调色小字，标题行的下边框从 1px 加到 2px。改动最小，位置不动，但范围终于比右边的合计数更重。'
+  },
+  {
+    id: 'vF',
+    title: '方案 F · 范围条带合计',
+    sub: '左边一道红边，右侧带合计',
+    note: '在方案 A 的基础上把范围条改成左边一道 3px 红边（像标签的压边），右边补上这个范围的合计 token 和成本。范围和结果放在同一行，不用再往下找就知道这段一共花了多少。'
+  }
+];
+
+function head(v) {
+  if (v.id === 'v0') {
+    return `<div class="sec-h"><b>TOKEN 四桶</b><span>当前范围 ${RANGE} / ${DAYS} 天</span><span class="r">${TOTAL}</span></div>`;
+  }
+  if (v.id === 'vA') {
+    return `<div class="rbar"><span class="lab">范围</span><span class="rng">${RANGE}</span>` +
+      `<span class="n">${DAYS} 天</span><span class="x">清除</span></div>` +
+      `<div class="sec-h"><b>TOKEN 四桶</b><span>四桶合计</span><span class="r">${TOTAL}</span></div>`;
+  }
+  if (v.id === 'vB') {
+    return `<div class="sec-h"><b>TOKEN 四桶</b>` +
+      `<span class="crumb"><span class="up">2026 年 10 月</span><span class="now">${RANGE}</span><span class="n">${DAYS} 天</span></span>` +
+      `<span class="r">${TOTAL}</span></div>`;
+  }
+  if (v.id === 'vC') {
+    return `<div class="sec-h"><b>TOKEN 四桶</b>` +
+      `<span><span class="pill">${RANGE.split(' → ')[0]}<span class="sep">→</span>${RANGE.split(' → ')[1]}</span>` +
+      `<span class="badge">${DAYS} 天</span><span class="x">清除</span></span>` +
+      `<span class="r">${TOTAL}</span></div>`;
+  }
+  if (v.id === 'vD') {
+    return `<div class="ledger">` +
+      `<div class="row"><span class="lab">范围</span><span class="dots"></span><span class="val">${RANGE}</span></div>` +
+      `<div class="sub">共 ${DAYS} 天 · 合计 ${TOTAL} token · ¥6.42</div></div>` +
+      `<div class="sec-h"><b>TOKEN 四桶</b><span>四桶合计</span><span class="r">${TOTAL}</span></div>`;
+  }
+  if (v.id === 'vE') {
+    return `<div class="sec-h"><b>TOKEN 四桶</b>` +
+      `<span class="rng">${RANGE.split(' → ')[0]}<span class="arrow">→</span>${RANGE.split(' → ')[1]}<span class="days">/ ${DAYS} 天</span></span>` +
+      `<span class="r">${TOTAL}</span></div>`;
+  }
+  return `<div class="rbar"><span class="rng">${RANGE}</span><span class="n">${DAYS} 天</span>` +
+    `<span class="sum">${TOTAL} token · ¥6.42</span><span class="x">清除</span></div>` +
+    `<div class="sec-h"><b>TOKEN 四桶</b><span>四桶合计</span><span class="r">${TOTAL}</span></div>`;
+}
+
+function rows() {
+  let html = '';
+  const comp = [
+    ['输入 / 未命中缓存', '659.6 万'],
+    ['输出 / 含推理', '95.0 万'],
+    ['缓存命中 / 97.5%', '2.97 亿'],
+    ['缓存写入 / 首次写入', '0']
+  ];
+  for (const [label, value] of comp) {
+    html += `<div class="leadrow"><span class="nm">${label}</span><span class="dots"></span><span class="v">${value}</span></div>`;
+  }
+  return html;
+}
+
+const root = document.getElementById('root');
+root.innerHTML = VARIANTS.map(v => `
+  <div class="variant ${v.id}">
+    <div class="vhead"><b>${v.title}</b><span>${v.sub}</span></div>
+    <div class="sec">${head(v)}${rows()}</div>
+    <div class="vnote">${v.note}</div>
+  </div>
+`).join('');
+
+document.getElementById('mode').onclick = () => {
+  const dark = document.documentElement.dataset.mode === 'dark';
+  document.documentElement.dataset.mode = dark ? 'light' : 'dark';
+  document.getElementById('mode').textContent = dark ? '切到深色' : '切到浅色';
+};
+</script>
+</body>
+</html>
