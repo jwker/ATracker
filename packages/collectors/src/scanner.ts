@@ -61,6 +61,7 @@ export async function runScan(
   const collectors = (await loadCollectors()).filter(c => !opts.only || opts.only.includes(c.id));
   const batchId = repo.startBatch(opts.trigger, Date.now());
   const sessionStates = new Map<string, Map<string, number>>();
+  let curSource = 'unknown';
   const affectedDays = new Set<string>();
   let filesScanned = 0;
   let eventsRead = 0;
@@ -137,6 +138,9 @@ export async function runScan(
       const cur = repo.getCursor(path);
       if (!cur) return { parse: true, offset: 0, reason: '新文件' };
 
+      // 解析规则变了，这个来源的文件全部重扫
+      if (cur.source !== curSource) return { parse: true, offset: 0, reason: '解析规则已更新' };
+
       // 指纹没变，整个文件跳过
       if (cur.size === st.size && cur.mtimeMs === Math.floor(st.mtimeMs) && cur.inode === st.ino) {
         return { parse: false, offset: cur.offset, reason: '指纹未变' };
@@ -154,7 +158,7 @@ export async function runScan(
         const st = statSync(path);
         repo.setCursor({
           path,
-          source: 'unknown',
+          source: curSource,
           size: st.size,
           mtimeMs: Math.floor(st.mtimeMs),
           inode: st.ino,
@@ -169,6 +173,7 @@ export async function runScan(
   };
 
   for (const collector of collectors) {
+    curSource = collector.version ? `${collector.id}:${collector.version}` : collector.id;
     const collected: any[] = [];
     const sessionRows: any[] = [];
     try {

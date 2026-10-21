@@ -47,6 +47,11 @@ export interface Collector {
   id: string;
   /** 显示名 */
   label: string;
+  /**
+   * 解析规则版本。改了采集器的解析逻辑就往上加一位，
+   * 游标里存的版本对不上时这个来源的文件会全部重扫。
+   */
+  version?: string;
   /** 这个来源的数据在哪 */
   roots(): string[];
   /** 产出用量事件 */
