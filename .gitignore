@@ -3,4 +3,3 @@ data/
 *.log
 .DS_Store
 packages/web/dist/
-backup/

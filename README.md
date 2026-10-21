@@ -76,7 +76,7 @@ config/pricing.json   手写成本表，唯一生效的定价来源
 data/atracker.db     运行时生成
 ```
 
-当前前端用 React 19 + Vite，保留 `design/v3/02-receipt.html` 的热敏小票样式。重构前的原生版本备份在 `backup/web-pre-react-20261021/`。
+当前前端用 React 19 + Vite，保留 `design/v3/02-receipt.html` 的热敏小票样式。后续改动都在 `packages/web/src` 上做。
 
 ## 加一个 agent
 
