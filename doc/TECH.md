@@ -1,6 +1,6 @@
 # ATracker 技术设计
 
-对应 `PRD.md` 的需求，本文只讲怎么实现。
+对应 `doc/PRD.md` 的需求，本文只讲怎么实现。
 
 技术选型：TypeScript，Node 24 以上。数据库用 Node 自带的 `node:sqlite`，不引入原生编译依赖。前端 React + Vite + ECharts。
 
@@ -285,7 +285,7 @@ CREATE INDEX idx_scan_log_at ON scan_log(at DESC);
 
 DSH 的一个会话文件实测 9.7 MB、27347 个 zstd 帧，解开 21.7 MB。codex 的 rollout 也可能很大。解析必须流式：一边读一边解析，不要整个读进内存再 split。
 
-zstd 多帧要用自己写的帧遍历器（Node 的 `zlib.zstdDecompressSync` 只解第一帧），参考 `design` 之外的实现在 `PLAN.md` 第 6.1 节提到的来源。
+zstd 多帧要用自己写的帧遍历器（Node 的 `zlib.zstdDecompressSync` 只解第一帧），参考 `design` 之外的实现在 `doc/PLAN.md` 第 6.1 节提到的来源。
 
 ### 2.7 数据量大时的稳定性
 

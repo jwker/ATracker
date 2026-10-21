@@ -16,6 +16,16 @@ npm run serve       # 起本地服务，默认 http://127.0.0.1:4178，打开就
 
 Node 24 以上直接跑 TypeScript，不需要构建步骤。
 
+## 文档
+
+| 文件 | 内容 |
+| --- | --- |
+| `doc/PRD.md` | 需求文档。显示什么、怎么算 |
+| `doc/TECH.md` | 技术设计。采集触发、价格兜底、聚合刷新、代码规则、接口 |
+| `doc/PLAN.md` | 规划。各来源核实结果、里程碑、待定项 |
+| `design/v3/` | 界面设计。`02-receipt.html` 是已定的主题 |
+| `design/wireframe/` | 功能线框原型 |
+
 ## 日常使用
 
 ```bash
@@ -73,7 +83,7 @@ data/atracker.db     运行时生成
 ## 现在的状态
 
 - 五个采集器都已实现并对账通过：codex 和 opencode 与来源自带的汇总精确一致，Claude Code、pi、DeepSeek Harness 在双方都覆盖的会话上全部一致。
-- 接口已完成：`atracker serve` 提供只读接口、文件监听自动扫描和 SSE 推送。清单见 `TECH.md` 第 6.4 节。
+- 接口已完成：`atracker serve` 提供只读接口、文件监听自动扫描和 SSE 推送。清单见 `doc/TECH.md` 第 6.4 节。
 - 前端已完成：按 `design/v3/02-receipt.html`（热敏小票）实现，三个视图都接了真数据。
 
 ## 价格
@@ -90,4 +100,4 @@ data/atracker.db     运行时生成
 
 **DeepSeek Harness 一个会话目录里有多个版本文件。** 只读编号最高的那个，全加起来会重复计算。
 
-详见 `PLAN.md` 第 3.1 节。
+详见 `doc/PLAN.md` 第 3.1 节。

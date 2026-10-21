@@ -27,7 +27,7 @@
 
 总量 = 输入 + 输出 + 缓存命中 + 缓存写入。
 
-各 agent 的原始字段到这四个桶的转换规则见 `PLAN.md` 第 3.1 节。其中 codex 的 `input_tokens` 含缓存，需要减去 `cached_input_tokens`。
+各 agent 的原始字段到这四个桶的转换规则见 `doc/PLAN.md` 第 3.1 节。其中 codex 的 `input_tokens` 含缓存，需要减去 `cached_input_tokens`。
 
 ### 2.2 数字的三种显示单位
 
@@ -397,7 +397,7 @@ Claude Code 的子 agent 和 codex 的派生线程有独立的用量记录。这
 
 ## 7. 数据来源
 
-界面上的每个数字都来自本地只读采集，各 agent 的原始文件位置和字段见 `PLAN.md` 第 3 节。
+界面上的每个数字都来自本地只读采集，各 agent 的原始文件位置和字段见 `doc/PLAN.md` 第 3 节。
 
 | 界面数据 | 来源 |
 | --- | --- |
