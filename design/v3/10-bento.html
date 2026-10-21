@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATracker — Bento</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    --r: 22px;
+    --r2: 13px;
+    --pill: 999px;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f2f4f9;
+    --card: #ffffff;
+    --card2: #edf1f7;
+    --ink: #0f172a;
+    --muted: #5b6b82;
+    --faint: #8a97a8;
+    --line: #e3e9f1;
+    --accent: #2a78d6;
+    --accent-2: #e8f1fd;
+    --accent-ink: #1e5fa8;
+    --solid: #101a2b;
+    --solid-2: #1a2941;
+    --solid-ink: #f7faff;
+    --solid-muted: #9fb0c8;
+    --solid-line: rgba(255,255,255,.13);
+    --ok: #159d6d;
+    --warn: #b07800;
+    --err: #d33a43;
+    --sel: #e8f1fd;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 14px 34px -22px rgba(15,23,42,.35);
+    --d0: #2a78d6; --d1: #eb6834; --d2: #1baf7a; --d3: #eda100; --d4: #e87ba4; --d5: #008300;
+    --b0: #2a78d6; --b1: #eb6834; --b2: #1baf7a; --b3: #eda100;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a0e14;
+    --card: #131a24;
+    --card2: #1b2532;
+    --ink: #e8eef7;
+    --muted: #9dabbd;
+    --faint: #708094;
+    --line: #243140;
+    --accent: #6aa6ff;
+    --accent-2: #18293f;
+    --accent-ink: #a9c9ff;
+    --solid: #e8eef7;
+    --solid-2: #d6dfec;
+    --solid-ink: #0c141f;
+    --solid-muted: #53647b;
+    --solid-line: rgba(12,20,31,.13);
+    --ok: #41d19d;
+    --warn: #ffc24a;
+    --err: #ff7a82;
+    --sel: #1b2c43;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 18px 40px -26px rgba(0,0,0,.8);
+    --d0: #3987e5; --d1: #d95926; --d2: #199e70; --d3: #c98500; --d4: #d55181; --d5: #008300;
+    --b0: #3987e5; --b1: #d95926; --b2: #199e70; --b3: #c98500;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  ::selection { background: var(--accent-2); color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+  .frame { max-width: 1400px; margin: 0 auto; padding: 22px 24px 40px; }
+
+  /* ---------- masthead ---------- */
+  .mast { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; padding: 4px 2px 18px; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .logo { display: flex; align-items: flex-end; gap: 3px; width: 34px; height: 30px; padding: 0 7px; border-radius: 10px; background: var(--ink); }
+  .logo i { display: block; width: 4px; border-radius: 3px 3px 1px 1px; background: var(--accent); }
+  .logo i:nth-child(1) { height: 9px; opacity: .55; }
+  .logo i:nth-child(2) { height: 16px; opacity: .8; }
+  .logo i:nth-child(3) { height: 22px; }
+  .word { font-size: 21px; font-weight: 750; letter-spacing: -.02em; }
+  .brand-sub { color: var(--faint); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  .mast-right { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 16px; }
+  .nav { display: flex; gap: 3px; padding: 4px; border-radius: var(--pill); background: var(--card); box-shadow: var(--shadow); }
+  .nav button { background: transparent; border: 0; border-radius: var(--pill); padding: 7px 15px; font-size: 11px; font-weight: 600; color: var(--muted); }
+  .nav button:hover { color: var(--ink); }
+  .nav button[aria-current="true"] { background: var(--ink); color: var(--card); }
+  .utils { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; }
+  .ulab { color: var(--faint); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; margin-left: 4px; }
+  .ubtn { background: transparent; border: 0; border-radius: var(--pill); padding: 4px 8px; color: var(--muted); font-size: 10px; }
+  .ubtn:hover { color: var(--ink); background: var(--card2); }
+  .ubtn[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-2); font-weight: 650; }
+  .mast-rule { display: flex; justify-content: space-between; gap: 10px; width: 100%; color: var(--faint); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+
+  .view { display: flex; flex-direction: column; gap: 14px; }
+
+  /* ---------- cards ---------- */
+  .panel { background: var(--card); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px 20px 20px; min-width: 0; }
+  .phead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .pm { color: var(--faint); font-size: 10px; font-weight: 500; letter-spacing: .02em; text-transform: none; white-space: nowrap; }
+  .pbody { padding: 0; }
+  .hint { color: var(--faint); font-size: 10px; line-height: 1.6; }
+  .empty { padding: 30px 10px; text-align: center; color: var(--faint); font-size: 12px; line-height: 1.8; }
+
+  /* ---------- home mosaic ---------- */
+  .top-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+  .mid-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .two-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .side-stack { display: grid; gap: 14px; align-content: start; }
+  .hero { display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(135deg, var(--card) 0%, var(--card) 58%, var(--accent-2) 130%); }
+  .hero-body { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(180px, .75fr); align-items: center; gap: 18px; }
+  .kicker { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  .huge { font-size: clamp(46px, 6.4vw, 86px); font-weight: 760; letter-spacing: -.055em; line-height: .96; margin: 12px 0 16px; }
+  .hero-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .hero-meta span { padding: 5px 10px; border-radius: var(--pill); background: var(--card2); color: var(--muted); font-size: 10px; }
+  .hero-meta b { color: var(--ink); font-weight: 650; }
+  .spark { display: block; width: 100%; height: auto; color: var(--accent); }
+  .spark .sarea { opacity: 1; }
+  .spark .sline { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .spark .sdot { fill: currentColor; }
+
+  .side-dark { background: var(--solid); color: var(--solid-ink); box-shadow: var(--shadow); }
+  .side-dark .phead { color: var(--solid-ink); }
+  .side-dark .pm { color: var(--solid-muted); }
+  .side-body { display: flex; flex-direction: column; gap: 0; }
+  .side-lab { color: var(--solid-muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+  .cost { font-size: clamp(30px, 3.6vw, 46px); font-weight: 760; letter-spacing: -.035em; line-height: 1.05; margin: 8px 0 4px; }
+  .cost-sub { color: var(--solid-muted); font-size: 10px; }
+  .side-list { margin-top: 18px; display: grid; gap: 0; }
+  .side-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--solid-line); font-size: 11px; color: var(--solid-muted); }
+  .side-row b { color: var(--solid-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ---------- calendar ---------- */
+  .cal-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+  .cal-title { font-size: 18px; font-weight: 720; letter-spacing: -.02em; }
+  .cal-head .hint { flex: 1 1 180px; }
+  .calctl { display: flex; gap: 5px; margin-left: auto; }
+  .sqbtn { background: var(--card2); border: 0; border-radius: var(--pill); padding: 6px 11px; font-size: 10px; color: var(--muted); }
+  .sqbtn:hover { background: var(--accent-2); color: var(--accent-ink); }
+  .cal-weeks { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; margin-bottom: 5px; }
+  .cal-weeks span { text-align: center; color: var(--faint); font-size: 9px; letter-spacing: .08em; }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+  .day { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; min-height: 58px; padding: 6px 7px; border: 1.5px solid transparent; border-radius: var(--r2); background: var(--card2); text-align: left; }
+  .day:hover { border-color: var(--accent); }
+  .day.blank { background: transparent; pointer-events: none; }
+  .day.sel { background: var(--accent-2); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-2); }
+  .dn { font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .day.sel .dn { color: var(--accent-ink); }
+  .dv { color: var(--faint); font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dbar { display: flex; gap: 2px; height: 5px; border-radius: 3px; overflow: hidden; }
+  .dbar i { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
+  .dbar .zero { display: block; width: 100%; height: 100%; border-radius: 3px; background: var(--line); }
+  .cal-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; color: var(--faint); font-size: 9px; }
+  .cal-foot b { color: var(--muted); font-weight: 600; }
+
+  /* ---------- legend ---------- */
+  .legend { display: grid; gap: 3px; }
+  .lg { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border: 0; border-radius: 10px; background: transparent; text-align: left; font-size: 10px; }
+  .lg:hover { background: var(--card2); }
+  .lg i { width: 9px; height: 9px; border-radius: 3px; }
+  .ln { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lv { color: var(--faint); font-size: 9px; white-space: nowrap; }
+  .lg[aria-pressed="false"] { opacity: .38; }
+  .lg[aria-pressed="false"] .ln { text-decoration: line-through; }
+  .lgnote { margin-top: 10px; color: var(--faint); font-size: 9px; line-height: 1.65; }
+
+  /* ---------- selection ---------- */
+  .sel-scope { color: var(--faint); font-size: 10px; }
+  .sel-num { font-size: clamp(32px, 3.8vw, 48px); font-weight: 760; letter-spacing: -.045em; line-height: 1.05; margin: 6px 0 10px; }
+  .sel-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 12px; }
+  .sel-meta span { padding: 4px 9px; border-radius: var(--pill); background: var(--card2); color: var(--muted); font-size: 9px; }
+  .sel-meta b { color: var(--ink); font-weight: 650; }
+  .brow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(84px, 150px) 66px; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 9px; }
+  .bn { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .bn i { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 3px; }
+  .bn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track { display: block; height: 6px; border-radius: 4px; background: var(--card2); overflow: hidden; }
+  .track i { display: block; height: 100%; border-radius: 4px; }
+  .bv { text-align: right; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* ---------- rankings ---------- */
+  .rank { display: grid; gap: 2px; }
+  .rrow { display: grid; grid-template-columns: 9px minmax(0, 1fr) 92px 78px; align-items: center; gap: 9px; width: 100%; padding: 8px 7px; border: 0; border-radius: 10px; background: transparent; text-align: left; font-size: 11px; }
+  .rrow:hover { background: var(--card2); }
+  .sw { width: 9px; height: 9px; border-radius: 3px; }
+  .rn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rb { display: block; height: 6px; border-radius: 4px; background: var(--card2); overflow: hidden; }
+  .rb i { display: block; height: 100%; border-radius: 4px; }
+  .rv { text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rv small { display: block; color: var(--faint); font-size: 9px; }
+  .note-strip { color: var(--muted); font-size: 10px; line-height: 1.7; }
+  .note-strip b { color: var(--ink); }
+
+  /* ---------- matrix ---------- */
+  .mxwrap { overflow-x: auto; margin: 0 -6px; padding: 0 6px 2px; }
+  table.mx { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 5px 3px; }
+  table.mx th, table.mx td { padding: 4px 3px; text-align: center; border: 0; }
+  table.mx th { font-size: 9px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+  table.mx th.mh { text-align: left; padding-left: 7px; }
+  table.mx td.mn { text-align: left; padding-left: 7px; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; color: var(--muted); }
+  table.mx td.tot, table.mx th.tot { text-align: right; font-size: 9px; color: var(--faint); white-space: nowrap; }
+  table.mx tr.mxfoot td { border-top: 1px solid var(--line); padding-top: 8px; }
+  .dotbtn { display: flex; align-items: center; justify-content: center; width: 100%; height: 32px; background: transparent; border: 0; border-radius: 9px; }
+  .dotbtn i { display: block; width: 24px !important; height: 24px !important; border-radius: 8px; background: var(--accent); }
+  .dotbtn:hover { background: var(--card2); }
+  .dotbtn:hover i { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .dotbtn.zero i { background: transparent; border: 1.5px dashed var(--line); }
+  .mxleg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; color: var(--faint); font-size: 9px; }
+  .mxleg i { border-radius: 4px; background: var(--accent); }
+
+  /* ---------- sessions ---------- */
+  .conv-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 20px; padding: 6px 4px 0; }
+  .view-title { font-size: clamp(28px, 3.8vw, 44px); font-weight: 760; letter-spacing: -.045em; line-height: 1; }
+  .view-sub { color: var(--muted); font-size: 11px; margin-top: 6px; }
+  .fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; padding: 11px 13px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); font-size: 10px; }
+  .field { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .field .fl { color: var(--faint); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+  .field select, .field input { background: var(--card2); border: 1.5px solid transparent; border-radius: var(--pill); padding: 6px 11px; font-size: 10px; min-width: 0; max-width: 16em; }
+  .field select:hover, .field input:hover { border-color: var(--line); }
+  .field select:focus, .field input:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  .field input { width: 16em; }
+  .field.wide { flex: 1 1 15em; }
+  .field.wide input { width: 100%; max-width: none; flex: 1 1 auto; }
+  .clearbtn { background: transparent; border: 0; border-radius: var(--pill); padding: 5px 10px; color: var(--accent-ink); background: var(--accent-2); font-size: 10px; }
+  .clearbtn:hover { filter: brightness(.97); }
+  .conv-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; align-items: start; }
+  .listbody { max-height: 780px; overflow: auto; margin: 0 -6px; padding: 0 6px; }
+  .grp { display: flex; justify-content: space-between; gap: 8px; margin: 10px 0 3px; padding: 6px 10px; border-radius: 9px; background: var(--card2); color: var(--muted); font-size: 9px; letter-spacing: .04em; }
+  .grp b { color: var(--ink); font-weight: 650; }
+  .srow { display: grid; grid-template-columns: 46px minmax(0, 1fr) 66px; align-items: center; gap: 9px; width: 100%; padding: 9px 10px; background: transparent; border: 0; border-radius: 12px; text-align: left; }
+  .srow:hover { background: var(--card2); }
+  .srow[aria-current="true"] { background: var(--accent-2); }
+  .srow[aria-current="true"] .stitle { color: var(--accent-ink); }
+  .sdate { color: var(--muted); font-size: 10px; font-weight: 650; }
+  .srow[aria-current="true"] .sdate { color: var(--accent-ink); }
+  .smain { display: block; min-width: 0; overflow: hidden; }
+  .stitle { display: block; font-size: 11px; font-weight: 620; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .smeta { display: block; color: var(--faint); font-size: 9px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stok { text-align: right; color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .listfoot { padding: 10px 8px 0; border-top: 1px solid var(--line); margin-top: 8px; color: var(--faint); font-size: 9px; }
+
+  .detail-title { font-size: clamp(22px, 2.6vw, 32px); font-weight: 750; letter-spacing: -.035em; line-height: 1.15; margin: 2px 0 12px; }
+  .kv { display: flex; flex-wrap: wrap; gap: 5px 7px; margin-bottom: 14px; }
+  .kv .k { display: none; }
+  .kv .v { padding: 4px 9px; border-radius: var(--pill); background: var(--card2); color: var(--muted); font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acts { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+  .act { border: 0; border-radius: var(--pill); padding: 7px 13px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; }
+  .act + .act { background: var(--card2); color: var(--muted); }
+  .act:hover { filter: brightness(1.05); }
+  .sstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .sstat { padding: 11px 12px; border-radius: var(--r2); background: var(--card2); }
+  .sstat .k { color: var(--faint); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+  .sstat .v { margin-top: 3px; font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+  .subh { margin: 16px 0 7px; color: var(--faint); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+  .tokrow { display: grid; grid-template-columns: 4.8em minmax(0, 1fr) 3.4em; align-items: center; gap: 9px; padding: 4px 0; font-size: 10px; }
+  .tokrow .k { color: var(--muted); }
+  .bar { display: block; height: 8px; border-radius: 5px; background: var(--card2); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 5px; }
+  .tokrow .p { text-align: right; color: var(--faint); font-size: 9px; }
+  .costline { display: grid; grid-template-columns: 3.6em minmax(0, 1fr) 4.5em; align-items: center; gap: 9px; padding: 4px 0; font-size: 10px; }
+  .costline .k { color: var(--muted); }
+  .costline .bar i { background: var(--accent); }
+  .costline .v { text-align: right; color: var(--muted); font-size: 9px; white-space: nowrap; }
+  .turnwrap { overflow-x: auto; border-radius: var(--r2); background: var(--card2); padding: 5px; }
+  .tgrid { min-width: 560px; }
+  .trow { display: grid; grid-template-columns: 44px minmax(0, 1.5fr) 58px 54px 54px 54px 36px; gap: 6px; align-items: center; padding: 5px 7px; border-radius: 7px; font-size: 9px; }
+  .trow:nth-child(even) { background: rgba(255,255,255,.45); }
+  :root[data-theme="dark"] .trow:nth-child(even) { background: rgba(255,255,255,.02); }
+  .trow.th { background: transparent; color: var(--faint); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; border-radius: 0; border-bottom: 1px solid var(--line); }
+  .trow .tm { color: var(--muted); white-space: nowrap; }
+  .trow .md { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trow .n, .trow .c { text-align: right; white-space: nowrap; }
+  .trow .st { text-align: right; font-weight: 700; }
+  .trow .ok { color: var(--ok); }
+  .trow .run { color: var(--accent); }
+  .trow .err { color: var(--err); }
+  .trow.sub { color: var(--faint); font-size: 8px; }
+  .trow.sub .subnote { grid-column: 2 / -1; }
+  .dnote { margin-top: 8px; color: var(--faint); font-size: 9px; line-height: 1.6; }
+  .dfoot { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 14px -20px -20px; padding: 11px 20px; border-top: 1px solid var(--line); color: var(--faint); font-size: 9px; }
+
+  /* ---------- logs ---------- */
+  .lstats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .lstat { padding: 13px 15px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }
+  .lstat .k { color: var(--faint); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  .lstat .v { margin-top: 4px; font-size: 22px; font-weight: 720; letter-spacing: -.03em; }
+  .lstat .v.warn { color: var(--warn); }
+  .lstat .v.err { color: var(--err); }
+  .logbar { display: flex; flex-direction: column; gap: 8px; padding: 13px 15px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }
+  .lgrp { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+  .lgl { width: 5.2em; flex: 0 0 auto; color: var(--faint); font-size: 8px; letter-spacing: .09em; text-transform: uppercase; }
+  .chip { background: var(--card2); border: 1.5px solid transparent; border-radius: var(--pill); padding: 4px 10px; color: var(--muted); font-size: 9px; }
+  .chip:hover { border-color: var(--line); }
+  .chip[aria-pressed="true"] { background: var(--accent-2); border-color: var(--accent); color: var(--accent-ink); font-weight: 650; }
+  .lsearch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .lsearch input { flex: 1 1 13em; background: var(--card2); border: 1.5px solid transparent; border-radius: var(--pill); padding: 6px 12px; font-size: 10px; width: 17em; max-width: 100%; }
+  .lsearch input:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  .scanmsg { color: var(--faint); font-size: 9px; }
+  .log-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 14px; align-items: start; }
+  .logleft { display: grid; gap: 14px; align-content: start; }
+  .diagrow { display: grid; grid-template-columns: 7px 11ch minmax(0, 1fr); align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 10px; }
+  .diagrow:first-child { border-top: 0; }
+  .diagrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .diagrow .dn { color: var(--ink); font-size: 10px; font-weight: 600; }
+  .diagrow .ds { color: var(--faint); font-size: 9px; text-align: right; }
+  .batches { display: grid; gap: 3px; }
+  .batch { display: grid; grid-template-columns: 34px auto minmax(0, 1fr); align-items: center; gap: 4px 8px; width: 100%; padding: 7px 8px; border: 0; border-radius: 10px; background: transparent; text-align: left; }
+  .batch:hover { background: var(--card2); }
+  .batch[aria-current="true"] { background: var(--accent-2); }
+  .batch .bn { font-size: 10px; font-weight: 700; color: var(--accent-ink); }
+  .batch .bt { color: var(--muted); font-size: 9px; }
+  .batch .bg { color: var(--faint); font-size: 9px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .batch .bm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 3px 9px; color: var(--faint); font-size: 8px; }
+  .batch .bm .w { color: var(--warn); }
+  .batch .bm .e { color: var(--err); }
+  .stream { margin: 0 -8px; padding: 0 8px; max-height: 720px; overflow: auto; }
+  .lhead, .lrow { display: grid; grid-template-columns: 58px 54px 84px minmax(0, 1fr); gap: 8px; align-items: start; padding: 7px 6px; border-radius: 7px; }
+  .lhead { position: sticky; top: 0; z-index: 1; background: var(--card); color: var(--faint); font-size: 8px; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+  .lrow { font-size: 10px; line-height: 1.55; border-top: 1px solid var(--line); }
+  .lrow:first-of-type { border-top: 0; }
+  .lrow.warn { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+  .lrow.err { background: color-mix(in srgb, var(--err) 8%, transparent); }
+  .lt { color: var(--faint); font-family: var(--mono); font-size: 9px; white-space: nowrap; }
+  .ll { color: var(--muted); font-size: 9px; font-weight: 650; white-space: nowrap; }
+  .ll i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); margin-right: 4px; vertical-align: 1px; }
+  .lrow.ok .ll i { background: var(--ok); }
+  .lrow.warn .ll i { background: var(--warn); }
+  .lrow.err .ll i { background: var(--err); }
+  .ls { color: var(--faint); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lm { min-width: 0; color: var(--muted); }
+  .lrow.warn .lm { color: var(--ink); }
+  .lsm { display: none; }
+  .streamfoot { margin: 10px -20px -20px; padding: 10px 20px; border-top: 1px solid var(--line); color: var(--faint); font-size: 9px; }
+
+  /* ---------- footer ---------- */
+  .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 24px 4px 0; color: var(--faint); font-size: 9px; letter-spacing: .04em; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1100px) {
+    .lstats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .conv-grid, .log-grid { grid-template-columns: minmax(0, 1fr); }
+    .log-grid > .panel { order: -1; }
+    .listbody { max-height: none; }
+  }
+  @media (max-width: 900px) {
+    .top-grid, .mid-grid, .two-grid { grid-template-columns: minmax(0, 1fr); }
+    .hero-body { grid-template-columns: minmax(0, 1fr); }
+    .spark { max-width: 420px; }
+  }
+  @media (max-width: 760px) {
+    .frame { padding: 16px 14px 30px; }
+    .mast { align-items: flex-start; padding-bottom: 14px; }
+    .mast-right { width: 100%; justify-content: space-between; }
+    .nav { order: 1; }
+    .utils { order: 2; }
+    .mast-rule { order: 3; }
+    .brand-sub { display: none; }
+    .panel { padding: 15px 16px 17px; border-radius: 20px; }
+    .view { gap: 11px; }
+    .lstats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .lstat { padding: 11px 13px; }
+    .lstat .v { font-size: 19px; }
+    .cal .day { min-height: 52px; }
+    .day .dv { display: none; }
+    .dn { font-size: 10px; }
+    .dbar { height: 4px; }
+    .fbar { padding: 9px 10px; }
+    .field input { width: 100%; }
+    .field.wide { flex-basis: 100%; }
+    .conv-head { padding-top: 2px; }
+    .trow { grid-template-columns: 40px minmax(0, 1.4fr) 54px 48px 48px 48px 34px; font-size: 8px; }
+    .streamfoot, .dfoot { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; }
+    .streamfoot { margin-bottom: -17px; }
+    .dfoot { margin-bottom: -17px; }
+    .lhead, .lrow { grid-template-columns: 52px 46px minmax(0, 1fr); }
+    .lhead .lsh, .lrow .ls { display: none; }
+    .lrow .lsm { display: inline; color: var(--faint); margin-right: 4px; }
+  }
+  @media (max-width: 520px) {
+    .frame { padding: 12px 11px 26px; }
+    .mast-right { gap: 8px; }
+    .nav { width: 100%; justify-content: space-between; }
+    .nav button { padding: 7px 12px; flex: 1; }
+    .utils { gap: 2px 4px; }
+    .ulab { font-size: 8px; margin-left: 2px; }
+    .ubtn { padding: 3px 6px; font-size: 9px; }
+    .huge { font-size: clamp(40px, 15vw, 56px); margin: 8px 0 12px; }
+    html[data-unit="full"] .huge { font-size: clamp(24px, 8.5vw, 34px); }
+    .hero-meta span { padding: 4px 8px; font-size: 9px; }
+    .cost { font-size: 32px; }
+    .side-row { font-size: 10px; }
+    .cal-head { gap: 6px 8px; }
+    .cal-title { font-size: 16px; }
+    .calctl { margin-left: 0; }
+    .sqbtn { padding: 5px 9px; }
+    .cal { gap: 4px; }
+    .day { min-height: 44px; padding: 5px 5px; border-radius: 10px; }
+    .day .dv { display: none; }
+    .day .dbar { height: 4px; }
+    .brow { grid-template-columns: minmax(0, 1fr) 62px 3.8em; gap: 6px; }
+    .rrow { grid-template-columns: 8px minmax(0, 1fr) 64px 4.4em; gap: 6px; padding: 7px 5px; }
+    .rrow .rn { font-size: 10px; }
+    .rv { font-size: 9px; }
+    .sel-num { font-size: 34px; }
+    .field select { max-width: none; width: 100%; }
+    .fbar .field { flex: 1 1 40%; }
+    .fbar .field.wide { flex-basis: 100%; }
+    .field.wide input { width: 100%; }
+    .sstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sstat .v { font-size: 14px; }
+    .srow { grid-template-columns: 42px minmax(0, 1fr) 58px; gap: 7px; padding: 8px 7px; }
+    .stitle { font-size: 10px; }
+    .conv-head .hint { font-size: 9px; }
+    .kv .v { max-width: 100%; }
+    .detail-title { font-size: 21px; }
+    .lgl { width: 100%; }
+    .lsearch input { flex-basis: 100%; }
+    .lstats { gap: 7px; }
+    .lstat .k { font-size: 8px; }
+    .lstat .v { font-size: 17px; }
+    .batch { grid-template-columns: 30px auto minmax(0, 1fr); }
+    .log-grid { gap: 11px; }
+    .stream { max-height: 520px; }
+    .lhead, .lrow { grid-template-columns: 46px 40px minmax(0, 1fr); font-size: 8.5px; }
+    .lm { line-height: 1.5; }
+    .foot { font-size: 8px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="_core.js"></script>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var W = TK.W, S = TK.state;
+  var VIEW = { home: 'overview', conv: 'sessions', log: 'logs' };
+  var MQ = window.matchMedia('(max-width: 720px)');
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function dc(slot) { return 'var(--d' + slot + ')'; }
+  function bc(i) { return 'var(--b' + i + ')'; }
+  function at(k) { return esc(k); }
+  function selRange(k) {
+    if (!S.sel) return false;
+    return k >= S.sel.start && k <= S.sel.end;
+  }
+  function money(n) { return TK.money(n); }
+
+  /* ---------- shell ---------- */
+  function shell(body) {
+    document.documentElement.setAttribute('data-unit', TK.unit());
+    var nav = [['home', 'Overview'], ['conv', 'Sessions'], ['log', 'Logs']].map(function (x) {
+      return '<button data-nav="' + x[0] + '" aria-current="' + (S.view === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>';
+    }).join('');
+    var units = TK.UNITS.map(function (u) {
+      return '<button class="ubtn" data-unit="' + u.id + '" aria-pressed="' + (TK.unit() === u.id ? 'true' : 'false') + '">' + u.id + '</button>';
+    }).join('');
+    var themes = [['light', 'Light'], ['dark', 'Dark']].map(function (t) {
+      return '<button class="ubtn" data-theme-set="' + t[0] + '" aria-pressed="' + (S.theme === t[0] ? 'true' : 'false') + '">' + t[1] + '</button>';
+    }).join('');
+    var last = W.BATCHES[0];
+    return '<div class="frame">' +
+      '<header class="mast">' +
+        '<div class="brand">' +
+          '<span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>' +
+          '<span class="word">ATracker</span>' +
+          '<span class="brand-sub">token observatory</span>' +
+        '</div>' +
+        '<div class="mast-right">' +
+          '<nav class="nav" aria-label="视图">' + nav + '</nav>' +
+          '<div class="utils">' +
+            '<span class="ulab">unit</span>' + units +
+            '<span class="ulab">theme</span>' + themes +
+          '</div>' +
+        '</div>' +
+        '<div class="mast-rule"><span>local / read-only / rate ' + TK.RATE.toFixed(2) + '</span><span>scan ' + esc(last.at.slice(0, 16)) + '</span></div>' +
+      '</header>' +
+      '<main class="view">' + body + '</main>' +
+      '<footer class="foot">' +
+        '<span>ATracker / token observatory</span>' +
+        '<span>估算成本 · 人民币按 ' + TK.RATE.toFixed(2) + ' 折算</span>' +
+        '<span>数据截至 ' + esc(last.at.slice(0, 16)) + '</span>' +
+      '</footer>' +
+    '</div>';
+  }
+
+  /* ---------- home ---------- */
+  function spark(keys) {
+    var vals = keys.map(function (k) { var d = W.days[k]; return d ? d.total : 0; });
+    if (!vals.length) return '';
+    var max = Math.max.apply(null, vals) || 1;
+    var n = vals.length, wd = 280, base = 106, top = 10;
+    var pts = vals.map(function (v, i) {
+      var x = n === 1 ? wd / 2 : i / (n - 1) * wd;
+      var y = base - (v / max) * (base - top);
+      return [x, y];
+    });
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+    var area = 'M0 ' + base + ' L' + pts.map(function (p) {
+      return p[0].toFixed(1) + ' ' + p[1].toFixed(1);
+    }).join(' L') + ' L' + wd + ' ' + base + ' Z';
+    var last = pts[n - 1];
+    return '<svg class="spark" viewBox="0 0 280 120" role="img" aria-label="每日 token 趋势">' +
+      '<title>每日 token 趋势</title>' +
+      '<defs><linearGradient id="sparkfill" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" stop-color="currentColor" stop-opacity=".20"></stop>' +
+        '<stop offset="1" stop-color="currentColor" stop-opacity="0"></stop>' +
+      '</linearGradient></defs>' +
+      '<path class="sarea" fill="url(#sparkfill)" d="' + area + '"></path>' +
+      '<path class="sline" d="' + line + '"></path>' +
+      '<circle class="sdot" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5"></circle>' +
+    '</svg>';
+  }
+
+  function calPane(keys, leg) {
+    var meta = TK.monthMeta(S.month);
+    var mk = TK.monthKeys(S.month);
+    var cells = '';
+    for (var i = 0; i < meta.lead; i++) cells += '<div class="day blank"></div>';
+    mk.forEach(function (k) {
+      var items = TK.dayItems(k, leg.ranked);
+      var day = W.days[k];
+      var segs = items.map(function (x) {
+        return '<i style="width:' + x.pct.toFixed(2) + '%;background:' + dc(x.slot) + '"></i>';
+      }).join('');
+      var bar = segs || '<span class="zero"></span>';
+      cells += '<button class="day' + (selRange(k) ? ' sel' : '') + '" data-day="' + k + '" aria-pressed="' + (selRange(k) ? 'true' : 'false') + '">' +
+        '<span class="dn">' + k.slice(8) + '</span>' +
+        '<span class="dv">' + (day && day.total ? esc(TK.fmtTok(day.total)) : '·') + '</span>' +
+        '<span class="dbar">' + bar + '</span>' +
+      '</button>';
+    });
+    var hidden = S.offDirs.length;
+    return '<section class="panel">' +
+      '<div class="cal-head">' +
+        '<span class="cal-title">' + esc(S.month.replace('-', ' / ')) + '</span>' +
+        '<span class="hint">' + (hidden ? hidden + ' 个目录已隐藏' : '点击日期选择 · 再点一天成范围') + '</span>' +
+        '<span class="calctl">' +
+          '<button class="sqbtn" data-shift="-1" aria-label="上个月">←</button>' +
+          '<button class="sqbtn" data-shift="1" aria-label="下个月">→</button>' +
+          '<button class="sqbtn" data-latest="1">本月</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="cal-weeks">' + ['一', '二', '三', '四', '五', '六', '日'].map(function (d) { return '<span>' + d + '</span>'; }).join('') + '</div>' +
+      '<div class="cal">' + cells + '</div>' +
+      '<div class="cal-foot"><span><b>' + esc(S.month) + '</b> · ' + meta.dim + ' 天</span><span>色块 = 目录占比</span></div>' +
+    '</section>';
+  }
+
+  function legendPane(keys, leg) {
+    var rows = leg.ranked.map(function (x) {
+      var off = S.offDirs.indexOf(x.path) >= 0;
+      return '<button class="lg" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off ? 'true' : 'false') + '">' +
+        '<i style="background:' + dc(x.slot) + '"></i>' +
+        '<span class="ln">' + esc(x.name) + '</span>' +
+        '<span class="lv">' + esc(TK.fmtTok(x.v)) + '</span>' +
+      '</button>';
+    }).join('');
+    return '<div class="pbody" style="padding-top:8px">' +
+      '<div class="legend">' + rows + '</div>' +
+      '<div class="lgnote">点击目录可隐藏或恢复它在日历中的色块。隐藏只影响日历，不改变任何汇总数字。</div>' +
+    '</div>';
+  }
+
+  function dirRows(d) {
+    return d.dirs.map(function (x) {
+      var w = d.agg.total ? x.v / d.agg.total * 100 : 0;
+      return '<div class="brow">' +
+        '<span class="bn"><i style="background:' + dc(x.slot) + '"></i><span>' + esc(x.name) + '</span></span>' +
+        '<span class="track"><i style="width:' + Math.max(1, w).toFixed(2) + '%;background:' + dc(x.slot) + '"></i></span>' +
+        '<span class="bv">' + esc(TK.fmtTok(x.v)) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function ranking(title, meta, rows, max, kind) {
+    var body = rows.map(function (x, i) {
+      var color = kind === 'dir' ? dc(x.slot) : 'var(--accent)';
+      var w = max ? x.v / max * 100 : 0;
+      return '<button class="rrow" data-' + kind + '="' + esc(kind === 'dir' ? x.path : x.id) + '">' +
+        '<span class="sw" style="background:' + color + '"></span>' +
+        '<span class="rn">' + esc(kind === 'dir' ? x.name : x.id) + '</span>' +
+        '<span class="rb"><i style="width:' + Math.max(1, w).toFixed(2) + '%;background:' + color + '"></i></span>' +
+        '<span class="rv">' + esc(TK.fmtTok(x.v)) + '<small>' + TK.fmtPct(max ? x.v / rows.reduce(function (s, y) { return s + y.v; }, 0) : 0) + '</small></span>' +
+      '</button>';
+    }).join('');
+    return '<section class="panel">' +
+      '<div class="phead"><span>' + esc(title) + '</span><span class="pm">' + esc(meta) + '</span></div>' +
+      '<div class="rank">' + body + '</div>' +
+    '</section>';
+  }
+
+  function matrixPane(keys) {
+    var m = TK.matrixData(keys);
+    var cmax = 1;
+    m.agents.forEach(function (a) {
+      m.keep.forEach(function (mod) { cmax = Math.max(cmax, m.cell[a.id][mod.id]); });
+    });
+    var head = '<tr><th class="mh">model / source</th>' + m.agents.map(function (a) { return '<th>' + esc(a.id) + '</th>'; }).join('') + '<th class="tot">Σ</th></tr>';
+    var body = m.keep.map(function (mod) {
+      var tds = m.agents.map(function (a) {
+        var v = m.cell[a.id][mod.id];
+        var r = Math.sqrt(v / cmax);
+        return '<td><button class="dotbtn' + (v ? '' : ' zero') + '" data-cell-agent="' + esc(a.id) + '" data-cell-model="' + esc(mod.id) + '" aria-label="' + esc(a.id + ' / ' + mod.id + ' ' + TK.fmtTok(v)) + '" title="' + esc(a.id + ' · ' + mod.id + ' · ' + TK.fmtTok(v)) + '">' +
+          '<i style="opacity:' + (v ? (0.14 + 0.86 * r).toFixed(2) : 1) + '"></i>' +
+        '</button></td>';
+      }).join('');
+      var row = m.agents.reduce(function (s, a) { return s + m.cell[a.id][mod.id]; }, 0);
+      return '<tr><td class="mn">' + esc(mod.id) + '</td>' + tds + '<td class="tot">' + esc(TK.fmtTok(row)) + '</td></tr>';
+    }).join('');
+    var foot = '<tr class="mxfoot"><td class="mn">Σ</td>' + m.agents.map(function (a) {
+      return '<td class="tot">' + esc(TK.fmtTok(m.rowTotal(a))) + '</td>';
+    }).join('') + '<td class="tot">' + esc(TK.fmtTok(m.agents.reduce(function (s, a) { return s + m.rowTotal(a); }, 0))) + '</td></tr>';
+    return '<section class="panel">' +
+      '<div class="phead"><span>MATRIX / 来源 × 模型</span><span class="pm">色块 = token 量 · 点击下钻</span></div>' +
+      '<div class="mxwrap"><table class="mx"><thead>' + head + '</thead><tbody>' + body + foot + '</tbody></table></div>' +
+      '<div class="mxleg"><span>少</span><i style="width:11px;height:11px;opacity:.18"></i><i style="width:11px;height:11px;opacity:.4"></i><i style="width:11px;height:11px;opacity:.68"></i><i style="width:11px;height:11px"></i><span>多</span><span>· 色块深浅表示用量 · 点击下钻</span></div>' +
+    '</section>';
+  }
+
+  function homeView() {
+    var keys = TK.rangeKeys();
+    var d = TK.detailData(keys);
+    var all = TK.aggregate(TK.allKeys());
+    var hit = d.agg.total ? d.agg.buckets.cacheRead / d.agg.total : 0;
+    var leg = TK.legend(keys);
+
+    var hero = '<section class="panel hero">' +
+      '<div class="phead"><span>TOKENS / 当前范围</span><span class="pm">' + esc(TK.scopeText()) + '</span></div>' +
+      '<div class="hero-body">' +
+        '<div>' +
+          '<div class="kicker">total tokens</div>' +
+          '<div class="huge">' + esc(TK.fmtTok(d.agg.total)) + '</div>' +
+          '<div class="hero-meta">' +
+            '<span>覆盖 <b>' + d.agg.days + '</b> 天</span>' +
+            '<span>缓存命中 <b>' + TK.fmtPct(hit) + '</b></span>' +
+            '<span>未定价 <b>' + esc(TK.fmtTok(d.agg.unpriced)) + '</b></span>' +
+          '</div>' +
+        '</div>' + spark(keys) +
+      '</div>' +
+    '</section>';
+
+    var side = '<aside class="panel side-dark">' +
+      '<div class="phead"><span>COST / 成本</span><span class="pm">估算</span></div>' +
+      '<div class="side-body">' +
+        '<div class="side-lab">priced spend</div>' +
+        '<div class="cost">' + money(d.agg.usd) + '</div>' +
+        '<div class="cost-sub">' + TK.moneyUsd(d.agg.usd) + ' / rate ' + TK.RATE.toFixed(2) + '</div>' +
+        '<div class="side-list">' +
+          '<div class="side-row"><span>全期 tokens</span><b>' + esc(TK.fmtTok(all.total)) + '</b></div>' +
+          '<div class="side-row"><span>全期成本</span><b>' + money(all.usd) + '</b></div>' +
+          '<div class="side-row"><span>已定价 token</span><b>' + esc(TK.fmtTok(d.agg.priced)) + '</b></div>' +
+          '<div class="side-row"><span>数据截至</span><b>' + esc(W.BATCHES[0].at.slice(0, 10)) + '</b></div>' +
+        '</div>' +
+      '</div>' +
+    '</aside>';
+
+    var sel = '<section class="panel">' +
+      '<div class="phead"><span>SELECTION / 选中</span><span class="pm">' + esc(S.sel ? 'range' : 'month') + '</span></div>' +
+      '<div class="pbody">' +
+        '<div class="sel-scope">' + esc(TK.scopeText()) + '</div>' +
+        '<div class="sel-num">' + esc(TK.fmtTok(d.agg.total)) + '</div>' +
+        '<div class="sel-meta"><span>成本 <b>' + money(d.agg.usd) + '</b></span><span>缓存 <b>' + TK.fmtPct(hit) + '</b></span></div>' +
+        dirRows(d) +
+        '<div class="hint">点击日历中的日期可切换单日或范围；点击上方目录 / 模型 / 矩阵色块进入会话列表。</div>' +
+      '</div>' +
+    '</section>';
+
+    var dirs = TK.W.DIRS.map(function (x, i) {
+      return { path: x.path, name: x.name, slot: i, v: d.agg.byDir[x.path] || 0 };
+    }).filter(function (x) { return x.v > 0; }).sort(function (a, b) { return b.v - a.v; });
+    var models = d.models;
+
+    var legendPanel = '<section class="panel"><div class="phead"><span>LEGEND / 目录</span><span class="pm">' + leg.ranked.length + ' dirs</span></div>' + legendPane(keys, leg) + '</section>';
+
+    return '<div class="top-grid">' + hero + side + '</div>' +
+      '<div class="mid-grid">' + calPane(keys, leg) +
+        '<div class="side-stack">' + legendPanel + sel + '</div>' +
+      '</div>' +
+      '<div class="two-grid">' +
+        ranking('DIRECTORY / 目录', '点击查看会话', dirs, dirs.length ? dirs[0].v : 1, 'dir') +
+        ranking('MODEL / 模型', '点击查看会话', models, models.length ? models[0].v : 1, 'model') +
+      '</div>' +
+      matrixPane(keys) +
+      '<div class="panel"><div class="note-strip"><b>口径</b> · 四桶合计等于该范围的 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。金额为估算值，人民币按固定汇率 ' + TK.RATE.toFixed(2) + ' 折算；未定价模型不计入金额。</div></div>';
+  }
+
+  /* ---------- sessions ---------- */
+  function convView() {
+    var g = TK.convGroups();
+    var cur = g.cur;
+    var cst = cur ? TK.convStats(cur) : null;
+    var any = S.convFilter.dir || S.convFilter.agent || S.convFilter.model || S.convQ;
+
+    var head = '<div class="conv-head">' +
+      '<div><div class="view-title">Sessions</div><div class="view-sub">会话 · 按目录分组</div></div>' +
+      '<div class="hint">' + g.convs.length + ' 个会话 · 点击行查看明细</div>' +
+    '</div>';
+
+    var fbar = '<div class="fbar">' +
+      '<label class="field"><span class="fl">dir</span><select id="fDir" aria-label="按目录筛选"><option value="">全部</option>' +
+        W.DIRS.map(function (x) { return '<option value="' + esc(x.path) + '"' + (S.convFilter.dir === x.path ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') +
+      '</select></label>' +
+      '<label class="field"><span class="fl">src</span><select id="fAgent" aria-label="按来源筛选"><option value="">全部</option>' +
+        W.AGENTS.map(function (x) { return '<option value="' + esc(x.id) + '"' + (S.convFilter.agent === x.id ? ' selected' : '') + '>' + esc(x.id) + '</option>'; }).join('') +
+      '</select></label>' +
+      '<label class="field"><span class="fl">model</span><select id="fModel" aria-label="按模型筛选"><option value="">全部</option>' +
+        W.MODELS.map(function (x) { return '<option value="' + esc(x.id) + '"' + (S.convFilter.model === x.id ? ' selected' : '') + '>' + esc(x.id) + '</option>'; }).join('') +
+      '</select></label>' +
+      '<label class="field wide"><span class="fl">q</span><input id="convq" value="' + esc(S.convQ) + '" placeholder="标题 / 目录 / 来源" autocomplete="off" aria-label="搜索会话"></label>' +
+      (any ? '<button class="clearbtn" data-clearf="1">清除筛选</button>' : '') +
+    '</div>';
+
+    var list = g.groups.length ? g.groups.map(function (gr) {
+      return '<div class="grp"><span># ' + esc(gr.dir.name) + '</span><b>' + esc(TK.fmtTok(gr.total)) + '</b></div>' +
+        gr.list.map(function (cv) {
+          var on = cur && cv.id === cur.id;
+          return '<button class="srow" data-cv="' + esc(cv.id) + '" aria-current="' + (on ? 'true' : 'false') + '">' +
+            '<span class="sdate">' + esc(cv.date.slice(5)) + '</span>' +
+            '<span class="smain"><span class="stitle">' + esc(cv.title) + '</span><span class="smeta">' + esc(cv.source) + ' · ' + esc(cv.model) + '</span></span>' +
+            '<span class="stok">' + esc(TK.fmtTok(cv.tokens)) + '</span>' +
+          '</button>';
+        }).join('');
+    }).join('') : '<div class="empty">没有匹配的会话<br><button class="clearbtn" data-clearf="1">清除筛选</button></div>';
+
+    var listPane = '<section class="panel">' +
+      '<div class="phead"><span>SESSIONS / 会话</span><span class="pm">' + g.convs.length + ' rows</span></div>' +
+      '<div class="listbody">' + list + '</div>' +
+      '<div class="listfoot">' + g.groups.length + ' 个目录 · 按日期倒序</div>' +
+    '</section>';
+
+    var detail = cur ? detailPane(cur, cst) : '<section class="panel"><div class="phead"><span>DETAIL / 明细</span></div><div class="empty">没有匹配的会话</div></section>';
+
+    return head + fbar + '<div class="conv-grid">' + listPane + detail + '</div>';
+  }
+
+  function detailPane(cur, cst) {
+    var fail = cur.turnList.filter(function (t) { return t.state === '失败'; }).length;
+    var subs = cur.turnList.filter(function (t) { return t.sub; }).length;
+    var labels = ['输入', '输出', '缓存命中', '缓存写入'];
+    var vals = [cst.tb.input, cst.tb.output, cst.tb.cacheRead, cst.tb.cacheWrite];
+    var comp = vals.map(function (v, i) {
+      var p = cst.tsum ? v / cst.tsum : 0;
+      return '<div class="tokrow">' +
+        '<span class="k">' + labels[i] + '</span>' +
+        '<span class="bar"><i style="width:' + Math.max(1, p * 100).toFixed(2) + '%;background:' + bc(i) + '"></i></span>' +
+        '<span class="p">' + TK.fmtPct(p) + '</span>' +
+      '</div>';
+    }).join('');
+
+    var days = cst.dayRows.length ? cst.dayRows.map(function (k) {
+      return '<div class="costline">' +
+        '<span class="k">' + esc(k.slice(5)) + '</span>' +
+        '<span class="bar"><i style="width:' + Math.max(1, cst.byDay[k] / cst.maxDay * 100).toFixed(2) + '%"></i></span>' +
+        '<span class="v">' + money(cst.byDay[k]) + '</span>' +
+      '</div>';
+    }).join('') : '<div class="hint">没有已定价的轮次</div>';
+
+    var turns = cur.turnList.map(function (t) {
+      var tc = TK.turnCost(t);
+      var st = t.state === '失败' ? 'ERR' : t.state === '进行中' ? 'RUN' : 'OK';
+      var cls = st === 'ERR' ? 'err' : st === 'RUN' ? 'run' : 'ok';
+      var row = '<div class="trow">' +
+        '<span class="tm">' + esc(t.time.slice(11, 16)) + '</span>' +
+        '<span class="md" title="' + esc(t.model) + '">' + esc(t.model) + '</span>' +
+        '<span class="n">' + esc(TK.fmtTok(t.input)) + '</span>' +
+        '<span class="n">' + esc(TK.fmtTok(t.output)) + '</span>' +
+        '<span class="n">' + esc(TK.fmtTok(t.cache)) + '</span>' +
+        '<span class="c">' + (tc.priced ? money(tc.usd) : '--') + '</span>' +
+        '<span class="st ' + cls + '">' + st + '</span>' +
+      '</div>';
+      if (t.sub) {
+        row += '<div class="trow sub"><span></span><span class="subnote">└─ 子 agent ×' + esc(t.sub.turns || 0) + ' · 用量并入本轮</span></div>';
+      }
+      return row;
+    }).join('');
+
+    return '<section class="panel">' +
+      '<div class="phead"><span>DETAIL / 明细</span><span class="pm">' + esc(cur.id) + '</span></div>' +
+      '<div class="pbody">' +
+        '<h2 class="detail-title">' + esc(cur.title) + '</h2>' +
+        '<div class="kv">' +
+          '<span class="k">date</span><span class="v">' + esc(cur.date) + '</span>' +
+          '<span class="k">dir</span><span class="v">' + esc(cur.dirName) + '</span>' +
+          '<span class="k">source</span><span class="v">' + esc(cur.source) + '</span>' +
+          '<span class="k">model</span><span class="v">' + esc(cur.model) + '</span>' +
+          '<span class="k">path</span><span class="v">' + esc(cur.dir) + '</span>' +
+        '</div>' +
+        '<div class="acts"><button class="act" data-tocal="' + esc(cur.id) + '">在日历中查看</button><button class="act" data-backdir="' + esc(cur.id) + '">该目录全部会话</button></div>' +
+        '<div class="sstats">' +
+          '<div class="sstat"><div class="k">turns</div><div class="v">' + cur.turns + '</div></div>' +
+          '<div class="sstat"><div class="k">sub agent</div><div class="v">' + subs + '</div></div>' +
+          '<div class="sstat"><div class="k">failed</div><div class="v">' + fail + '</div></div>' +
+          '<div class="sstat"><div class="k">tokens</div><div class="v">' + esc(TK.fmtTok(cur.tokens)) + '</div></div>' +
+        '</div>' +
+        '<div class="subh">token / 构成</div>' + comp +
+        '<div class="subh">cost / 按天</div>' + days +
+        '<div class="subh">turns / 轮次</div>' +
+        '<div class="turnwrap"><div class="tgrid">' +
+          '<div class="trow th"><span>time</span><span>model</span><span>in</span><span>out</span><span>cache</span><span>cost</span><span>st</span></div>' +
+          turns +
+        '</div></div>' +
+        '<div class="dnote">成本按模型单价估算 · 未定价轮次显示 --' + (cst.unpriced ? ' · ' + cst.unpriced + ' 轮未定价' : '') + '</div>' +
+      '</div>' +
+      '<div class="dfoot"><span>' + cur.turns + ' turns</span><span>' + esc(TK.fmtTok(cur.tokens)) + ' tokens</span><span>' + (cst.usd ? money(cst.usd) : '--') + '</span></div>' +
+    '</section>';
+  }
+
+  /* ---------- logs ---------- */
+  function logView() {
+    var d = TK.logData();
+    var last = d.last;
+    var stats = '<div class="lstats">' +
+      '<div class="lstat"><div class="k">last scan</div><div class="v">' + esc(last.at.slice(11, 19)) + '</div></div>' +
+      '<div class="lstat"><div class="k">events</div><div class="v">' + last.events.toLocaleString('en-US') + '</div></div>' +
+      '<div class="lstat"><div class="k">dup</div><div class="v">' + last.dup + '</div></div>' +
+      '<div class="lstat"><div class="k">skip</div><div class="v">' + last.skipped + '</div></div>' +
+      '<div class="lstat"><div class="k">warn</div><div class="v' + (last.warn ? ' warn' : '') + '">' + last.warn + '</div></div>' +
+      '<div class="lstat"><div class="k">err</div><div class="v' + (last.err ? ' err' : '') + '">' + last.err + '</div></div>' +
+    '</div>';
+
+    var levels = [['all', 'ALL'], ['info', 'INFO'], ['ok', 'OK'], ['warn', 'WARN'], ['err', 'ERR']];
+    var lvl = levels.map(function (x) {
+      return '<button class="chip" data-level="' + x[0] + '" aria-pressed="' + (S.log.lvl === x[0] ? 'true' : 'false') + '">' + x[1] + '</button>';
+    }).join('');
+    var srcs = d.src.map(function (x) {
+      return '<button class="chip" data-src="' + esc(x) + '" aria-pressed="' + (S.log.src === x ? 'true' : 'false') + '">' + (x === 'all' ? '全部' : esc(x)) + '</button>';
+    }).join('');
+
+    var bar = '<div class="logbar">' +
+      '<div class="lgrp"><span class="lgl">level</span>' + lvl + '</div>' +
+      '<div class="lgrp"><span class="lgl">source</span>' + srcs + '</div>' +
+      '<div class="lsearch"><span class="lgl">search</span><input id="logq" value="' + esc(S.log.q) + '" placeholder="message" autocomplete="off" aria-label="搜索日志">' +
+        '<button class="clearbtn" data-logclear="1">清除</button>' +
+        '<button class="clearbtn" data-rescan="1">重新扫描</button>' +
+        '<span class="scanmsg" id="scanmsg"></span>' +
+      '</div>' +
+    '</div>';
+
+    var diag = '<section class="panel">' +
+      '<div class="phead"><span>SOURCES / 来源</span><span class="pm">' + d.diag.length + '</span></div>' +
+      '<div class="pbody" style="padding-top:6px;padding-bottom:6px">' + d.diag.map(function (x) {
+        return '<div class="diagrow"><i></i><span class="dn">' + esc(x.name) + '</span><span class="ds">' + esc(x.text) + '</span></div>';
+      }).join('') + '</div>' +
+    '</section>';
+
+    var batches = '<section class="panel">' +
+      '<div class="phead"><span>BATCHES / 批次</span><span class="pm">' + d.batches.length + '</span></div>' +
+      '<div class="batches">' + d.batches.map(function (b) {
+        return '<button class="batch" data-batch="' + b.id + '" aria-current="' + (S.log.batch === b.id ? 'true' : 'false') + '">' +
+          '<span class="bn">#' + b.id + '</span>' +
+          '<span class="bt">' + esc(b.at.slice(11, 19)) + '</span>' +
+          '<span class="bg">' + esc(b.trigger) + ' · ' + b.files + ' files</span>' +
+          '<span class="bm"><span>ev ' + b.events.toLocaleString('en-US') + '</span><span>dup ' + b.dup + '</span><span class="' + (b.warn ? 'w' : '') + '">warn ' + b.warn + '</span><span class="' + (b.err ? 'e' : '') + '">err ' + b.err + '</span></span>' +
+        '</button>';
+      }).join('') + '</div>' +
+    '</section>';
+
+    var stream = '<section class="panel">' +
+      '<div class="phead"><span>STREAM / 日志</span><span class="pm">' + d.logs.length + ' rows</span></div>' +
+      '<div class="stream">' +
+        '<div class="lhead"><span>time</span><span>level</span><span class="lsh">source</span><span>message</span></div>' +
+        (d.logs.length ? d.logs.map(function (l) {
+          var tag = l.lvl === 'warn' ? 'WARN' : l.lvl === 'err' ? 'ERR' : l.lvl === 'ok' ? 'OK' : 'INFO';
+          return '<div class="lrow ' + l.lvl + '">' +
+            '<span class="lt">' + esc(l.at.slice(11, 19)) + '</span>' +
+            '<span class="ll"><i></i>' + tag + '</span>' +
+            '<span class="ls">' + esc(l.src) + '</span>' +
+            '<span class="lm"><span class="lsm">' + esc(l.src) + '</span>' + esc(l.msg) + '</span>' +
+          '</div>';
+        }).join('') : '<div class="empty">没有匹配的日志</div>') +
+      '</div>' +
+      '<div class="streamfoot">' + d.logs.length + ' rows' + (S.log.batch !== null ? ' / batch #' + S.log.batch : ' / all batches') + '</div>' +
+    '</section>';
+
+    return '<div class="conv-head"><div><div class="view-title">Logs</div><div class="view-sub">扫描日志 · 本地只读</div></div><div class="hint">最近扫描 ' + esc(last.at) + '</div></div>' +
+      stats + bar + '<div class="log-grid"><div class="logleft">' + diag + batches + '</div>' + stream + '</div>';
+  }
+
+  function route() {
+    if (S.view === 'conv') return convView();
+    if (S.view === 'log') return logView();
+    return homeView();
+  }
+
+  var focusId = null, focusPos = 0;
+  function draw() {
+    var ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT' && ae.id) {
+      focusId = ae.id;
+      focusPos = ae.selectionStart;
+    }
+    app.innerHTML = shell(route());
+    if (focusId) {
+      var el = document.getElementById(focusId);
+      if (el) {
+        el.focus();
+        try { el.setSelectionRange(focusPos, focusPos); } catch (e) {}
+      }
+    }
+    focusId = null;
+  }
+
+  app.addEventListener('click', function (e) {
+    var t = e.target;
+    var nav = t.closest('[data-nav]');
+    if (nav) { TK.go(nav.getAttribute('data-nav')); return; }
+    var unit = t.closest('.ubtn[data-unit]');
+    if (unit) { TK.setUnit(unit.getAttribute('data-unit')); return; }
+    var th = t.closest('[data-theme-set]');
+    if (th) {
+      if (S.theme !== th.getAttribute('data-theme-set')) TK.toggleTheme();
+      return;
+    }
+    var shift = t.closest('[data-shift]');
+    if (shift) { TK.shiftMonth(Number(shift.getAttribute('data-shift'))); TK.refresh(); return; }
+    if (t.closest('[data-latest]')) { TK.resetToday(); TK.refresh(); return; }
+    var day = t.closest('[data-day]');
+    if (day) { TK.selectDay(day.getAttribute('data-day')); TK.refresh(); return; }
+    var lg = t.closest('[data-legend]');
+    if (lg) {
+      var p = lg.getAttribute('data-legend');
+      var i = S.offDirs.indexOf(p);
+      if (i >= 0) S.offDirs.splice(i, 1); else S.offDirs.push(p);
+      TK.refresh(); return;
+    }
+    var dir = t.closest('[data-dir]');
+    if (dir) { TK.go('conv', { dir: dir.getAttribute('data-dir') }); return; }
+    var model = t.closest('[data-model]');
+    if (model) { TK.go('conv', { model: model.getAttribute('data-model') }); return; }
+    var cell = t.closest('[data-cell-agent]');
+    if (cell) {
+      S.convFilter = { dir: null, agent: cell.getAttribute('data-cell-agent'), model: cell.getAttribute('data-cell-model') };
+      S.convId = null;
+      TK.go('conv');
+      return;
+    }
+    var cv = t.closest('[data-cv]');
+    if (cv) { S.convId = cv.getAttribute('data-cv'); TK.refresh(); return; }
+    if (t.closest('[data-tocal]')) {
+      var tid = t.closest('[data-tocal]').getAttribute('data-tocal');
+      var cur = W.convs.filter(function (x) { return x.id === tid; })[0];
+      if (cur) TK.go('home', { day: cur.date });
+      return;
+    }
+    if (t.closest('[data-backdir]')) {
+      var bid = t.closest('[data-backdir]').getAttribute('data-backdir');
+      var cd = W.convs.filter(function (x) { return x.id === bid; })[0];
+      if (cd) TK.go('conv', { dir: cd.dir });
+      return;
+    }
+    if (t.closest('[data-clearf]')) {
+      S.convFilter = { dir: null, agent: null, model: null };
+      S.convQ = '';
+      S.convId = null;
+      TK.refresh(); return;
+    }
+    var level = t.closest('[data-level]');
+    if (level) { TK.setLog({ lvl: level.getAttribute('data-level') }); return; }
+    var src = t.closest('[data-src]');
+    if (src) { TK.setLog({ src: src.getAttribute('data-src') }); return; }
+    var batch = t.closest('[data-batch]');
+    if (batch) {
+      var id = Number(batch.getAttribute('data-batch'));
+      TK.setLog({ batch: S.log.batch === id ? null : id });
+      return;
+    }
+    if (t.closest('[data-logclear]')) {
+      TK.setLog({ batch: null, lvl: 'all', src: 'all', q: '' });
+      return;
+    }
+    var rs = t.closest('[data-rescan]');
+    if (rs) {
+      if (rs.disabled) return;
+      var msg = document.getElementById('scanmsg');
+      rs.disabled = true; rs.textContent = '扫描中';
+      if (msg) msg.textContent = 'queued';
+      setTimeout(function () {
+        if (!document.body.contains(rs)) return;
+        rs.disabled = false; rs.textContent = '重新扫描';
+        if (msg) msg.textContent = 'done · 0 new';
+      }, 1200);
+    }
+  });
+
+  app.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.id === 'fDir') { S.convFilter.dir = t.value || null; S.convId = null; TK.refresh(); }
+    else if (t.id === 'fAgent') { S.convFilter.agent = t.value || null; S.convId = null; TK.refresh(); }
+    else if (t.id === 'fModel') { S.convFilter.model = t.value || null; S.convId = null; TK.refresh(); }
+  });
+
+  app.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.id === 'convq') { S.convQ = t.value; TK.refresh(); }
+    else if (t.id === 'logq') { S.log.q = t.value; TK.refresh(); }
+  });
+
+  TK.mount(draw);
+  draw();
+  if (MQ.addEventListener) MQ.addEventListener('change', draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 02 · 热敏小票</title>
+<style>
+  :root[data-theme="light"] {
+    --desk: #cfd0cb;
+    --paper: #f6f5f0;
+    --ink: #17181a;
+    --muted: #6c6e69;
+    --faint: #a9aba5;
+    --rule: #c9cbc4;
+    --accent: #bf3b22;
+    --wash: #e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-theme="dark"] {
+    --desk: #0d0e0f;
+    --paper: #1a1b1d;
+    --ink: #ecebe4;
+    --muted: #a2a39d;
+    --faint: #6f716c;
+    --rule: #3b3c39;
+    --accent: #ff6a4d;
+    --wash: #232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--desk);
+    color: var(--ink);
+    font-family: "Courier New", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    padding: 22px 12px 42px;
+  }
+  button, input { font: inherit; color: inherit; }
+  .receipt {
+    max-width: 820px; margin: 0 auto; background: var(--paper);
+    padding: 24px 34px 30px; position: relative;
+    box-shadow: 0 18px 50px rgba(0,0,0,.16);
+  }
+  .receipt::before, .receipt::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 10px;
+    background:
+      linear-gradient(135deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x,
+      linear-gradient(45deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x;
+    background-color: var(--paper);
+  }
+  .receipt::before { top: -10px; }
+  .receipt::after { bottom: -10px; transform: rotate(180deg); }
+  .rhead { text-align: center; border-bottom: 2px solid var(--ink); padding-bottom: 12px; }
+  .rhead .name { font-size: 26px; letter-spacing: .34em; font-weight: 700; }
+  .rhead .sub { font-size: 9px; letter-spacing: .28em; color: var(--muted); margin-top: 3px; }
+  .barcode { height: 34px; margin: 12px auto 6px; max-width: 300px;
+    background: repeating-linear-gradient(90deg,
+      var(--ink) 0 2px, transparent 2px 4px,
+      var(--ink) 4px 5px, transparent 5px 9px,
+      var(--ink) 9px 12px, transparent 12px 14px,
+      var(--ink) 14px 15px, transparent 15px 19px);
+  }
+  .rno { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted); border-top: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); padding: 4px 0; }
+  .navrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 13px 0 4px; }
+  .tab { background: transparent; border: 1px solid var(--ink); padding: 4px 10px; cursor: pointer; font-size: 10px; letter-spacing: .12em; }
+  .tab:hover { background: var(--wash); }
+  .tab[aria-current="true"] { background: var(--ink); color: var(--paper); }
+  .sp { flex: 1; }
+  .unit { display: flex; border: 1px solid var(--rule); }
+  .unit button { border: 0; border-left: 1px solid var(--rule); background: transparent; padding: 3px 7px; font-size: 9px; letter-spacing: .08em; cursor: pointer; color: var(--muted); }
+  .unit button:first-child { border-left: 0; }
+  .unit button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
+  .ghost:hover { color: var(--ink); border-color: var(--ink); }
+  .tear { text-align: center; font-size: 8.5px; letter-spacing: .3em; color: var(--faint); margin: 14px 0 8px; }
+  .sec { margin-top: 16px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--ink); padding-bottom: 3px; margin-bottom: 9px; }
+  .sec-h b { font-size: 10px; letter-spacing: .18em; font-weight: 700; }
+  .sec-h span { font-size: 9px; color: var(--muted); letter-spacing: .08em; }
+  .sec-h .r { margin-left: auto; font-size: 9px; color: var(--muted); }
+  .total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 4px; }
+  .total-line .lab { font-size: 9.5px; letter-spacing: .18em; color: var(--muted); }
+  .total-line .val { font-size: clamp(34px, 6vw, 58px); font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+  .total-line .side { text-align: right; }
+  .total-line .money { font-size: clamp(22px, 3.4vw, 34px); color: var(--accent); letter-spacing: -.03em; }
+  .total-line .tiny { font-size: 9px; color: var(--muted); letter-spacing: .04em; }
+  .leadrow { display: flex; align-items: baseline; gap: 5px; padding: 2px 0; }
+  .leadrow .nm { white-space: nowrap; }
+  .leadrow .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
+  .leadrow .v { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .leadrow .muted { color: var(--muted); }
+  .leadrow .acc { color: var(--accent); }
+  .cal-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .cal-tools .scope { font-size: 10px; letter-spacing: .06em; }
+  .legend { display: flex; flex-wrap: wrap; gap: 3px 13px; margin: 8px 0 9px; }
+  .lg { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; font-size: 9.5px; cursor: pointer; color: var(--ink); }
+  .lg .sw { width: 10px; height: 10px; background: var(--c); border: 1px solid var(--paper); }
+  .lg .n { color: var(--muted); margin-left: 3px; }
+  .lg[aria-pressed="false"] { color: var(--faint); text-decoration: line-through; }
+  .lg[aria-pressed="false"] .sw { opacity: .25; }
+  .wk, .cal { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 3px; }
+  .wk div { font-size: 8.5px; letter-spacing: .18em; color: var(--muted); text-align: center; padding-bottom: 2px; }
+  .wk div:nth-child(6), .wk div:nth-child(7) { color: var(--accent); }
+  .cell { border: 1px solid var(--rule); min-height: 62px; padding: 4px 5px 0; background: transparent; text-align: left; cursor: pointer; display: flex; flex-direction: column; border-radius: 0; }
+  .cell:hover { border-color: var(--ink); }
+  .cell.out { border-color: transparent; pointer-events: none; }
+  .cell.inrange { background: var(--wash); }
+  .cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .cell .d { font-size: 9px; color: var(--muted); }
+  .cell .v { font-size: 9.5px; margin: 1px 0 auto; font-variant-numeric: tabular-nums; }
+  .cell .stack { display: flex; gap: 2px; height: 7px; margin: 0 -5px; }
+  .cell .stack i { height: 100%; display: block; background: var(--c); }
+  .matrix { width: 100%; border-collapse: collapse; }
+  .matrix th, .matrix td { border: 1px solid var(--rule); padding: 4px 5px; font-size: 9px; text-align: right; font-variant-numeric: tabular-nums; }
+  .matrix th { font-weight: 700; color: var(--muted); border-bottom-color: var(--ink); }
+  .matrix th.l, .matrix td.l { text-align: left; }
+  .matrix td.c { cursor: pointer; }
+  .matrix td.c:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .bars .row { margin: 6px 0 8px; }
+  .bars .row .top { display: flex; align-items: baseline; gap: 5px; font-size: 9.5px; }
+  .bars .row .top .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
+  .bars .row .top .v { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bars .row .track { height: 7px; background: var(--wash); margin-top: 2px; }
+  .bars .row .track i { display: block; height: 7px; background: var(--ink); }
+  .bars .row .track i.acc { background: var(--accent); }
+  .stamp { display: inline-block; border: 2px solid var(--accent); color: var(--accent); padding: 1px 7px; font-size: 9px; letter-spacing: .16em; transform: rotate(-2deg); }
+  .stamp.ok { border-color: var(--t3); color: var(--t3); transform: rotate(1deg); }
+  .pick { display: flex; gap: 10px; overflow-x: auto; padding: 3px 0 8px; border-bottom: 1px dashed var(--rule); }
+  .stub { flex: 0 0 200px; border: 1px solid var(--rule); background: transparent; text-align: left; padding: 7px 8px; cursor: pointer; border-radius: 0; }
+  .stub:hover { border-color: var(--ink); }
+  .stub[aria-current="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+  .stub .t { font-size: 9.5px; line-height: 1.35; display: block; height: 26px; overflow: hidden; }
+  .stub .m { font-size: 8.5px; color: var(--muted); display: block; margin-top: 5px; }
+  .filterline { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 7px 0; font-size: 9px; color: var(--muted); }
+  .pill { border: 1px solid var(--rule); padding: 0 5px; font-size: 8.5px; color: var(--ink); }
+  .clear { background: none; border: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 9px; padding: 0; }
+  .search { width: 100%; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 6px 2px; outline: none; font-size: 10.5px; }
+  .search:focus { border-bottom-color: var(--accent); }
+  .detail-title { font-size: 19px; line-height: 1.35; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 3px; }
+  .detail-meta { font-size: 9.5px; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 78px 1fr 78px 1fr; gap: 3px 8px; font-size: 9.5px; margin: 9px 0; }
+  .kv .k { color: var(--muted); }
+  .turn { width: 100%; border-collapse: collapse; }
+  .turn th, .turn td { border-bottom: 1px dotted var(--rule); padding: 4px 3px; font-size: 9px; text-align: right; font-variant-numeric: tabular-nums; }
+  .turn th { letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--ink); font-weight: 700; }
+  .turn th.l, .turn td.l { text-align: left; }
+  .turn tr.sub td { color: var(--muted); }
+  .turn .t { white-space: nowrap; }
+  .state { font-size: 8.5px; border: 1px solid var(--rule); padding: 0 3px; white-space: nowrap; }
+  .state.err { border-color: var(--accent); color: var(--accent); }
+  .state.live { border-color: var(--ink); }
+  .logstat { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+  .logstat .box { border-top: 2px solid var(--ink); padding-top: 4px; }
+  .logstat .k { font-size: 8.5px; letter-spacing: .1em; color: var(--muted); }
+  .logstat .v { font-size: 17px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .logstat .s { font-size: 8.5px; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+  .chip { border: 1px solid var(--rule); background: transparent; padding: 2px 6px; font-size: 8.5px; cursor: pointer; color: var(--muted); }
+  .chip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .f-label { font-size: 8.5px; letter-spacing: .14em; color: var(--muted); margin-top: 8px; }
+  .batch { width: 100%; border-collapse: collapse; }
+  .batch th, .batch td { border-bottom: 1px dotted var(--rule); padding: 4px 3px; font-size: 8.8px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .batch th { border-bottom: 1px solid var(--ink); color: var(--muted); font-weight: 700; }
+  .batch th.l, .batch td.l { text-align: left; }
+  .batch tr[data-batch] { cursor: pointer; }
+  .batch tr.cur td { background: var(--wash); }
+  .tape { border-top: 1px solid var(--ink); margin-top: 4px; }
+  .ll { display: grid; grid-template-columns: 110px 20px 74px minmax(0,1fr); gap: 5px; padding: 3px 0; border-bottom: 1px dotted var(--rule); font-size: 9px; }
+  .ll .t { color: var(--muted); }
+  .ll .s { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ll.err { color: var(--accent); }
+  .ll.warn .lv { color: var(--accent); }
+  .ll.err .lv { color: var(--accent); }
+  .diag { display: flex; flex-wrap: wrap; gap: 3px 16px; font-size: 8.5px; color: var(--muted); }
+  .diag b { color: var(--ink); font-weight: 400; }
+  .placeholder { text-align: center; color: var(--muted); padding: 30px 0; }
+  @media (max-width: 700px) {
+    body { padding: 16px 6px 34px; }
+    .receipt { padding: 18px 16px 24px; }
+    .rhead .name { font-size: 21px; letter-spacing: .26em; }
+    .total-line { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .total-line .side { text-align: left; }
+    .kv { grid-template-columns: 62px 1fr; }
+    .logstat { grid-template-columns: 1fr 1fr; }
+    .cell { min-height: 52px; }
+    .matrix, .turn, .batch { display: block; overflow-x: auto; }
+    .ll { grid-template-columns: 94px 16px 62px minmax(0,1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="_core.js"></script>
+<script>
+(function () {
+  'use strict';
+  const TK = window.TK, W = TK.W, S = TK.state;
+  const TONES = ['var(--t0)', 'var(--t1)', 'var(--t2)', 'var(--t3)', 'var(--t4)', 'var(--t5)'];
+
+  function esc(v) {
+    return String(v).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+  function tone(slot) { return TONES[slot % TONES.length]; }
+  function lead(label, value, cls) {
+    return '<div class="leadrow"><span class="nm">' + label + '</span><span class="dots"></span>' +
+      '<span class="v ' + (cls || '') + '">' + value + '</span></div>';
+  }
+
+  function header() {
+    const views = [['home', '总账'], ['conv', '会话'], ['log', '日志']];
+    return '<div class="rhead"><div class="name">ATRACKER</div><div class="sub">LOCAL TOKEN RECEIPT</div>' +
+      '<div class="barcode"></div></div>' +
+      '<div class="rno"><span>NO. 20261020-42</span><span>2026-10-21 12:00</span><span>TERMINAL 01</span></div>' +
+      '<div class="navrow">' + views.map(function (v) {
+        return '<button class="tab" data-nav="' + v[0] + '" aria-current="' + (S.view === v[0]) + '">' + v[1] + '</button>';
+      }).join('') +
+      '<span class="sp"></span>' +
+      '<div class="unit">' + TK.UNITS.map(function (u) {
+        return '<button data-unit="' + u.id + '" aria-pressed="' + (TK.unit() === u.id) + '">' + u.label + '</button>';
+      }).join('') + '</div>' +
+      '<button class="ghost" id="themeBtn">' + (S.theme === 'light' ? '夜间小票' : '日间小票') + '</button></div>' +
+      '<div class="tear">TEAR ALONG DOTTED LINE</div>';
+  }
+
+  function homeView() {
+    const all = TK.aggregate(TK.allKeys());
+    const d = TK.detailData(TK.rangeKeys());
+    const miss = W.MODELS.filter(function (m) { return !TK.PRICE[m.id]; }).length;
+    return '<div class="sec" style="margin-top:4px"><div class="total-line">' +
+        '<div><div class="lab">TOTAL TOKENS / 全部记录</div><div class="val">' + TK.fmtTok(all.total) + '</div>' +
+          '<div class="tiny">' + TK.abbr(all.total) + ' / 覆盖 ' + TK.allKeys().length + ' 天 / 四桶合计</div></div>' +
+        '<div class="side"><div class="lab">ESTIMATED COST</div><div class="money">' + TK.money(all.usd) + '</div>' +
+          '<div class="tiny">' + TK.moneyUsd(all.usd) + ' / 汇率 6.5' + (miss ? ' / ' + miss + ' 个模型无价格' : '') + '</div></div>' +
+      '</div></div>' +
+      '<div class="sec"><div class="sec-h"><b>TOKEN 四桶</b><span>当前范围 ' + TK.scopeText() + '</span><span class="r">' + TK.fmtTok(d.agg.total) + '</span></div>' +
+        lead('输入 / 未命中缓存', TK.fmtTok(d.comp[0].v)) +
+        lead('输出 / 含推理', TK.fmtTok(d.comp[1].v)) +
+        lead('缓存命中 / ' + TK.fmtPct(d.agg.total ? d.comp[2].v / d.agg.total : 0), TK.fmtTok(d.comp[2].v)) +
+        lead('缓存写入 / 首次写入', TK.fmtTok(d.comp[3].v)) +
+      '</div>' +
+      calendar() +
+      '<div class="sec"><div class="sec-h"><b>来源 × 模型</b><span>格内深浅表示量级</span><span class="r">点格下钻</span></div>' + matrix() + '</div>' +
+      '<div class="sec"><div class="sec-h"><b>模型用量</b><span>按 token 降序</span></div><div class="bars">' +
+        d.models.map(function (x) {
+          return '<div class="row"><div class="top"><span>' + esc(x.id) + '</span><span class="dots"></span>' +
+            '<span class="v">' + TK.fmtPct(x.v / (d.agg.total || 1)) + ' / ' + TK.fmtTok(x.v) + '</span></div>' +
+            '<div class="track"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></div></div>';
+        }).join('') + '</div></div>' +
+      '<div class="sec"><div class="sec-h"><b>目录用量</b><span>点一行查看该目录的会话</span></div><div class="bars">' +
+        d.dirs.map(function (x) {
+          return '<div class="row" data-dir="' + esc(x.path) + '" style="cursor:pointer"><div class="top">' +
+            '<span>' + esc(x.name) + '</span><span class="dots"></span>' +
+            '<span class="v">' + TK.fmtPct(x.v / (d.agg.total || 1)) + ' / ' + TK.fmtTok(x.v) + '</span></div>' +
+            '<div class="track"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%;background:' + tone(x.slot) + '"></i></div></div>';
+        }).join('') + '</div></div>' +
+      '<div class="sec"><div class="sec-h"><b>NOTE</b><span>口径</span></div>' +
+        '<div style="font-size:9.5px;color:var(--muted)">四桶合计等于该范围的 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。价格来自 config/pricing.json，人民币按 6.5 折算。</div></div>';
+  }
+
+  function calendar() {
+    const meta = TK.monthMeta(S.month);
+    const lg = TK.legend(TK.monthKeys(S.month));
+    let cells = '';
+    for (let i = 0; i < meta.lead; i++) cells += '<div class="cell out"></div>';
+    for (let day = 1; day <= meta.dim; day++) {
+      const k = meta.y + '-' + W.d2(meta.m) + '-' + W.d2(day);
+      const rec = W.days[k];
+      const inRange = S.sel && k >= S.sel.start && k <= S.sel.end;
+      const isSel = S.sel && k === S.sel.start && k === S.sel.end;
+      const items = TK.dayItems(k, lg.ranked);
+      cells += '<button class="cell' + (isSel ? ' sel' : (inRange ? ' inrange' : '')) + '" data-day="' + k + '" title="' + k + (rec ? ' / ' + TK.fmtTok(rec.total) : ' / 无记录') + '">' +
+        '<span class="d">' + day + '</span><span class="v">' + (rec ? TK.fmtTok(rec.total) : '--') + '</span>' +
+        '<span class="stack">' + items.map(function (x) {
+          return '<i style="width:' + x.pct.toFixed(2) + '%;--c:' + tone(x.slot) + '"></i>';
+        }).join('') + '</span></button>';
+    }
+    return '<div class="sec"><div class="sec-h"><b>月历</b><span>' + meta.y + ' 年 ' + meta.m + ' 月 / ' + meta.dim + ' 天</span><span class="r">' + TK.scopeText() + '</span></div>' +
+      '<div class="cal-tools"><button class="ghost" id="prev">PREV</button><button class="ghost" id="next">NEXT</button>' +
+      '<button class="ghost" id="today">TODAY</button><span class="scope">点击一天选中，再点另一天成区间</span></div>' +
+      '<div class="legend">' + lg.ranked.map(function (x) {
+        const off = S.offDirs.indexOf(x.path) >= 0;
+        return '<button class="lg" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '">' +
+          '<span class="sw" style="--c:' + tone(x.slot) + '"></span>' + esc(x.name) + '<span class="n">' + TK.fmtTok(x.v) + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="wk">' + W.WEEK.map(function (w) { return '<div>' + w + '</div>'; }).join('') + '</div>' +
+      '<div class="cal">' + cells + '</div></div>';
+  }
+
+  function matrix() {
+    const d = TK.matrixData(TK.rangeKeys());
+    let head = '<th class="l">模型</th>';
+    d.agents.forEach(function (a) { head += '<th>' + esc(a.id) + '</th>'; });
+    head += '<th>合计</th>';
+    let body = '';
+    const models = d.keep.concat(d.rest);
+    models.forEach(function (m) {
+      let row = '<tr><td class="l">' + esc(m.id) + '</td>';
+      d.agents.forEach(function (a) {
+        const v = d.cell[a.id][m.id];
+        row += '<td class="c" data-agent="' + esc(a.id) + '" data-model="' + esc(m.id) + '" style="' + heat(v, d.maxCell) + '">' +
+          (v ? TK.fmtTok(v) : '-') + '</td>';
+      });
+      const total = d.agents.reduce(function (s, a) { return s + d.cell[a.id][m.id]; }, 0);
+      row += '<td>' + TK.fmtTok(total) + '</td></tr>';
+      body += row;
+    });
+    let foot = '<tr><td class="l">合计</td>';
+    d.agents.forEach(function (a) { foot += '<td>' + TK.fmtTok(d.rowTotal(a)) + '</td>'; });
+    foot += '<td>' + TK.fmtTok(d.agents.reduce(function (s, a) { return s + d.rowTotal(a); }, 0)) + '</td></tr>';
+    return '<table class="matrix"><thead><tr>' + head + '</tr></thead><tbody>' + body + foot + '</tbody></table>';
+  }
+  function heat(v, max) {
+    if (!v) return 'background:transparent';
+    const t = Math.min(1, v / (max || 1));
+    const pct = Math.round((8 + t * 84));
+    const fg = t > .55 ? 'var(--paper)' : 'var(--ink)';
+    return 'background:color-mix(in srgb, var(--ink) ' + pct + '%, transparent);color:' + fg;
+  }
+
+  function convView() {
+    const g = TK.convGroups();
+    const f = S.convFilter;
+    let strip = '<div class="filterline"><span>会话 ' + g.convs.length + ' 条</span>';
+    if (f.dir) strip += '<span class="pill">' + esc(f.dir) + '</span>';
+    if (f.agent) strip += '<span class="pill">' + esc(f.agent) + '</span>';
+    if (f.model) strip += '<span class="pill">' + esc(f.model) + '</span>';
+    if (f.dir || f.agent || f.model) strip += '<button class="clear" id="clearF">清除筛选</button>';
+    strip += '</div><input class="search" id="convq" placeholder="搜索会话标题、目录或来源" value="' + esc(S.convQ) + '">' +
+      '<div class="pick">' + g.groups.map(function (grp) {
+        return grp.list.map(function (cv) {
+          return '<button class="stub" data-cv="' + cv.id + '" aria-current="' + (cv.id === S.convId) + '">' +
+            '<span class="t">' + esc(cv.title) + '</span>' +
+            '<span class="m">' + cv.date + ' / ' + esc(cv.source) + ' / ' + TK.fmtTok(cv.tokens) + '</span></button>';
+        }).join('');
+      }).join('') + '</div>';
+
+    let detail = '';
+    if (!g.cur) {
+      detail = '<div class="placeholder">没有符合筛选条件的会话。换个来源或模型，或者清除筛选。</div>';
+    } else {
+      const cur = g.cur;
+      const st = TK.convStats(cur);
+      detail = '<div class="sec-h" style="margin-top:12px"><b>SESSION RECEIPT</b><span>' + cur.date + '</span><span class="r">' + TK.fmtTok(st.tsum) + '</span></div>' +
+        '<div class="detail-title">' + esc(cur.title) + '</div>' +
+        '<div class="detail-meta">' + esc(cur.dirName) + ' / ' + esc(cur.source) + ' / ' + esc(cur.model) + '</div>' +
+        '<div style="margin-top:8px"><button class="ghost" id="toCal">在日历中查看这天</button></div>' +
+        '<div class="kv"><span class="k">日期</span><span>' + cur.date + '</span><span class="k">轮次</span><span>' + cur.turns + ' 轮</span>' +
+          '<span class="k">工具调用</span><span>' + Math.round(cur.turns * 3.4) + ' 次</span><span class="k">子 agent</span><span>' + cur.turnList.filter(function (t) { return t.sub; }).length + ' 轮</span></div>' +
+        '<div class="sec"><div class="sec-h"><b>TOKEN 构成</b><span>合计 ' + TK.fmtTok(st.tsum) + '</span></div>' +
+          lead('输入', TK.fmtTok(st.tb.input)) + lead('输出', TK.fmtTok(st.tb.output)) +
+          lead('缓存命中', TK.fmtTok(st.tb.cacheRead)) + lead('缓存写入', TK.fmtTok(st.tb.cacheWrite)) + '</div>' +
+        '<div class="sec bars"><div class="sec-h"><b>成本</b><span>' + TK.moneyUsd(st.usd) + ' / 汇率 6.5</span><span class="r">' + TK.money(st.usd) + '</span></div>' +
+          (st.unpriced ? '<div style="font-size:9px;color:var(--accent)">' + st.unpriced + ' 轮使用了未配置价格的模型，未计入</div>' : '') +
+          st.dayRows.map(function (k) {
+            return '<div class="row"><div class="top"><span>' + k + '</span><span class="dots"></span><span class="v">' + TK.money(st.byDay[k]) + '</span></div>' +
+              '<div class="track"><i class="acc" style="width:' + (st.byDay[k] / st.maxDay * 100).toFixed(1) + '%"></i></div></div>';
+          }).join('') + '</div>' +
+        '<div class="sec"><div class="sec-h"><b>逐轮明细</b><span>子 agent 行缩进显示</span></div>' +
+          '<table class="turn"><thead><tr><th class="l">时间</th><th class="l">模型</th><th>输入</th><th>输出</th><th>缓存</th><th>成本</th><th class="l">状态</th></tr></thead><tbody>' +
+          cur.turnList.map(function (t) {
+            const tc = TK.turnCost(t);
+            let r = '<tr><td class="l t">' + t.time + '</td><td class="l">' + esc(t.model) + '</td>' +
+              '<td>' + TK.fmtTok(t.input) + '</td><td>' + TK.fmtTok(t.output) + '</td><td>' + TK.fmtTok(t.cache) + '</td>' +
+              '<td>' + (tc.priced ? TK.money(tc.usd) : '--') + '</td><td class="l">' +
+              (t.state === '失败' ? '<span class="state err">失败</span>' : t.state === '进行中' ? '<span class="state live">进行中</span>' : '成功') + '</td></tr>';
+            if (t.sub) {
+              for (let i = 0; i < t.sub.turns; i++) {
+                r += '<tr class="sub"><td class="l t">↳ 子 agent</td><td class="l">' + esc(t.model) + '</td>' +
+                  '<td>' + TK.fmtTok(Math.round(t.input * 0.4)) + '</td><td>' + TK.fmtTok(Math.round(t.output * 0.5)) + '</td>' +
+                  '<td>' + TK.fmtTok(Math.round(t.cache * 0.3)) + '</td><td>' + TK.money(tc.priced ? tc.usd * 0.12 : 0) + '</td><td class="l"></td></tr>';
+              }
+            }
+            return r;
+          }).join('') + '</tbody></table></div>' +
+        '<div class="sec"><div class="sec-h"><b>口径</b><span>NOTES</span></div>' +
+          '<div style="font-size:9px;color:var(--muted)">token 分四桶：未缓存输入、输出（含推理）、缓存命中、缓存写入。日期按本机时区折算自然日。子 agent 的用量计入总量并归属到发起它的那一轮。价格来自 config/pricing.json。</div></div>' +
+        '';
+    }
+    return strip + detail;
+  }
+
+  function logView() {
+    const d = TK.logData();
+    const last = d.last;
+    const levels = [['all', '全部'], ['warn', '警告'], ['err', '错误']];
+    return '<div class="sec"><div class="sec-h"><b>扫描状态</b><span>' + last.at + '</span><span class="r">trigger ' + last.trigger + '</span></div>' +
+        '<div class="logstat">' +
+          '<div class="box"><div class="k">最近扫描</div><div class="v">' + last.at.slice(5, 16) + '</div><div class="s">' + (last.ms / 1000).toFixed(1) + ' s / ' + last.trigger + '</div></div>' +
+          '<div class="box"><div class="k">写入事件</div><div class="v">' + TK.full(last.events) + '</div><div class="s">去重 ' + last.dup + ' 条</div></div>' +
+          '<div class="box"><div class="k">跳过文件</div><div class="v">' + last.skipped + '</div><div class="s">指纹未变</div></div>' +
+          '<div class="box"><div class="k">警告 / 错误</div><div class="v">' + last.warn + ' / ' + last.err + '</div><div class="s">队列 0 / 2000</div></div>' +
+        '</div></div>' +
+      '<div class="sec"><div class="sec-h"><b>过滤</b><span>FILTER</span><span class="r">' + d.logs.length + ' 行</span></div>' +
+        '<div class="f-label">级别</div><div class="chips">' + levels.map(function (l) {
+          return '<button class="chip" data-lvl="' + l[0] + '" aria-pressed="' + (S.log.lvl === l[0]) + '">' + l[1] + '</button>';
+        }).join('') + '</div>' +
+        '<div class="f-label">来源</div><div class="chips">' + d.src.map(function (x) {
+          return '<button class="chip" data-src="' + (x === 'all' ? 'all' : esc(x)) + '" aria-pressed="' + (S.log.src === x) + '">' + (x === 'all' ? '全部' : esc(x)) + '</button>';
+        }).join('') + '</div>' +
+        '<input class="search" id="logq" placeholder="关键字，例如 database is locked" value="' + esc(S.log.q) + '">' +
+        '<div style="margin-top:8px"><button class="ghost" id="clearf">清除筛选</button> <button class="ghost" id="rescan">重新扫描</button></div>' +
+        '<div class="diag" style="margin-top:9px">' + d.diag.map(function (x) {
+          return '<span><b>' + esc(x.name) + '</b> ' + esc(x.text) + '</span>';
+        }).join('') + '</div></div>' +
+      '<div class="sec"><div class="sec-h"><b>扫描批次</b><span>点一行只看该批日志</span></div>' +
+        '<table class="batch"><thead><tr><th class="l">时间</th><th class="l">触发</th><th>耗时</th><th>文件</th><th>事件</th><th>警</th><th>错</th><th class="l">结果</th></tr></thead><tbody>' +
+        d.batches.map(function (b) {
+          return '<tr data-batch="' + b.id + '"' + (S.log.batch === b.id ? ' class="cur"' : '') + '>' +
+            '<td class="l">' + b.at.slice(5) + '</td><td class="l">' + ({ watch: '文件变更', poll: '兜底轮询', manual: '手动' }[b.trigger]) + '</td>' +
+            '<td>' + b.ms + '</td><td>' + b.files + '</td><td>' + b.events + '</td><td>' + b.warn + '</td><td>' + b.err + '</td>' +
+            '<td class="l">' + (b.err ? '<span class="stamp">有错误</span>' : '<span class="stamp ok">成功</span>') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+      '<div class="sec"><div class="sec-h"><b>日志流</b><span>EVENT TAPE</span><span class="r">' + (S.log.batch ? '批次 ' + S.log.batch : '全部批次') + '</span></div>' +
+        '<div class="tape">' + d.logs.map(function (l) {
+          return '<div class="ll ' + l.lvl + '"><span class="t">' + l.at.slice(5) + '</span>' +
+            '<span class="lv">' + ({ ok: 'OK', info: '..', warn: '!', err: 'X' }[l.lvl]) + '</span>' +
+            '<span class="s">' + esc(l.src) + '</span><span>' + esc(l.msg) + '</span></div>';
+        }).join('') + (d.logs.length ? '' : '<div class="placeholder">没有符合条件的日志行。</div>') + '</div></div>';
+  }
+
+  function draw() {
+    const body = S.view === 'home' ? homeView() : S.view === 'conv' ? convView() : logView();
+    document.getElementById('app').innerHTML = '<div class="receipt">' + header() + body + '</div>';
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.nav === 'conv') TK.go('conv', { clearConv: true });
+        else TK.go(b.dataset.nav);
+      };
+    });
+    document.querySelectorAll('[data-unit]').forEach(function (b) {
+      b.onclick = function () { TK.setUnit(b.dataset.unit); };
+    });
+    document.getElementById('themeBtn').onclick = TK.toggleTheme;
+    if (S.view === 'home') {
+      document.getElementById('prev').onclick = function () { TK.shiftMonth(-1); TK.refresh(); };
+      document.getElementById('next').onclick = function () { TK.shiftMonth(1); TK.refresh(); };
+      document.getElementById('today').onclick = function () { TK.resetToday(); TK.refresh(); };
+      document.querySelectorAll('[data-day]').forEach(function (el) {
+        el.onclick = function () { TK.selectDay(el.dataset.day); TK.refresh(); };
+      });
+      document.querySelectorAll('[data-legend]').forEach(function (el) {
+        el.onclick = function () {
+          const p = el.dataset.legend;
+          const i = S.offDirs.indexOf(p);
+          if (i >= 0) S.offDirs.splice(i, 1); else S.offDirs.push(p);
+          TK.refresh();
+        };
+      });
+      document.querySelectorAll('[data-dir]').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { dir: el.dataset.dir }); };
+      });
+      document.querySelectorAll('.matrix td.c').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { agent: el.dataset.agent, model: el.dataset.model }); };
+      });
+    }
+    if (S.view === 'conv') {
+      const q = document.getElementById('convq');
+      if (q) q.oninput = function (e) {
+        S.convQ = e.target.value; TK.refresh();
+        const n = document.getElementById('convq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearF');
+      if (cf) cf.onclick = function () { TK.go('conv', { clearConv: true }); };
+      document.querySelectorAll('[data-cv]').forEach(function (el) {
+        el.onclick = function () { S.convId = el.dataset.cv; TK.refresh(); };
+      });
+      const toCal = document.getElementById('toCal');
+      if (toCal) {
+        const g = TK.convGroups();
+        if (g.cur) toCal.onclick = function () { TK.go('home', { day: g.cur.date }); };
+      }
+    }
+    if (S.view === 'log') {
+      document.querySelectorAll('[data-lvl]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ lvl: b.dataset.lvl }); };
+      });
+      document.querySelectorAll('[data-src]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ src: b.dataset.src }); };
+      });
+      document.querySelectorAll('[data-batch]').forEach(function (tr) {
+        tr.onclick = function () {
+          const id = Number(tr.dataset.batch);
+          TK.setLog({ batch: S.log.batch === id ? null : id });
+        };
+      });
+      const q = document.getElementById('logq');
+      if (q) q.oninput = function (e) {
+        S.log.q = e.target.value; TK.refresh();
+        const n = document.getElementById('logq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearf');
+      if (cf) cf.onclick = function () { TK.setLog({ batch: null, lvl: 'all', src: 'all', q: '' }); };
+      const rs = document.getElementById('rescan');
+      if (rs) rs.onclick = function () { rs.textContent = '已触发 / 排队中'; };
+    }
+  }
+
+  TK.mount(draw);
+  draw();
+})();
+</script>
+</body>
+</html>

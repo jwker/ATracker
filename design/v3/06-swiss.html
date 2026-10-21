@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 06 · 国际主义网格</title>
+<style>
+  :root[data-theme="light"] {
+    --bg: #f2f1ec;
+    --paper: #fbfaf6;
+    --ink: #121211;
+    --dim: #5b5a54;
+    --faint: #8e8b82;
+    --line: #d6d3c9;
+    --line2: #b6b2a6;
+    --red: #d02a1b;
+    --wash: #e8e5dc;
+    --sel: #f5ddd8;
+    --d0:#2a78d6; --d1:#eb6834; --d2:#1baf7a; --d3:#eda100; --d4:#e87ba4; --d5:#008300;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0d0c;
+    --paper: #151514;
+    --ink: #f1efe8;
+    --dim: #a3a099;
+    --faint: #706d66;
+    --line: #2d2c29;
+    --line2: #46443f;
+    --red: #ff5c47;
+    --wash: #1e1e1c;
+    --sel: #3a211d;
+    --d0:#3987e5; --d1:#d95926; --d2:#199e70; --d3:#c98500; --d4:#d55181; --d5:#008300;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", sans-serif;
+    font-size: 13px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .shell { max-width: 1360px; margin: 0 auto; padding: 0 34px 70px; }
+  .topbar { border-top: 7px solid var(--ink); margin-top: 20px; display: flex; align-items: stretch; gap: 26px; padding: 11px 0 10px; border-bottom: 1px solid var(--ink); flex-wrap: wrap; }
+  .brand { font-weight: 800; letter-spacing: -.03em; font-size: 17px; line-height: 1; align-self: center; }
+  .brand span { color: var(--red); }
+  .nav { display: flex; gap: 20px; align-self: center; }
+  .nav button { background: none; border: 0; padding: 2px 0; font-size: 11px; letter-spacing: .12em; color: var(--dim); border-bottom: 2px solid transparent; }
+  .nav button:hover { color: var(--ink); }
+  .nav button[aria-current="true"] { color: var(--ink); border-bottom-color: var(--red); }
+  .topbar .sp { flex: 1; }
+  .unit { display: flex; align-self: center; border: 1px solid var(--line2); }
+  .unit button { border: 0; border-left: 1px solid var(--line2); background: transparent; padding: 3px 8px; font-size: 10px; letter-spacing: .06em; color: var(--dim); }
+  .unit button:first-child { border-left: 0; }
+  .unit button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .ghost { border: 1px solid var(--line2); background: transparent; padding: 3px 10px; font-size: 10px; letter-spacing: .08em; color: var(--dim); align-self: center; }
+  .ghost:hover { border-color: var(--ink); color: var(--ink); }
+  .mast { display: grid; grid-template-columns: repeat(12, minmax(0,1fr)); gap: 0 22px; padding: 30px 0 24px; border-bottom: 2px solid var(--ink); }
+  .mast h1 { grid-column: 1 / 8; margin: 0; font-size: clamp(54px, 8.2vw, 108px); line-height: .88; letter-spacing: -.065em; font-weight: 800; }
+  .mast h1 em { font-style: normal; color: var(--red); }
+  .mast .aside { grid-column: 9 / 13; align-self: end; border-left: 1px solid var(--line2); padding-left: 16px; }
+  .mast .aside p { margin: 0 0 9px; font-size: 11.5px; color: var(--dim); max-width: 34ch; }
+  .mast .aside .meta { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; color: var(--faint); line-height: 1.7; }
+  .kicker { font-size: 9.5px; letter-spacing: .22em; color: var(--faint); margin-bottom: 12px; display: flex; justify-content: space-between; }
+  .kicker b { color: var(--red); font-weight: 500; }
+  .sec { margin-top: 34px; }
+  .sec-h { display: flex; align-items: baseline; gap: 12px; border-top: 2px solid var(--ink); padding-top: 7px; margin-bottom: 14px; }
+  .sec-h i { width: 9px; height: 9px; background: var(--red); display: inline-block; transform: translateY(-1px); }
+  .sec-h h2 { margin: 0; font-size: 15px; letter-spacing: .02em; font-weight: 800; }
+  .sec-h .en { font-size: 9px; letter-spacing: .2em; color: var(--faint); }
+  .sec-h .r { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 10px; color: var(--dim); text-align: right; }
+  .hero { display: grid; grid-template-columns: repeat(12, minmax(0,1fr)); border-bottom: 1px solid var(--line2); }
+  .hero .big { grid-column: 1 / 9; padding: 8px 22px 18px 0; border-right: 1px solid var(--line2); }
+  .hero .cap { font-size: 10px; letter-spacing: .16em; color: var(--dim); margin-bottom: 4px; }
+  .hero .num { font-size: clamp(64px, 10.4vw, 146px); font-weight: 800; letter-spacing: -.07em; line-height: .84; font-variant-numeric: tabular-nums; }
+  .hero .num small { font-size: .26em; font-weight: 700; letter-spacing: -.02em; margin-left: 6px; }
+  .hero .sub { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 13px; font-size: 10.5px; color: var(--dim); }
+  .hero .sub b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .hero .side { grid-column: 9 / 13; padding: 8px 0 18px 22px; }
+  .hero .side .cost { font-size: clamp(30px, 3.7vw, 50px); font-weight: 800; letter-spacing: -.045em; line-height: .95; font-variant-numeric: tabular-nums; }
+  .hero .side .costlab { font-size: 9.5px; letter-spacing: .16em; color: var(--dim); margin-top: 9px; }
+  .hero .side .note { font-size: 10px; color: var(--faint); margin-top: 5px; }
+  .hero .side .kvs { margin-top: 14px; border-top: 1px solid var(--line); }
+  .hero .side .kvs div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding: 4px 0; font-size: 10px; color: var(--dim); }
+  .hero .side .kvs b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .buckets { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border-bottom: 2px solid var(--ink); }
+  .bucket { padding: 14px 18px 16px 0; border-right: 1px solid var(--line); }
+  .bucket:last-child { border-right: 0; }
+  .bucket .k { font-size: 9.5px; letter-spacing: .14em; color: var(--dim); }
+  .bucket .v { font-size: clamp(20px, 2.2vw, 29px); font-weight: 700; letter-spacing: -.03em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .bucket .p { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; color: var(--faint); margin-top: 2px; }
+  .bucket .bar { height: 4px; background: var(--wash); margin-top: 9px; position: relative; }
+  .bucket .bar i { position: absolute; left: 0; top: 0; height: 4px; background: var(--ink); }
+  .cols { display: grid; grid-template-columns: repeat(12, minmax(0,1fr)); gap: 26px; }
+  .calwrap { grid-column: 1 / 8; min-width: 0; }
+  .sidewrap { grid-column: 8 / 13; min-width: 0; border-left: 1px solid var(--line2); padding-left: 24px; }
+  .tools { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .tools .scope { font-size: 10px; color: var(--dim); margin-left: 2px; }
+  .mini { border: 1px solid var(--line2); background: transparent; padding: 2px 8px; font-size: 9.5px; letter-spacing: .06em; color: var(--dim); }
+  .mini:hover { border-color: var(--ink); color: var(--ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 5px 15px; margin: 0 0 11px; }
+  .lg { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; padding: 0; font-size: 10px; color: var(--ink); }
+  .lg .sw { width: 8px; height: 8px; background: var(--c); }
+  .lg .v { color: var(--faint); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; }
+  .lg[aria-pressed="false"] { color: var(--faint); text-decoration: line-through; }
+  .lg[aria-pressed="false"] .sw { opacity: .22; }
+  .wk, .cal { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); }
+  .wk div { font-size: 8.5px; letter-spacing: .16em; color: var(--faint); padding: 4px 0 6px; border-bottom: 1px solid var(--ink); text-align: right; }
+  .wk div:nth-child(6), .wk div:nth-child(7) { color: var(--red); }
+  .cell { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; min-height: 67px; padding: 5px 6px 4px; text-align: left; display: flex; flex-direction: column; gap: 1px; border-radius: 0; }
+  .cell:nth-child(7n) { border-right: 0; }
+  .cell:hover { background: var(--wash); }
+  .cell.out { border-bottom-color: var(--line); pointer-events: none; }
+  .cell.inrange { background: var(--sel); }
+  .cell.sel { box-shadow: inset 0 0 0 2px var(--red); background: var(--sel); }
+  .cell .d { font-size: 9.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .cell .v { font-size: 11px; font-weight: 600; margin-top: auto; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .cell .stack { display: flex; gap: 1px; height: 4px; margin: 3px -6px 0; }
+  .cell .stack i { display: block; height: 4px; }
+  .rank { margin-top: 4px; }
+  .rankrow { border-bottom: 1px solid var(--line); padding: 8px 0 7px; }
+  .rankrow .top { display: flex; align-items: baseline; gap: 8px; }
+  .rankrow .sw { width: 8px; height: 8px; background: var(--c); flex: 0 0 auto; }
+  .rankrow .nm { font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rankrow .v { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rankrow .tr { height: 5px; background: var(--wash); margin-top: 6px; position: relative; }
+  .rankrow .tr i { position: absolute; left: 0; top: 0; height: 5px; background: var(--c, var(--ink)); }
+  .rankrow .pc { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--faint); }
+  .rankrow button.nm { border: 0; background: none; padding: 0; text-align: left; }
+  .rankrow button.nm:hover { color: var(--red); }
+  .matrix-wrap { overflow-x: auto; }
+  table.mx { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 620px; }
+  table.mx th, table.mx td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: right; font-size: 10px; }
+  table.mx th { border-bottom: 1px solid var(--ink); font-size: 9px; letter-spacing: .08em; color: var(--dim); font-weight: 600; }
+  table.mx th.l, table.mx td.l { text-align: left; }
+  table.mx td.c { cursor: pointer; }
+  table.mx td.c:hover { box-shadow: inset 0 0 0 1px var(--ink); }
+  table.mx tr:hover td.l { color: var(--red); }
+  table.mx .tot { font-weight: 700; }
+  .note { font-size: 9.5px; line-height: 1.65; color: var(--faint); border-top: 1px solid var(--line); padding-top: 9px; margin-top: 16px; }
+  .note b { color: var(--dim); font-weight: 600; }
+  /* conversation */
+  .filterbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 2px solid var(--ink); padding: 8px 0 12px; }
+  .filterbar label { font-size: 9px; letter-spacing: .16em; color: var(--faint); }
+  .filterbar input { flex: 1; min-width: 180px; border: 0; border-bottom: 1px solid var(--line2); background: transparent; padding: 5px 2px; outline: none; font-size: 11.5px; }
+  .filterbar input:focus { border-bottom-color: var(--red); }
+  .chip { border: 1px solid var(--line2); background: transparent; padding: 2px 8px; font-size: 9.5px; color: var(--dim); }
+  .chip:hover { border-color: var(--ink); color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .clearf { border: 0; background: none; color: var(--red); font-size: 9.5px; text-decoration: underline; text-underline-offset: 3px; padding: 2px; }
+  .conv-cols { display: grid; grid-template-columns: repeat(12, minmax(0,1fr)); gap: 28px; }
+  .conv-list { grid-column: 1 / 5; min-width: 0; border-top: 2px solid var(--ink); }
+  .cl-row { width: 100%; display: grid; grid-template-columns: 46px 1fr auto; gap: 8px; align-items: baseline; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 8px 4px; text-align: left; }
+  .cl-row:hover { background: var(--wash); }
+  .cl-row[aria-current="true"] { background: var(--sel); box-shadow: inset 3px 0 0 var(--red); }
+  .cl-row .dt { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--faint); }
+  .cl-row .tt { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cl-row .tk { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); }
+  .conv-detail { grid-column: 5 / 13; min-width: 0; }
+  .cd-head { border-top: 2px solid var(--ink); padding-top: 10px; }
+  .cd-head .meta { display: flex; gap: 12px; flex-wrap: wrap; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; color: var(--faint); }
+  .cd-head h2 { margin: 8px 0 5px; font-size: clamp(22px, 2.6vw, 34px); line-height: 1.1; letter-spacing: -.035em; font-weight: 700; }
+  .kvline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 10px; color: var(--dim); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 7px 0; margin: 10px 0 18px; }
+  .kvline b { color: var(--ink); font-weight: 600; }
+  .compose { display: flex; height: 10px; margin: 6px 0 12px; gap: 2px; }
+  .compose i { display: block; height: 10px; }
+  .c4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 8px; }
+  .c4 .k { font-size: 9px; letter-spacing: .1em; color: var(--faint); }
+  .c4 .v { font-size: 16px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .c4 .p { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--faint); }
+  .costrow { display: grid; grid-template-columns: 92px 1fr 76px; gap: 10px; align-items: center; font-size: 9.5px; border-bottom: 1px solid var(--line); padding: 5px 0; }
+  .costrow .tr { height: 4px; background: var(--wash); position: relative; }
+  .costrow .tr i { position: absolute; left: 0; top: 0; height: 4px; background: var(--red); }
+  .costrow .v { text-align: right; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; color: var(--dim); }
+  .turn-wrap { overflow-x: auto; }
+  table.turns { width: 100%; border-collapse: collapse; min-width: 650px; font-variant-numeric: tabular-nums; }
+  table.turns th, table.turns td { border-bottom: 1px solid var(--line); padding: 5px 7px; font-size: 9.5px; text-align: right; }
+  table.turns th { font-size: 8.5px; letter-spacing: .08em; color: var(--faint); border-bottom-color: var(--ink); font-weight: 500; }
+  table.turns th.l, table.turns td.l { text-align: left; }
+  table.turns tr.sub td { color: var(--faint); font-style: italic; }
+  .state { font-size: 8.5px; border: 1px solid var(--line2); padding: 0 4px; }
+  .state.err { border-color: var(--red); color: var(--red); }
+  .state.live { border-color: var(--d3); color: var(--d3); }
+  /* log */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+  .stat { padding: 12px 16px 14px 0; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat .k { font-size: 9px; letter-spacing: .14em; color: var(--faint); }
+  .stat .v { font-size: clamp(22px, 2.4vw, 32px); font-weight: 800; letter-spacing: -.04em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .stat .s { font-size: 9px; color: var(--dim); }
+  .logcols { display: grid; grid-template-columns: repeat(12, minmax(0,1fr)); gap: 28px; }
+  .logleft { grid-column: 1 / 5; min-width: 0; }
+  .logright { grid-column: 5 / 13; min-width: 0; }
+  .fgroup { border-top: 1px solid var(--line); padding: 9px 0 10px; }
+  .fgroup .lab { font-size: 8.5px; letter-spacing: .16em; color: var(--faint); margin-bottom: 6px; }
+  .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  .diag { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); }
+  .diag div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .diag .ok { color: var(--d2); }
+  table.batch { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.batch th, table.batch td { border-bottom: 1px solid var(--line); padding: 5px 6px; font-size: 8.5px; text-align: right; }
+  table.batch th { color: var(--faint); font-weight: 500; letter-spacing: .06em; border-bottom-color: var(--ink); }
+  table.batch th.l, table.batch td.l { text-align: left; }
+  table.batch tbody tr { cursor: pointer; }
+  table.batch tbody tr:hover { background: var(--wash); }
+  table.batch tbody tr.cur { background: var(--sel); box-shadow: inset 3px 0 0 var(--red); }
+  .logline { display: grid; grid-template-columns: 82px 16px 62px 1fr; gap: 8px; border-bottom: 1px solid var(--line); padding: 5px 2px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; }
+  .logline .t { color: var(--faint); }
+  .logline .lv { font-weight: 700; }
+  .logline.ok .lv { color: var(--d2); }
+  .logline.info .lv { color: var(--faint); }
+  .logline.warn .lv { color: var(--d3); }
+  .logline.err .lv { color: var(--red); }
+  .logline .s { color: var(--dim); }
+  .logline .m { overflow-wrap: anywhere; }
+  .logline.err .m { color: var(--red); }
+  .placeholder { border: 1px dashed var(--line2); padding: 26px 14px; text-align: center; font-size: 11px; color: var(--faint); margin-top: 12px; }
+  @media (max-width: 900px) {
+    .shell { padding: 0 18px 48px; }
+    .mast h1 { grid-column: 1 / -1; }
+    .mast .aside { grid-column: 1 / -1; margin-top: 20px; border-left: 0; border-top: 1px solid var(--line); padding: 12px 0 0; }
+    .hero .big, .hero .side { grid-column: 1 / -1; border-right: 0; padding-right: 0; }
+    .hero .side { border-top: 1px solid var(--line); padding-left: 0; margin-top: 12px; }
+    .buckets { grid-template-columns: 1fr 1fr; }
+    .bucket:nth-child(2) { border-right: 0; }
+    .bucket:nth-child(3), .bucket:nth-child(4) { border-top: 1px solid var(--line); }
+    .bucket:nth-child(3) { border-right: 1px solid var(--line); }
+    .calwrap, .sidewrap, .conv-list, .conv-detail, .logleft, .logright { grid-column: 1 / -1; }
+    .sidewrap { border-left: 0; padding-left: 0; border-top: 1px solid var(--line2); padding-top: 18px; }
+    .conv-cols, .logcols { gap: 20px; }
+    .cell { min-height: 60px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .stat:nth-child(2) { border-right: 0; }
+    .stat:nth-child(3), .stat:nth-child(4) { border-top: 1px solid var(--line); }
+    .c4 { grid-template-columns: 1fr 1fr; }
+    .topbar { gap: 12px; }
+    .nav { order: 4; flex-basis: 100%; }
+  }
+  @media (max-width: 520px) {
+    .cell { min-height: 55px; padding: 4px 4px 3px; }
+    .cell .v { font-size: 9px; }
+    .cell .stack { margin-left: -4px; margin-right: -4px; }
+    .logline { grid-template-columns: 78px 14px 1fr; }
+    .logline .s { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="_core.js"></script>
+<script>
+(function () {
+  'use strict';
+  const TK = window.TK, W = TK.W, S = TK.state;
+  const PAL = ['var(--d0)', 'var(--d1)', 'var(--d2)', 'var(--d3)', 'var(--d4)', 'var(--d5)'];
+  function esc(v) {
+    return String(v).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+  function c(slot) { return PAL[slot % PAL.length]; }
+  function pct(v, all) { return all ? TK.fmtPct(v / all) : '0.0%'; }
+
+  function mast() {
+    const all = TK.aggregate(TK.allKeys());
+    const miss = W.MODELS.filter(function (m) { return !TK.PRICE[m.id]; }).length;
+    return '<div class="mast">' +
+      '<div class="kicker" style="grid-column:1/-1"><span>LOCAL TOKEN OBSERVATORY / 用量观测</span><b>2026 · 10 · 21</b></div>' +
+      '<h1>用量<br><em>观测</em></h1>' +
+      '<div class="aside"><p>把本机每天产生的 token、成本与会话摊开来看。数字来自同一份本地记录，不联网。</p>' +
+        '<div class="meta">覆盖 ' + TK.allKeys().length + ' 天 / ' + W.DIRS.length + ' 个目录 / ' + W.MODELS.length + ' 个模型<br>' +
+        '全部记录 ' + TK.fmtTok(all.total) + ' / ' + TK.money(all.usd) + '<br>' +
+        (miss ? miss + ' 个模型没有配置价格' : '全部模型已配置价格') + '</div></div>' +
+      '</div>';
+  }
+
+  function subMast() {
+    const conv = S.view === 'conv';
+    return '<div class="mast" style="padding:24px 0 20px"><div class="kicker" style="grid-column:1/-1"><span>LOCAL TOKEN OBSERVATORY / 用量观测</span><b>2026 · 10 · 21</b></div>' +
+      '<h1 style="font-size:clamp(42px,6.4vw,84px)">' + (conv ? '会话' : '日志') + '<br><em>' + (conv ? '索引' : '流水') + '</em></h1>' +
+      '<div class="aside"><p>' + (conv ? '按目录分组的本地会话。选中一条，查看它的 token 构成、每日成本与逐轮明细。' : '扫描状态、批次与服务日志。筛选只影响日志流，不会改动用量数据。') + '</p>' +
+      '<div class="meta">' + (conv ? '支持按目录 / 来源 / 模型下钻<br>在会话与日历之间往返' : '扫描器按文件指纹去重<br>新批次会追加到列表顶部') + '</div></div></div>';
+  }
+
+  function header() {
+    const views = [['home', '总览'], ['conv', '会话'], ['log', '日志']];
+    return '<div class="topbar"><div class="brand">AT<span>·</span>TRACKER</div>' +
+      '<div class="nav">' + views.map(function (v) {
+        return '<button data-nav="' + v[0] + '" aria-current="' + (S.view === v[0]) + '">' + v[1] + '</button>';
+      }).join('') + '</div>' +
+      '<span class="sp"></span>' +
+      '<div class="unit">' + TK.UNITS.map(function (u) {
+        return '<button data-unit="' + u.id + '" aria-pressed="' + (TK.unit() === u.id) + '">' + u.label + '</button>';
+      }).join('') + '</div>' +
+      '<button class="ghost" id="themeBtn">' + (S.theme === 'light' ? 'DARK' : 'LIGHT') + '</button></div>';
+  }
+
+  function homeView() {
+    const all = TK.aggregate(TK.allKeys());
+    const d = TK.detailData(TK.rangeKeys());
+    const hit = d.agg.total ? d.comp[2].v / d.agg.total : 0;
+    return '<div class="hero">' +
+        '<div class="big"><div class="cap">TOTAL TOKENS / 全部记录</div>' +
+          '<div class="num">' + TK.fmtTok(all.total) + '</div>' +
+          '<div class="sub"><span>当前范围 <b>' + TK.fmtTok(d.agg.total) + '</b></span>' +
+          '<span>天数 <b>' + d.agg.days + '</b></span>' +
+          '<span>缓存命中 <b>' + TK.fmtPct(hit) + '</b></span>' +
+          '<span>未定价模型 <b>' + W.MODELS.filter(function (m) { return !TK.PRICE[m.id]; }).length + '</b></span></div></div>' +
+        '<div class="side"><div class="cost">' + TK.money(all.usd) + '</div><div class="costlab">ESTIMATED COST / 估算成本</div>' +
+          '<div class="note">' + TK.moneyUsd(all.usd) + ' / 固定汇率 6.5</div>' +
+          '<div class="kvs"><div><span>当前范围</span><b>' + TK.money(d.agg.usd) + '</b></div>' +
+          '<div><span>已计价 token</span><b>' + TK.fmtTok(d.agg.priced) + '</b></div>' +
+          '<div><span>范围</span><b>' + TK.scopeText() + '</b></div></div></div>' +
+      '</div>' +
+      '<div class="buckets">' + d.comp.map(function (x, i) {
+        return '<div class="bucket"><div class="k">' + x.label.toUpperCase() + ' / ' + ['INPUT', 'OUTPUT', 'CACHE READ', 'CACHE WRITE'][i] + '</div>' +
+          '<div class="v">' + TK.fmtTok(x.v) + '</div><div class="p">' + pct(x.v, d.agg.total) + ' OF RANGE</div>' +
+          '<div class="bar"><i style="width:' + (d.agg.total ? x.v / d.agg.total * 100 : 0).toFixed(1) + '%"></i></div></div>';
+      }).join('') + '</div>' +
+      '<div class="sec"><div class="sec-h"><i></i><h2>月视图</h2><span class="en">CALENDAR</span>' +
+        '<span class="r">' + TK.scopeText() + '</span></div>' +
+        '<div class="cols"><div class="calwrap">' + calendar() + '</div>' +
+        '<div class="sidewrap">' + dirRank() + modelRank() + '</div></div></div>' +
+      '<div class="sec"><div class="sec-h"><i></i><h2>来源 × 模型</h2><span class="en">AGENT / MODEL MATRIX</span>' +
+        '<span class="r">格内颜色表示量级，点击下钻</span></div><div class="matrix-wrap">' + matrix() + '</div></div>' +
+      '<div class="note"><b>口径</b>　四桶合计等于该范围的 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。金额为估算值，人民币按 6.5 折算。目录颜色跟随实体，不随排名变化。</div>';
+  }
+
+  function calendar() {
+    const meta = TK.monthMeta(S.month);
+    const lg = TK.legend(TK.monthKeys(S.month));
+    let cells = '';
+    for (let i = 0; i < meta.lead; i++) cells += '<div class="cell out"></div>';
+    for (let day = 1; day <= meta.dim; day++) {
+      const k = meta.y + '-' + W.d2(meta.m) + '-' + W.d2(day);
+      const rec = W.days[k];
+      const inRange = S.sel && k >= S.sel.start && k <= S.sel.end;
+      const isSel = S.sel && k === S.sel.start && k === S.sel.end;
+      const items = TK.dayItems(k, lg.ranked);
+      cells += '<button class="cell' + (isSel ? ' sel' : (inRange ? ' inrange' : '')) + '" data-day="' + k + '" title="' + k + (rec ? ' / ' + TK.fmtTok(rec.total) : ' / 无记录') + '">' +
+        '<span class="d">' + day + '</span><span class="v">' + (rec ? TK.fmtTok(rec.total) : '·') + '</span>' +
+        '<span class="stack">' + items.map(function (x) {
+          return '<i style="width:' + x.pct.toFixed(2) + '%;background:' + c(x.slot) + '"></i>';
+        }).join('') + '</span></button>';
+    }
+    return '<div class="tools"><button class="mini" id="prev">上个月</button><button class="mini" id="next">下个月</button>' +
+      '<button class="mini" id="today">本月</button><span class="scope">' + meta.y + ' 年 ' + meta.m + ' 月 / 点一天选中，再点另一天成区间</span></div>' +
+      '<div class="legend">' + lg.ranked.map(function (x) {
+        const off = S.offDirs.indexOf(x.path) >= 0;
+        return '<button class="lg" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '">' +
+          '<span class="sw" style="--c:' + c(x.slot) + '"></span>' + esc(x.name) + '<span class="v">' + TK.fmtTok(x.v) + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="wk">' + W.WEEK.map(function (w) { return '<div>' + w + '</div>'; }).join('') + '</div>' +
+      '<div class="cal">' + cells + '</div>';
+  }
+
+  function dirRank() {
+    const d = TK.detailData(TK.rangeKeys());
+    return '<div style="font-size:9px;letter-spacing:.16em;color:var(--faint);border-bottom:1px solid var(--ink);padding-bottom:4px">DIRECTORIES / 目录</div>' +
+      '<div class="rank">' + d.dirs.map(function (x) {
+        return '<div class="rankrow" style="--c:' + c(x.slot) + '"><div class="top">' +
+          '<span class="sw"></span><button class="nm" data-dir="' + esc(x.path) + '" title="查看该目录的会话">' + esc(x.name) + '</button>' +
+          '<span class="v">' + TK.fmtTok(x.v) + ' <span class="pc">' + pct(x.v, d.agg.total) + '</span></span></div>' +
+          '<div class="tr"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></div></div>';
+      }).join('') + '</div>';
+  }
+  function modelRank() {
+    const d = TK.detailData(TK.rangeKeys());
+    return '<div style="font-size:9px;letter-spacing:.16em;color:var(--faint);border-bottom:1px solid var(--ink);padding-bottom:4px;margin-top:20px">MODELS / 模型</div>' +
+      '<div class="rank">' + d.models.map(function (x) {
+        return '<div class="rankrow" style="--c:var(--ink)"><div class="top">' +
+          '<span class="nm" title="' + esc(x.id) + '">' + esc(x.id) + '</span>' +
+          '<span class="v">' + TK.fmtTok(x.v) + ' <span class="pc">' + pct(x.v, d.agg.total) + '</span></span></div>' +
+          '<div class="tr"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></div></div>';
+      }).join('') + '</div>';
+  }
+
+  function matrix() {
+    const d = TK.matrixData(TK.rangeKeys());
+    let head = '<th class="l">模型 / 来源</th>';
+    d.agents.forEach(function (a) { head += '<th>' + esc(a.id) + '</th>'; });
+    head += '<th>合计</th>';
+    let body = '';
+    d.keep.concat(d.rest).forEach(function (m) {
+      let row = '<tr><td class="l">' + esc(m.id) + '</td>';
+      d.agents.forEach(function (a) {
+        const v = d.cell[a.id][m.id];
+        row += '<td class="c" data-agent="' + esc(a.id) + '" data-model="' + esc(m.id) + '" style="' + heat(v, d.maxCell) + '">' +
+          (v ? TK.fmtTok(v) : '·') + '</td>';
+      });
+      const total = d.agents.reduce(function (s, a) { return s + d.cell[a.id][m.id]; }, 0);
+      row += '<td class="tot">' + TK.fmtTok(total) + '</td></tr>';
+      body += row;
+    });
+    let foot = '<tr><td class="l tot">合计</td>';
+    d.agents.forEach(function (a) { foot += '<td class="tot">' + TK.fmtTok(d.rowTotal(a)) + '</td>'; });
+    foot += '<td class="tot">' + TK.fmtTok(d.agents.reduce(function (s, a) { return s + d.rowTotal(a); }, 0)) + '</td></tr>';
+    return '<table class="mx"><thead><tr>' + head + '</tr></thead><tbody>' + body + foot + '</tbody></table>';
+  }
+  function heat(v, max) {
+    if (!v) return 'background:transparent';
+    const t = Math.min(1, v / (max || 1));
+    const bg = Math.round(6 + t * 88);
+    return 'background:color-mix(in srgb, var(--red) ' + bg + '%, transparent);color:' + (t > .58 ? '#ffffff' : 'var(--ink)');
+  }
+
+  function convView() {
+    const g = TK.convGroups();
+    const f = S.convFilter;
+    let chips = '<div class="filterbar"><label>FILTER</label>';
+    if (f.dir) chips += '<button class="chip" aria-pressed="true" data-clear="1">' + esc(f.dir) + ' ×</button>';
+    if (f.agent) chips += '<button class="chip" aria-pressed="true" data-clear="1">' + esc(f.agent) + ' ×</button>';
+    if (f.model) chips += '<button class="chip" aria-pressed="true" data-clear="1">' + esc(f.model) + ' ×</button>';
+    if (f.dir || f.agent || f.model) chips += '<button class="clearf" id="clearF">清除筛选</button>';
+    chips += '<span class="sp" style="flex:1"></span><label>' + g.convs.length + ' SESSIONS</label>' +
+      '<input id="convq" placeholder="搜索标题、目录或来源" value="' + esc(S.convQ) + '"></div>';
+    let list = '<div class="conv-list">';
+    if (!g.convs.length) list += '<div class="placeholder">没有符合筛选条件的会话。</div>';
+    g.groups.forEach(function (grp) {
+      list += '<div style="font-size:8.5px;letter-spacing:.14em;color:var(--faint);padding:8px 4px 3px;border-bottom:1px solid var(--line2)">' + esc(grp.dir.name) + '</div>';
+      grp.list.forEach(function (cv) {
+        list += '<button class="cl-row" data-cv="' + cv.id + '" aria-current="' + (cv.id === S.convId) + '">' +
+          '<span class="dt">' + cv.date.slice(5) + '</span><span class="tt">' + esc(cv.title) + '</span>' +
+          '<span class="tk">' + TK.fmtTok(cv.tokens) + '</span></button>';
+      });
+    });
+    list += '</div>';
+    let detail = '';
+    if (!g.cur) {
+      detail = '<div class="conv-detail"><div class="placeholder">没有符合筛选条件的会话。换个来源或模型，或者清除筛选。</div></div>';
+    } else {
+      const cur = g.cur, st = TK.convStats(cur);
+      const comp = [['输入', st.tb.input], ['输出', st.tb.output], ['缓存命中', st.tb.cacheRead], ['缓存写入', st.tb.cacheWrite]];
+      detail = '<div class="conv-detail"><div class="cd-head">' +
+        '<div class="meta"><span>' + cur.date + '</span><span>' + esc(cur.source) + '</span><span>' + esc(cur.model) + '</span><span>' + esc(cur.dirName) + '</span></div>' +
+        '<h2>' + esc(cur.title) + '</h2>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="mini" id="toCal">在日历中查看这天</button>' +
+        '<button class="mini" id="backDir">查看该目录全部会话</button></div></div>' +
+        '<div class="kvline"><span>轮次 <b>' + cur.turns + '</b></span><span>工具调用 <b>' + Math.round(cur.turns * 3.4) + '</b></span>' +
+        '<span>含子 agent <b>' + cur.turnList.filter(function (t) { return t.sub; }).length + '</b> 轮</span>' +
+        '<span>合计 <b>' + TK.fmtTok(st.tsum) + '</b></span></div>' +
+        '<div class="sec"><div class="sec-h"><i></i><h2>Token 构成</h2><span class="en">COMPOSITION</span><span class="r">' + TK.money(st.usd) + '</span></div>' +
+        '<div class="c4">' + comp.map(function (x, i) {
+          return '<div><div class="k">' + x[0] + '</div><div class="v">' + TK.fmtTok(x[1]) + '</div>' +
+            '<div class="p">' + pct(x[1], st.tsum) + '</div></div>';
+        }).join('') + '</div>' +
+        '<div class="compose">' + comp.map(function (x, i) {
+          return '<i style="width:' + (x[1] / st.tsum * 100).toFixed(2) + '%;background:' + ['var(--ink)', 'var(--red)', 'var(--d0)', 'var(--d3)'][i] + '"></i>';
+        }).join('') + '</div>' +
+        (st.unpriced ? '<div style="font-size:9px;color:var(--red);margin-bottom:8px">' + st.unpriced + ' 轮使用未定价模型，金额未计入</div>' : '') +
+        '<div style="font-size:9px;letter-spacing:.14em;color:var(--faint);border-bottom:1px solid var(--line2);padding-bottom:3px;margin-bottom:5px">COST BY DAY / 每日成本</div>' +
+        st.dayRows.map(function (k) {
+          return '<div class="costrow"><span>' + k + '</span><span class="tr"><i style="width:' + (st.byDay[k] / st.maxDay * 100).toFixed(1) + '%"></i></span>' +
+            '<span class="v">' + TK.money(st.byDay[k]) + '</span></div>';
+        }).join('') + '</div>' +
+        '<div class="sec"><div class="sec-h"><i></i><h2>逐轮明细</h2><span class="en">TURNS</span><span class="r">' + cur.turnList.length + ' 行</span></div>' +
+        '<div class="turn-wrap"><table class="turns"><thead><tr><th class="l">时间</th><th class="l">模型</th><th>输入</th><th>输出</th><th>缓存</th><th>成本</th><th class="l">状态</th></tr></thead><tbody>' +
+        cur.turnList.map(function (t) {
+          const tc = TK.turnCost(t);
+          let r = '<tr><td class="l">' + t.time + '</td><td class="l">' + esc(t.model) + '</td>' +
+            '<td>' + TK.fmtTok(t.input) + '</td><td>' + TK.fmtTok(t.output) + '</td><td>' + TK.fmtTok(t.cache) + '</td>' +
+            '<td>' + (tc.priced ? TK.money(tc.usd) : '无价格') + '</td><td class="l">' +
+            (t.state === '失败' ? '<span class="state err">失败</span>' : t.state === '进行中' ? '<span class="state live">进行中</span>' : '成功') + '</td></tr>';
+          if (t.sub) {
+            for (let i = 0; i < t.sub.turns; i++) {
+              r += '<tr class="sub"><td class="l">↳ 子 agent</td><td class="l">' + esc(t.model) + '</td>' +
+                '<td>' + TK.fmtTok(Math.round(t.input * 0.4)) + '</td><td>' + TK.fmtTok(Math.round(t.output * 0.5)) + '</td>' +
+                '<td>' + TK.fmtTok(Math.round(t.cache * 0.3)) + '</td><td>' + TK.money(tc.priced ? tc.usd * 0.12 : 0) + '</td><td class="l"></td></tr>';
+            }
+          }
+          return r;
+        }).join('') + '</tbody></table></div></div>' +
+        '<div class="note"><b>口径</b>　子 agent 的用量计入总量并归属到发起它的那一轮。金额按输入 / 输出 / 缓存命中 / 缓存写入四桶分别计价，人民币按 6.5 折算。</div></div>';
+    }
+    return chips + '<div class="conv-cols">' + list + detail + '</div>';
+  }
+
+  function logView() {
+    const d = TK.logData();
+    const last = d.last;
+    const levels = [['all', '全部'], ['warn', '警告'], ['err', '错误']];
+    return '<div class="stats">' +
+        '<div class="stat"><div class="k">最近扫描</div><div class="v">' + last.at.slice(5, 16) + '</div><div class="s">' + (last.ms / 1000).toFixed(1) + ' 秒 / ' + ({ watch: '文件变更', poll: '轮询', manual: '手动' }[last.trigger]) + '</div></div>' +
+        '<div class="stat"><div class="k">写入事件</div><div class="v">' + TK.full(last.events) + '</div><div class="s">去重 ' + last.dup + ' 条</div></div>' +
+        '<div class="stat"><div class="k">跳过文件</div><div class="v">' + last.skipped + '</div><div class="s">指纹未变</div></div>' +
+        '<div class="stat"><div class="k">警告 / 错误</div><div class="v">' + last.warn + ' / ' + last.err + '</div><div class="s">队列 0 / 2000</div></div>' +
+      '</div>' +
+      '<div class="logcols" style="margin-top:22px"><div class="logleft">' +
+        '<div class="fgroup"><div class="lab">LEVEL / 级别</div><div class="chips">' + levels.map(function (l) {
+          return '<button class="chip" data-lvl="' + l[0] + '" aria-pressed="' + (S.log.lvl === l[0]) + '">' + l[1] + '</button>';
+        }).join('') + '</div></div>' +
+        '<div class="fgroup"><div class="lab">SOURCE / 来源</div><div class="chips">' + d.src.map(function (x) {
+          return '<button class="chip" data-src="' + (x === 'all' ? 'all' : esc(x)) + '" aria-pressed="' + (S.log.src === x) + '">' + (x === 'all' ? '全部' : esc(x)) + '</button>';
+        }).join('') + '</div></div>' +
+        '<div class="fgroup"><div class="lab">QUERY / 关键字</div><input id="logq" placeholder="例如 database is locked" value="' + esc(S.log.q) + '" style="width:100%;border:0;border-bottom:1px solid var(--line2);background:transparent;padding:5px 2px;outline:none;font-size:11px">' +
+          '<div style="display:flex;gap:8px;margin-top:10px"><button class="mini" id="clearf">清除筛选</button><button class="mini" id="rescan">重新扫描</button></div></div>' +
+        '<div class="diag">' + d.diag.map(function (x) {
+          return '<div><span>' + esc(x.name) + '</span><span class="ok">' + esc(x.text) + '</span></div>';
+        }).join('') + '</div></div>' +
+      '<div class="logright">' +
+        '<div class="sec-h" style="margin-top:0"><i></i><h2>扫描批次</h2><span class="en">BATCHES</span><span class="r">点一行只看该批日志</span></div>' +
+        '<div style="overflow-x:auto"><table class="batch"><thead><tr><th class="l">时间</th><th class="l">触发</th><th>耗时</th><th>文件</th><th>事件</th><th>警告</th><th>错误</th></tr></thead><tbody>' +
+        d.batches.map(function (b) {
+          return '<tr data-batch="' + b.id + '"' + (S.log.batch === b.id ? ' class="cur"' : '') + '>' +
+            '<td class="l">' + b.at.slice(5) + '</td><td class="l">' + ({ watch: '文件变更', poll: '兜底轮询', manual: '手动' }[b.trigger]) + '</td>' +
+            '<td>' + b.ms + 'ms</td><td>' + b.files + '</td><td>' + b.events + '</td><td>' + b.warn + '</td><td>' + b.err + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div class="sec-h" style="margin-top:26px"><i></i><h2>日志流</h2><span class="en">EVENT TAPE</span><span class="r">' + d.logs.length + ' 行' + (S.log.batch ? ' / 批次 ' + S.log.batch : ' / 全部批次') + '</span></div>' +
+        '<div>' + d.logs.map(function (l) {
+          return '<div class="logline ' + l.lvl + '"><span class="t">' + l.at.slice(5) + '</span>' +
+            '<span class="lv">' + ({ ok: 'OK', info: '··', warn: '!', err: 'X' }[l.lvl]) + '</span>' +
+            '<span class="s">' + esc(l.src) + '</span><span class="m">' + esc(l.msg) + '</span></div>';
+        }).join('') + (d.logs.length ? '' : '<div class="placeholder">没有符合条件的日志行。</div>') + '</div></div></div>';
+  }
+
+  function draw() {
+    const body = S.view === 'home' ? homeView() : S.view === 'conv' ? convView() : logView();
+    document.getElementById('app').innerHTML = '<div class="shell">' + header() + (S.view === 'home' ? mast() : subMast()) + body + '</div>';
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.nav === 'conv') TK.go('conv', { clearConv: true });
+        else TK.go(b.dataset.nav);
+      };
+    });
+    document.querySelectorAll('[data-unit]').forEach(function (b) {
+      b.onclick = function () { TK.setUnit(b.dataset.unit); };
+    });
+    document.getElementById('themeBtn').onclick = TK.toggleTheme;
+    if (S.view === 'home') {
+      document.getElementById('prev').onclick = function () { TK.shiftMonth(-1); TK.refresh(); };
+      document.getElementById('next').onclick = function () { TK.shiftMonth(1); TK.refresh(); };
+      document.getElementById('today').onclick = function () { TK.resetToday(); TK.refresh(); };
+      document.querySelectorAll('[data-day]').forEach(function (el) {
+        el.onclick = function () { TK.selectDay(el.dataset.day); TK.refresh(); };
+      });
+      document.querySelectorAll('[data-legend]').forEach(function (el) {
+        el.onclick = function () {
+          const p = el.dataset.legend;
+          const i = S.offDirs.indexOf(p);
+          if (i >= 0) S.offDirs.splice(i, 1); else S.offDirs.push(p);
+          TK.refresh();
+        };
+      });
+      document.querySelectorAll('[data-dir]').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { dir: el.dataset.dir }); };
+      });
+      document.querySelectorAll('td.c').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { agent: el.dataset.agent, model: el.dataset.model }); };
+      });
+    }
+    if (S.view === 'conv') {
+      const q = document.getElementById('convq');
+      if (q) q.oninput = function (e) {
+        S.convQ = e.target.value; TK.refresh();
+        const n = document.getElementById('convq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearF');
+      if (cf) cf.onclick = function () { TK.go('conv', { clearConv: true }); };
+      document.querySelectorAll('.filterbar [data-clear]').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { clearConv: true }); };
+      });
+      document.querySelectorAll('[data-cv]').forEach(function (el) {
+        el.onclick = function () { S.convId = el.dataset.cv; TK.refresh(); };
+      });
+      const g = TK.convGroups();
+      const toCal = document.getElementById('toCal');
+      if (toCal && g.cur) toCal.onclick = function () { TK.go('home', { day: g.cur.date }); };
+      const bd = document.getElementById('backDir');
+      if (bd && g.cur) bd.onclick = function () { TK.go('conv', { dir: g.cur.dir }); };
+    }
+    if (S.view === 'log') {
+      document.querySelectorAll('[data-lvl]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ lvl: b.dataset.lvl }); };
+      });
+      document.querySelectorAll('[data-src]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ src: b.dataset.src }); };
+      });
+      document.querySelectorAll('[data-batch]').forEach(function (tr) {
+        tr.onclick = function () {
+          const id = Number(tr.dataset.batch);
+          TK.setLog({ batch: S.log.batch === id ? null : id });
+        };
+      });
+      const q = document.getElementById('logq');
+      if (q) q.oninput = function (e) {
+        S.log.q = e.target.value; TK.refresh();
+        const n = document.getElementById('logq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearf');
+      if (cf) cf.onclick = function () { TK.setLog({ batch: null, lvl: 'all', src: 'all', q: '' }); };
+      const rs = document.getElementById('rescan');
+      if (rs) rs.onclick = function () { rs.textContent = '已触发 / 排队中'; };
+    }
+  }
+
+  TK.mount(draw);
+  draw();
+})();
+</script>
+</body>
+</html>

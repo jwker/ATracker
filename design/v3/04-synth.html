@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 04 · 模块合成器</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg: #14120f;
+    --panel: #221f1a;
+    --panel2: #2a2620;
+    --raised: #1b1815;
+    --ink: #ece3d2;
+    --dim: #a09885;
+    --faint: #6d6759;
+    --line: #3a352c;
+    --line2: #4c4538;
+    --amber: #f2a83e;
+    --amber2: #ffcf7a;
+    --teal: #57c3b0;
+    --red: #e06a50;
+    --green: #7fbf6a;
+    --lcd: #171b15;
+    --lcd-line: #2c3329;
+    --lcd-ink: #d6c9a7;
+    --lcd-dim: #7c8069;
+    --lcd-amber: #ffb849;
+    --track: #0f0d0a;
+    --track-line: rgba(0,0,0,.62);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
+  }
+  :root[data-theme="light"] {
+    --bg: #d9d4ca;
+    --panel: #ece7dc;
+    --panel2: #e3ddd1;
+    --raised: #f4f0e7;
+    --ink: #211e19;
+    --dim: #635d51;
+    --faint: #938c7d;
+    --line: #c2bbac;
+    --line2: #a9a191;
+    --amber: #8f5a00;
+    --amber2: #6b4400;
+    --teal: #0e7367;
+    --red: #a83a25;
+    --green: #3f6e2f;
+    --lcd: #1c211b;
+    --lcd-line: #333a2e;
+    --lcd-ink: #d9cdaa;
+    --lcd-dim: #858a72;
+    --lcd-amber: #ffc061;
+    --track: #d3cbb9;
+    --track-line: rgba(70,60,40,.16);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Helvetica Neue", Arial, "PingFang SC", sans-serif;
+    font-size: 13px; line-height: 1.45;
+  }
+  button, input { font: inherit; color: inherit; }
+  .top {
+    display: flex; align-items: center; gap: 18px; padding: 14px 22px;
+    border-bottom: 1px solid var(--line); background: var(--raised); position: sticky; top: 0; z-index: 30;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo .led { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  .logo b { font-size: 15px; letter-spacing: .2em; font-weight: 600; }
+  .logo span { font-size: 9px; letter-spacing: .24em; color: var(--faint); }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button {
+    background: var(--panel2); border: 1px solid var(--line2); border-radius: 3px;
+    padding: 6px 13px; cursor: pointer; color: var(--dim); font-size: 10px; letter-spacing: .12em;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-current="true"] { color: var(--lcd-amber); background: #2b2419; border-color: var(--amber); }
+  :root[data-theme="light"] .tabs button[aria-current="true"] { background: #3a2f1d; color: #ffc978; }
+  .grow { flex: 1; }
+  .unit { display: flex; align-items: center; gap: 7px; }
+  .unit .k { font-size: 8.5px; letter-spacing: .2em; color: var(--faint); }
+  .unit .seg { display: flex; border: 1px solid var(--line2); border-radius: 3px; overflow: hidden; }
+  .unit button { border: 0; border-left: 1px solid var(--line2); background: transparent; padding: 4px 7px; font-size: 9px; cursor: pointer; color: var(--dim); }
+  .unit button:first-child { border-left: 0; }
+  .unit button[aria-pressed="true"] { background: var(--amber); color: #1b1509; }
+  .key { border: 1px solid var(--line2); background: var(--panel2); border-radius: 3px; padding: 5px 10px; cursor: pointer; font-size: 9px; letter-spacing: .1em; color: var(--dim); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+  .key:hover { border-color: var(--amber); color: var(--amber); }
+  .key:active { transform: translateY(1px); box-shadow: none; }
+  .wrap { max-width: 1440px; margin: 20px auto 48px; padding: 0 22px; }
+  .module {
+    position: relative; background: var(--panel); border: 1px solid var(--line2); border-radius: 6px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 2px 0 rgba(0,0,0,.28);
+  }
+  .module-h {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px 7px;
+    border-bottom: 1px solid var(--line); background: var(--panel2);
+    border-radius: 6px 6px 0 0;
+  }
+  .module-h .tag { font-size: 8px; letter-spacing: .22em; color: var(--faint); }
+  .module-h h2 { margin: 0; font-size: 10px; letter-spacing: .18em; font-weight: 600; color: var(--ink); }
+  .module-h .r { margin-left: auto; font-size: 9px; color: var(--dim); font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .module-b { padding: 12px; }
+
+  /* MASTER LCD */
+  .master { background: var(--lcd); border-color: #0b0d0a; box-shadow: inset 0 2px 12px rgba(0,0,0,.55), 0 2px 0 rgba(0,0,0,.3); }
+  .master .module-h { background: #111511; border-bottom-color: var(--lcd-line); }
+  .master .module-h h2 { color: var(--lcd-ink); }
+  .master .module-h .tag { color: var(--lcd-dim); }
+  .master .module-h .r { color: var(--lcd-amber); }
+  .master-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; padding: 14px 16px 12px; }
+  .lcd-label { font-size: 8.5px; letter-spacing: .26em; color: var(--lcd-dim); }
+  .hero { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: clamp(36px, 5vw, 66px); line-height: 1; letter-spacing: -.02em; color: var(--lcd-amber); margin-top: 4px; text-shadow: 0 0 18px rgba(255,184,73,.25); }
+  .hero-sub { font-size: 9px; color: var(--lcd-dim); margin-top: 7px; letter-spacing: .05em; }
+  .fare-side { display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; text-align: right; }
+  .fare { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: clamp(24px, 3vw, 38px); color: var(--lcd-ink); margin-top: 3px; }
+  .fare-s { font-size: 9px; color: var(--lcd-dim); margin-top: 5px; }
+  .meters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; border-top: 1px solid var(--lcd-line); padding: 10px 16px 14px; }
+  .meter-lcd .k { font-size: 8px; letter-spacing: .16em; color: var(--lcd-dim); }
+  .meter-lcd .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; color: var(--lcd-ink); margin-top: 2px; }
+  .meter-lcd .bar { height: 6px; background: #0c0f0b; margin-top: 5px; position: relative; overflow: hidden; }
+  .meter-lcd .bar i { position: absolute; inset: 0 auto 0 0; background: var(--lcd-amber); opacity: .85; }
+  .transport { display: flex; gap: 5px; align-items: center; }
+  .transport button { background: #2a2419; border: 1px solid #4c4232; color: var(--lcd-amber); border-radius: 3px; padding: 4px 8px; font-size: 9px; cursor: pointer; }
+  .transport button:hover { border-color: var(--lcd-amber); }
+
+  .main-grid { display: grid; grid-template-columns: minmax(0,2.2fr) minmax(300px,1fr); gap: 16px; margin-top: 16px; }
+
+  /* sequencer */
+  .seq-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .scope { font-size: 9px; color: var(--dim); }
+  .seq-grid { display: grid; grid-template-columns: repeat(16, minmax(0,1fr)); gap: 5px; }
+  .pad {
+    position: relative; border: 1px solid var(--line2); background: var(--raised); border-radius: 3px;
+    padding: 5px 4px 8px; cursor: pointer; text-align: left; min-height: 54px; overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .pad:hover { border-color: var(--amber); }
+  .pad .d { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; color: var(--dim); display: block; }
+  .pad .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); display: block; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pad .stack { position: absolute; left: 4px; right: 4px; bottom: 4px; height: 4px; display: flex; gap: 2px; }
+  .pad .stack i { display: block; height: 100%; background: var(--c); }
+  .pad .glow { position: absolute; inset: 0; background: var(--amber); opacity: var(--g, 0); pointer-events: none; }
+  .pad.in { border-color: var(--amber); }
+  .pad.cur { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 22%, var(--raised)); }
+  .pad.cur .d { color: var(--ink); }
+  .pad.dim { opacity: .38; }
+  .pad.off { opacity: .2; }
+  .seq-foot { display: flex; align-items: center; gap: 12px; margin-top: 9px; flex-wrap: wrap; font-size: 8.5px; color: var(--faint); }
+  .ledkey { display: inline-flex; align-items: center; gap: 5px; }
+  .ledkey i { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+
+  /* channel strips */
+  .channels { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 6px; }
+  .strip { background: none; border: 0; padding: 0; cursor: pointer; text-align: center; }
+  .strip .meter { display: block; position: relative; height: 118px; background: var(--track); border: 1px solid var(--line2); border-radius: 3px; overflow: hidden; box-shadow: inset 0 2px 6px rgba(0,0,0,.18); }
+  .strip .meter i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c); }
+  .strip .meter::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(to top, transparent 0 5px, var(--track-line) 5px 7px); }
+  .strip .nm { display: block; font-size: 8px; color: var(--dim); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .strip .v { display: block; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); margin-top: 2px; }
+  .strip .pc { display: block; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--amber); margin-top: 1px; }
+  .strip[aria-pressed="false"] .meter i { opacity: .15; }
+  .strip[aria-pressed="false"] .nm { color: var(--faint); text-decoration: line-through; }
+  .strip:hover .meter { border-color: var(--amber); }
+  .ch-note { margin-top: 9px; font-size: 8px; color: var(--faint); letter-spacing: .04em; }
+
+  /* patch bay */
+  .patch { display: grid; grid-template-columns: minmax(0,1fr) 250px; gap: 18px; }
+  .jack-table { width: 100%; border-collapse: collapse; }
+  .jack-table th { font-size: 8px; letter-spacing: .02em; color: var(--faint); font-weight: 400; text-align: center; padding: 2px 2px 6px; }
+  .jack-table th.l { text-align: left; width: 120px; }
+  .jack-table td { padding: 4px 2px; text-align: center; border-top: 1px solid var(--line); }
+  .jack-table td.l { text-align: left; font-size: 9px; color: var(--dim); padding-left: 2px; }
+  .jack-table td.sum { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); border-left: 1px solid var(--line); }
+  .jack { width: 26px; height: 22px; margin: 0 auto; border: 0; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .jack i { display: block; width: var(--sz); height: var(--sz); border-radius: 50%; background: var(--amber); opacity: var(--o, .9); box-shadow: 0 0 0 3px var(--panel), 0 0 7px rgba(242,168,62,.35); }
+  .jack.empty i { background: transparent; box-shadow: none; border: 1px solid var(--line2); }
+  .jack:hover i { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--amber), 0 0 10px var(--amber); }
+  .model-list .mrow { display: grid; grid-template-columns: 1fr 54px; gap: 3px 8px; padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+  .model-list .nm { font-size: 8.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .model-list .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; text-align: right; color: var(--faint); }
+  .model-list .tr { grid-column: 1 / -1; height: 5px; background: var(--track); }
+  .model-list .tr i { display: block; height: 5px; background: var(--amber); opacity: .75; }
+
+  /* conversation */
+  .bank { display: flex; gap: 6px; overflow-x: auto; padding: 10px 12px; }
+  .preset {
+    flex: 0 0 186px; text-align: left; background: var(--raised); border: 1px solid var(--line2);
+    border-radius: 3px; padding: 7px 8px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .preset:hover { border-color: var(--amber); }
+  .preset[aria-current="true"] { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--raised)); }
+  .preset .t { display: block; font-size: 9.5px; line-height: 1.35; height: 26px; overflow: hidden; }
+  .preset .m { display: block; margin-top: 3px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-tools { display: flex; gap: 8px; align-items: center; padding: 0 12px 10px; flex-wrap: wrap; }
+  .search { flex: 1 1 260px; background: var(--raised); border: 1px solid var(--line2); border-radius: 3px; padding: 6px 8px; font-size: 10px; outline: none; }
+  .search:focus { border-color: var(--amber); }
+  .pill { border: 1px solid var(--line2); border-radius: 3px; padding: 2px 6px; font-size: 8.5px; color: var(--dim); }
+  .clearf { border: 0; background: none; color: var(--amber); font-size: 9px; cursor: pointer; text-decoration: underline; }
+  .session-lcd { background: var(--lcd); border-radius: 3px; border: 1px solid #0b0d0a; box-shadow: inset 0 2px 10px rgba(0,0,0,.5); padding: 14px; }
+  .session-lcd .code { font-size: 8px; letter-spacing: .22em; color: var(--lcd-dim); }
+  .session-lcd h1 { margin: 4px 0 4px; font-size: 20px; color: var(--lcd-ink); font-weight: 500; line-height: 1.25; }
+  .session-lcd .meta { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--lcd-dim); }
+  .session-lcd .row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--lcd-line); align-items: baseline; }
+  .session-lcd .row .k { font-size: 8px; letter-spacing: .16em; color: var(--lcd-dim); }
+  .session-lcd .row .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 10px; color: var(--lcd-ink); }
+  .conv-grid { display: grid; grid-template-columns: minmax(0,1.75fr) minmax(280px,1fr); gap: 16px; margin-top: 16px; }
+  .scope-box { position: sticky; top: 82px; align-self: start; }
+  .tape { width: 100%; border-collapse: collapse; }
+  .tape th, .tape td { border-bottom: 1px solid var(--line); padding: 5px 6px; font-size: 8.8px; text-align: right; font-family: "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tape th { color: var(--faint); font-weight: 400; font-size: 7.5px; letter-spacing: .08em; border-bottom-color: var(--line2); }
+  .tape th.l, .tape td.l { text-align: left; }
+  .tape tr.sub td { color: var(--faint); background: var(--panel2); }
+  .tape tr:hover td { background: var(--panel2); }
+  .badge { display: inline-block; font-size: 7.5px; border: 1px solid var(--line2); padding: 0 4px; border-radius: 2px; white-space: nowrap; }
+  .badge.err { color: var(--red); border-color: var(--red); }
+  .badge.ok { color: var(--green); border-color: var(--green); }
+  .scope-lcd { background: var(--lcd); border: 1px solid #0b0d0a; border-radius: 3px; padding: 9px; box-shadow: inset 0 2px 10px rgba(0,0,0,.5); }
+  .scope-lcd svg { display: block; width: 100%; height: auto; }
+  .scope-axis { display: flex; justify-content: space-between; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--lcd-dim); margin-top: 2px; }
+  .scope-note { display: flex; gap: 10px; margin-top: 6px; font-size: 7.5px; color: var(--lcd-dim); }
+  .dayfade { display: grid; grid-template-columns: 1fr 38px; gap: 3px 7px; align-items: center; padding: 3px 0; }
+  .dayfade .k { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--dim); }
+  .dayfade .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); text-align: right; }
+  .dayfade .tr { grid-column: 1 / -1; height: 5px; background: var(--raised); }
+  .dayfade .tr i { display: block; height: 5px; background: var(--teal); }
+  .notes { font-size: 8.5px; color: var(--dim); line-height: 1.6; }
+  .empty { color: var(--faint); padding: 30px 0; text-align: center; }
+
+  /* log */
+  .status-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+  .status { padding: 10px 12px; border-radius: 3px; background: var(--raised); border: 1px solid var(--line2); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+  .status .k { display: flex; align-items: center; gap: 6px; font-size: 8px; letter-spacing: .16em; color: var(--faint); }
+  .status .k i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status.warn .k i { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .status.err .k i { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .status .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 22px; margin-top: 3px; }
+  .status .s { font-size: 8px; color: var(--faint); }
+  .belt { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 10px 12px; }
+  .bgroup { display: flex; align-items: center; gap: 4px; }
+  .bgroup .k { font-size: 7.5px; letter-spacing: .16em; color: var(--faint); margin-right: 4px; }
+  .swbtn { border: 1px solid var(--line2); background: var(--raised); border-radius: 3px; padding: 3px 7px; font-size: 8.5px; color: var(--dim); cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+  .swbtn[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #1b1509; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }
+  .bgroup input { background: var(--raised); border: 1px solid var(--line2); border-radius: 3px; padding: 4px 7px; width: 150px; font-size: 9px; outline: none; }
+  .bgroup input:focus { border-color: var(--amber); }
+  .diag { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 8px; color: var(--faint); padding: 0 12px 10px; }
+  .batch-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 9px; }
+  .batchcard { text-align: left; background: var(--raised); border: 1px solid var(--line2); border-radius: 3px; padding: 8px 9px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+  .batchcard:hover { border-color: var(--amber); }
+  .batchcard[aria-pressed="true"] { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, var(--raised)); }
+  .batchcard .h { display: flex; align-items: center; gap: 6px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; }
+  .batchcard .h .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .batchcard .h .dot.err { background: var(--red); }
+  .batchcard .h .st { margin-left: auto; font-family: "Helvetica Neue", Arial, sans-serif; font-size: 7px; letter-spacing: .1em; color: var(--faint); }
+  .batchcard .m { font-size: 8px; color: var(--faint); margin-top: 4px; }
+  .batchcard .nums { display: flex; gap: 10px; margin-top: 5px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--dim); flex-wrap: wrap; }
+  .batchcard .nums b { color: var(--ink); font-weight: 400; }
+  .service { background: var(--lcd); border: 1px solid #0b0d0a; border-radius: 3px; box-shadow: inset 0 2px 10px rgba(0,0,0,.5); max-height: 430px; overflow: auto; }
+  .line { display: grid; grid-template-columns: 108px 14px 76px minmax(0,1fr); gap: 7px; padding: 3px 10px; border-bottom: 1px solid rgba(255,255,255,.035); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; color: var(--lcd-ink); }
+  .line .t { color: var(--lcd-dim); }
+  .line .s { color: var(--lcd-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line .lv { color: var(--lcd-dim); }
+  .line.ok .lv { color: #8fcf7a; }
+  .line.warn .lv, .line.warn .m { color: var(--lcd-amber); }
+  .line.err .lv, .line.err .m { color: #ff8c72; }
+  @media (max-width: 1150px) {
+    .main-grid, .conv-grid { grid-template-columns: 1fr; }
+    .main-grid > *, .conv-grid > * { min-width: 0; }
+    .patch { grid-template-columns: 1fr; }
+    .scope-box { position: static; }
+    .status-row, .batch-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 760px) {
+    .top { flex-wrap: wrap; padding: 10px 14px; gap: 9px; }
+    .wrap { padding: 0 14px; }
+    .master-grid { grid-template-columns: 1fr; gap: 12px; }
+    .fare-side { align-items: flex-start; text-align: left; }
+    .meters { grid-template-columns: 1fr 1fr; }
+    .seq-grid { grid-template-columns: repeat(8, minmax(0,1fr)); }
+    .pad { min-height: 48px; }
+    .channels { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+    .status-row, .batch-grid { grid-template-columns: 1fr; }
+    .belt .bgroup { flex-basis: 100%; flex-wrap: wrap; }
+    .swbtn { white-space: nowrap; }
+    .bgroup input { flex: 1; width: auto; min-width: 0; }
+    .tabs { order: 4; width: 100%; }
+    .tape { display: block; overflow-x: auto; }
+    .jack-table { display: block; overflow-x: auto; }
+    .preset { flex-basis: 160px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="_core.js"></script>
+<script>
+(function () {
+  'use strict';
+  const TK = window.TK, W = TK.W, S = TK.state;
+  const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)', 'var(--s6)'];
+  function esc(v) {
+    return String(v).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+  function c(slot) { return SERIES[slot % SERIES.length]; }
+  function modelSlot(id) {
+    const i = W.MODELS.findIndex(function (m) { return m.id === id; });
+    return i < 0 ? 0 : i;
+  }
+
+  function topbar() {
+    const views = [['home', '总览'], ['conv', '会话'], ['log', '日志']];
+    return '<div class="top"><div class="logo"><span class="led"></span><b>ATR</b><span>MODULAR TOKEN SYSTEM</span></div>' +
+      '<div class="tabs">' + views.map(function (v) {
+        return '<button data-nav="' + v[0] + '" aria-current="' + (S.view === v[0]) + '">' + v[1] + '</button>';
+      }).join('') + '</div><span class="grow"></span>' +
+      '<div class="unit"><span class="k">UNIT</span><div class="seg">' + TK.UNITS.map(function (u) {
+        return '<button data-unit="' + u.id + '" aria-pressed="' + (TK.unit() === u.id) + '">' + u.label + '</button>';
+      }).join('') + '</div></div>' +
+      '<button class="key" id="themeBtn">' + (S.theme === 'dark' ? 'LIGHT' : 'DARK') + '</button></div>';
+  }
+
+  function masterLCD() {
+    const a = TK.aggregate(TK.allKeys());
+    const d = TK.detailData(TK.rangeKeys());
+    const hit = d.agg.total ? d.comp[2].v / d.agg.total : 0;
+    const miss = W.MODELS.filter(function (m) { return !TK.PRICE[m.id]; }).length;
+    const comps = [
+      ['INPUT / 输入', d.comp[0].v],
+      ['OUTPUT / 输出', d.comp[1].v],
+      ['CACHE READ / 命中', d.comp[2].v],
+      ['CACHE WRITE / 写入', d.comp[3].v]
+    ];
+    return '<section class="module master"><div class="module-h"><h2>MASTER</h2>' +
+      '<span class="r" id="scopeNow">' + TK.scopeText() + '</span></div>' +
+      '<div class="master-grid"><div><div class="lcd-label">TOTAL TOKENS / 当前范围</div>' +
+        '<div class="hero">' + TK.fmtTok(d.agg.total) + '</div>' +
+        '<div class="hero-sub">全期 ' + TK.abbr(a.total) + ' / ' + TK.allKeys().length + ' 天 / 输入 + 输出 + 缓存命中 + 缓存写入</div></div>' +
+        '<div class="fare-side"><div class="lcd-label">ESTIMATED FARE / 当前范围</div>' +
+        '<div class="fare">' + TK.money(d.agg.usd) + '</div>' +
+        '<div class="fare-s">' + TK.moneyUsd(d.agg.usd) + ' / 汇率 6.5 / ' + (miss ? miss + ' 个模型未配置价格' : '全部模型已配置') + '</div>' +
+        '<div class="transport" style="margin-top:8px"><button id="prev">◀ 月</button><button id="today">本月</button><button id="next">月 ▶</button></div></div></div>' +
+      '<div class="meters">' + comps.map(function (x) {
+        return '<div class="meter-lcd"><div class="k">' + x[0] + '</div><div class="v">' + TK.fmtTok(x[1]) + '</div>' +
+          '<div class="bar"><i style="width:' + (x[1] / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></div></div>';
+      }).join('') + '</div>' +
+      '<div style="padding:0 16px 12px;font-size:8.5px;color:var(--lcd-dim)">CACHE HIT ' + TK.fmtPct(hit) + ' / 选择范围后，下方所有模块同步更新</div></section>';
+  }
+
+  function sequencer() {
+    const meta = TK.monthMeta(S.month);
+    const lg = TK.legend(TK.monthKeys(S.month));
+    let max = 1;
+    for (let day = 1; day <= meta.dim; day++) {
+      const rec = W.days[meta.y + '-' + W.d2(meta.m) + '-' + W.d2(day)];
+      if (rec && rec.total > max) max = rec.total;
+    }
+    let pads = '';
+    for (let day = 1; day <= meta.dim; day++) {
+      const k = meta.y + '-' + W.d2(meta.m) + '-' + W.d2(day);
+      const rec = W.days[k];
+      const inRange = S.sel && k >= S.sel.start && k <= S.sel.end;
+      const isCur = S.sel && k === S.sel.start && k === S.sel.end;
+      const items = TK.dayItems(k, lg.ranked);
+      const g = rec ? Math.min(0.3, rec.total / max * 0.3) : 0;
+      const off = !rec;
+      pads += '<button class="pad ' + (isCur ? 'cur' : (inRange ? 'in' : '')) + (off ? ' off' : '') + '" data-day="' + k + '" ' +
+        'style="--g:' + g.toFixed(3) + '" title="' + k + ' / ' + (rec ? TK.fmtTok(rec.total) : '无记录') + '">' +
+        '<span class="glow"></span><span class="d">' + W.d2(day) + '</span>' +
+        '<span class="v">' + (rec ? TK.fmtTok(rec.total) : '--') + '</span>' +
+        '<span class="stack">' + items.map(function (x) {
+          return '<i style="width:' + x.pct.toFixed(2) + '%;--c:' + c(x.slot) + '"></i>';
+        }).join('') + '</span></button>';
+    }
+    return '<section class="module"><div class="module-h"><h2>SEQUENCER</h2>' +
+      '<span class="r">' + S.month.replace('-', ' / ') + ' / ' + meta.dim + ' STEPS</span></div><div class="module-b">' +
+      '<div class="seq-head"><span class="scope">点一步选一天，再点一步成区间。当前范围：' + TK.scopeText() + '</span></div>' +
+      '<div class="seq-grid" style="margin-top:9px">' + pads + '</div>' +
+      '<div class="seq-foot"><span class="ledkey"><i></i>选中</span><span class="ledkey"><i style="opacity:.35"></i>区间内</span>' +
+      '<span>底部色条为目录构成，可在右侧通道条静音</span></div></div></section>';
+  }
+
+  function channels() {
+    const lg = TK.legend(TK.rangeKeys());
+    return '<section class="module"><div class="module-h"><h2>DIR CHANNELS</h2><span class="r">MUTE</span></div><div class="module-b">' +
+      '<div class="channels">' + lg.ranked.map(function (x) {
+        const off = S.offDirs.indexOf(x.path) >= 0;
+        const share = lg.agg.total ? x.v / lg.agg.total * 100 : 0;
+        const hgt = Math.min(96, share / 25 * 100);
+        return '<button class="strip" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '" title="' + esc(x.path) + ' / ' + TK.fmtTok(x.v) + ' / ' + TK.fmtPct(share / 100) + '">' +
+          '<span class="meter"><i style="height:' + hgt.toFixed(1) + '%;--c:' + c(x.slot) + '"></i></span>' +
+          '<span class="nm">' + esc(x.name) + '</span><span class="v">' + TK.fmtTok(x.v) + '</span>' +
+          '<span class="pc">' + TK.fmtPct(share / 100) + '</span></button>';
+      }).join('') + '</div><div class="ch-note">刻度 0-25% · 占当前范围总量 · 点击静音</div></div></section>';
+  }
+
+  function patchBay() {
+    const d = TK.matrixData(TK.rangeKeys());
+    const dd = TK.detailData(TK.rangeKeys());
+    let head = '<tr><th class="l">AGENT IN</th>';
+    d.keep.forEach(function (m) { head += '<th title="' + esc(m.id) + '">' + esc(m.id.length > 10 ? m.id.slice(0, 9) + '.' : m.id) + '</th>'; });
+    if (d.rest.length) head += '<th>OTH</th>';
+    head += '<th>SUM</th></tr>';
+    let rows = '';
+    d.agents.forEach(function (a) {
+      let r = '<tr><td class="l" title="' + esc(a.id) + '">' + esc(a.id) + '</td>';
+      d.keep.forEach(function (m) {
+        const v = d.cell[a.id][m.id];
+        const t = v / (d.maxCell || 1);
+        const sz = v ? (6 + Math.round(t * 16)) : 5;
+        r += '<td><button class="jack' + (v ? '' : ' empty') + '" data-agent="' + esc(a.id) + '" data-model="' + esc(m.id) + '" title="' + esc(a.id) + ' × ' + esc(m.id) + ' / ' + TK.fmtTok(v) + '">' +
+          '<i style="--sz:' + sz + 'px;--o:' + (0.35 + t * 0.6).toFixed(2) + '"></i></button></td>';
+      });
+      if (d.rest.length) {
+        const rv = d.restColTotal(a);
+        r += '<td class="sum">' + (rv ? TK.fmtTok(rv) : '-') + '</td>';
+      }
+      r += '<td class="sum">' + TK.fmtTok(d.rowTotal(a)) + '</td></tr>';
+      rows += r;
+    });
+    let foot = '<tr><td class="l" style="border-top:1px solid var(--line2)">SUM</td>';
+    d.keep.forEach(function (m) { foot += '<td class="sum" style="border-top:1px solid var(--line2)">' + TK.fmtTok(d.colTotal[m.id]) + '</td>'; });
+    if (d.rest.length) foot += '<td class="sum" style="border-top:1px solid var(--line2)">' + TK.fmtTok(d.rest.reduce(function (s, m) { return s + d.colTotal[m.id]; }, 0)) + '</td>';
+    foot += '<td class="sum" style="border-top:1px solid var(--line2)">' + TK.fmtTok(d.agents.reduce(function (s, a) { return s + d.rowTotal(a); }, 0)) + '</td></tr>';
+    return '<section class="module" style="margin-top:16px"><div class="module-h"><h2>PATCH BAY / AGENT × MODEL</h2><span class="r">CLICK A JACK TO OPEN SESSION</span></div>' +
+      '<div class="module-b"><div class="patch"><div style="overflow-x:auto"><table class="jack-table"><thead>' + head + '</thead><tbody>' + rows + foot + '</tbody></table>' +
+      '<div class="seq-foot" style="margin-top:8px"><span>点越大，用量越高。空心为未使用。</span></div></div>' +
+      '<div class="model-list"><div class="lcd-label" style="margin-bottom:6px;color:var(--faint)">MODEL OUT</div>' +
+      dd.models.map(function (x) {
+        return '<div class="mrow"><span class="nm" title="' + esc(x.id) + '">' + esc(x.id) + '</span><span class="v">' + TK.fmtTok(x.v) + '</span>' +
+          '<span class="tr"><i style="width:' + (x.v / (dd.agg.total || 1) * 100).toFixed(1) + '%"></i></span></div>';
+      }).join('') + '</div></div></div></section>';
+  }
+
+  function homeView() {
+    return masterLCD() + '<div class="main-grid">' + sequencer() + channels() + '</div>' + patchBay();
+  }
+
+  function sessionRail(g) {
+    return '<section class="module"><div class="module-h"><h2>SESSION BANK</h2><span class="r">' + g.convs.length + ' PRESETS</span></div>' +
+      '<div class="bank">' + g.convs.map(function (cv) {
+        return '<button class="preset" data-cv="' + cv.id + '" aria-current="' + (cv.id === S.convId) + '">' +
+          '<span class="t">' + esc(cv.title) + '</span>' +
+          '<span class="m">' + esc(cv.source) + ' / ' + esc(cv.model) + ' / ' + TK.fmtTok(cv.tokens) + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="conv-tools"><input class="search" id="convq" placeholder="搜索目录、会话摘要" value="' + esc(S.convQ) + '">' +
+      (S.convFilter.dir || S.convFilter.agent || S.convFilter.model
+        ? '<span class="pill">' + esc(S.convFilter.dir || '') + (S.convFilter.agent ? ' / ' + esc(S.convFilter.agent) : '') + (S.convFilter.model ? ' / ' + esc(S.convFilter.model) : '') + '</span><button class="clearf" id="clearF">清除筛选</button>'
+        : '<span class="pill">全部来源</span>') +
+      '</div></section>';
+  }
+
+  function scopeSVG(cur) {
+    const list = cur.turnList;
+    const vals = list.map(function (t) { return t.input + t.output + t.cache; });
+    const max = Math.max.apply(null, vals.concat([1]));
+    const W2 = 340, H = 116;
+    const step = list.length > 1 ? (W2 - 20) / (list.length - 1) : 0;
+    const pts = vals.map(function (v, i) {
+      return [10 + (list.length > 1 ? i * step : W2 / 2), 104 - (v / max) * 86];
+    });
+    const poly = pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    let marks = '';
+    pts.forEach(function (p, i) {
+      const failed = list[i].state === '失败';
+      marks += '<g><title>第 ' + (i + 1) + ' 轮 / ' + list[i].time.slice(11) + ' / ' + TK.fmtTok(vals[i]) + ' / ' + list[i].state + '</title>' +
+        '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="9" fill="transparent"/>' +
+        '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="3.2" fill="' + (failed ? '#ff8c72' : '#ffb849') + '" stroke="#171b15" stroke-width="2"/></g>';
+    });
+    const maxIdx = vals.indexOf(max);
+    const mp = pts[maxIdx];
+    return '<svg viewBox="0 0 ' + W2 + ' ' + H + '" role="img" aria-label="逐轮 token 曲线">' +
+      '<line x1="10" y1="104" x2="' + (W2 - 10) + '" y2="104" stroke="#333a2e" stroke-width="1"/>' +
+      '<polyline points="' + poly + '" fill="none" stroke="#ffb849" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>' +
+      marks +
+      '<text x="' + Math.min(mp[0], W2 - 52) + '" y="' + Math.max(mp[1] - 8, 12) + '" fill="#d6c9a7" font-size="8" font-family="monospace">' + TK.fmtTok(max) + '</text>' +
+      '</svg>' +
+      '<div class="scope-axis"><span>' + (list[0] ? list[0].time.slice(11) : '') + '</span><span>' + (list[list.length - 1] ? list[list.length - 1].time.slice(11) : '') + '</span></div>' +
+      '<div class="scope-note"><span>2px 折线 / 逐轮总量</span><span style="margin-left:auto">红点 = 失败</span></div>';
+  }
+
+  function convView() {
+    const g = TK.convGroups();
+    if (!g.cur) {
+      return sessionRail(g) + '<div class="module" style="margin-top:16px"><div class="empty">没有符合筛选条件的会话。清除筛选后重试。</div></div>';
+    }
+    const cur = g.cur;
+    const st = TK.convStats(cur);
+    const comps = [
+      ['INPUT', st.tb.input, 'var(--s1)'],
+      ['OUTPUT', st.tb.output, 'var(--s2)'],
+      ['CACHE READ', st.tb.cacheRead, 'var(--s3)'],
+      ['CACHE WRITE', st.tb.cacheWrite, 'var(--s4)']
+    ];
+    let table = '<table class="tape"><thead><tr><th class="l">#</th><th class="l">TIME</th><th class="l">MODEL</th><th>IN</th><th>OUT</th><th>CACHE</th><th>COST</th><th class="l">ST</th></tr></thead><tbody>';
+    cur.turnList.forEach(function (t, i) {
+      const tc = TK.turnCost(t);
+      table += '<tr><td class="l">' + W.d2(i + 1) + '</td><td class="l">' + t.time.slice(11) + '</td><td class="l">' + esc(t.model) + '</td>' +
+        '<td>' + TK.fmtTok(t.input) + '</td><td>' + TK.fmtTok(t.output) + '</td><td>' + TK.fmtTok(t.cache) + '</td>' +
+        '<td>' + (tc.priced ? TK.money(tc.usd) : '--') + '</td><td class="l">' +
+        (t.state === '失败' ? '<span class="badge err">FAIL</span>' : t.state === '进行中' ? '<span class="badge ok">RUN</span>' : 'OK') + '</td></tr>';
+      if (t.sub) {
+        for (let j = 0; j < t.sub.turns; j++) {
+          table += '<tr class="sub"><td class="l">' + W.d2(i + 1) + 's</td><td class="l">' + t.time.slice(11) + '</td><td class="l">' + esc(t.model) + '</td>' +
+            '<td>' + TK.fmtTok(Math.round(t.input * 0.4)) + '</td><td>' + TK.fmtTok(Math.round(t.output * 0.5)) + '</td>' +
+            '<td>' + TK.fmtTok(Math.round(t.cache * 0.3)) + '</td><td>' + TK.money(tc.priced ? tc.usd * 0.12 : 0) + '</td><td class="l">SUB</td></tr>';
+        }
+      }
+    });
+    table += '</tbody></table>';
+    return sessionRail(g) +
+      '<section class="module" style="margin-top:16px"><div class="module-h"><h2>SESSION LCD</h2><span class="r">' + cur.id.toUpperCase() + '</span></div>' +
+      '<div class="module-b"><div class="session-lcd"><div class="code">SESSION / ' + cur.id.toUpperCase() + '</div>' +
+        '<h1>' + esc(cur.title) + '</h1>' +
+        '<div class="meta">' + esc(cur.source) + ' / ' + esc(cur.model) + ' / ' + esc(cur.dirName) + ' / ' + cur.date + '</div>' +
+        '<div class="row">' + comps.map(function (x) {
+          return '<span><span class="k">' + x[0] + '</span> <span class="v">' + TK.fmtTok(x[1]) + '</span></span>';
+        }).join('') +
+        '<span style="margin-left:auto"><span class="k">FARE</span> <span class="v" style="color:var(--lcd-amber)">' + TK.money(st.usd) + '</span></span>' +
+        '<span><button class="key" id="toCal" style="background:#2a2419;border-color:#4c4232;color:var(--lcd-amber)">在日历中查看这天</button></span>' +
+        '</div></div></div></section>' +
+      '<div class="conv-grid"><section class="module"><div class="module-h"><h2>TURN TAPE</h2><span class="r">' + cur.turnList.length + ' STEPS</span></div>' +
+        '<div class="module-b" style="overflow-x:auto">' + table + '</div></section>' +
+        '<aside class="scope-box"><section class="module"><div class="module-h"><h2>SCOPE</h2><span class="r">TOKENS / STEP</span></div>' +
+          '<div class="module-b"><div class="scope-lcd">' + scopeSVG(cur) + '</div></div></section>' +
+          '<section class="module" style="margin-top:16px"><div class="module-h"><h2>FARE / DAY</h2><span class="r">' + TK.moneyUsd(st.usd) + '</span></div>' +
+          '<div class="module-b">' + (st.dayRows.length === 1
+            ? '<div class="dayfade"><span class="k">' + st.dayRows[0] + '</span><span class="v"></span><span class="tr"><i style="width:100%"></i></span></div>' +
+              '<div style="font-family:monospace;font-size:9px;color:var(--dim);margin-top:4px">' + TK.money(st.byDay[st.dayRows[0]]) + '</div>'
+            : st.dayRows.map(function (k) {
+              return '<div class="dayfade"><span class="k">' + k + '</span><span class="v">' + TK.money(st.byDay[k]) + '</span>' +
+                '<span class="tr"><i style="width:' + (st.byDay[k] / st.maxDay * 100).toFixed(1) + '%"></i></span></div>';
+            }).join('')) +
+          (st.unpriced ? '<div style="font-size:8px;color:var(--red);margin-top:6px">' + st.unpriced + ' 轮未配置价格</div>' : '') +
+          '</div></section>' +
+          '<section class="module" style="margin-top:16px"><div class="module-h"><h2>NOTES</h2></div><div class="module-b">' +
+          '<div class="notes">token 分四桶：未缓存输入、输出（含推理）、缓存命中、缓存写入。日期按 Asia/Shanghai 折算自然日。子 agent 的用量计入总量并归属到发起它的那一轮。价格来自 config/pricing.json，人民币按 6.5 折算。</div></div></section>' +
+        '</aside></div>';
+  }
+
+  function logView() {
+    const d = TK.logData();
+    const last = d.last;
+    const levels = [['all', '全部'], ['warn', '警告'], ['err', '错误']];
+    return '<div class="status-row">' +
+        '<div class="status"><div class="k"><i></i>LAST SCAN</div><div class="v">' + last.at.slice(5, 16) + '</div><div class="s">' + last.trigger + ' / ' + (last.ms / 1000).toFixed(1) + ' s</div></div>' +
+        '<div class="status"><div class="k"><i></i>EVENTS</div><div class="v">' + TK.full(last.events) + '</div><div class="s">去重 ' + last.dup + ' 条</div></div>' +
+        '<div class="status"><div class="k"><i></i>SKIPPED</div><div class="v">' + last.skipped + '</div><div class="s">指纹未变</div></div>' +
+        '<div class="status ' + (last.err ? 'err' : last.warn ? 'warn' : '') + '"><div class="k"><i></i>WARN / ERR</div><div class="v">' + last.warn + ' / ' + last.err + '</div><div class="s">队列 0 / 2000</div></div>' +
+      '</div>' +
+      '<section class="module" style="margin-top:16px"><div class="module-h"><h2>FILTER BELT</h2><span class="r">LIVE</span></div>' +
+        '<div class="belt">' +
+          '<div class="bgroup"><span class="k">LEVEL</span>' + levels.map(function (l) {
+            return '<button class="swbtn" data-lvl="' + l[0] + '" aria-pressed="' + (S.log.lvl === l[0]) + '">' + l[1] + '</button>';
+          }).join('') + '</div>' +
+          '<div class="bgroup"><span class="k">SOURCE</span>' + d.src.map(function (x) {
+            return '<button class="swbtn" data-src="' + (x === 'all' ? 'all' : esc(x)) + '" aria-pressed="' + (S.log.src === x) + '">' + (x === 'all' ? '全部' : esc(x)) + '</button>';
+          }).join('') + '</div>' +
+          '<div class="bgroup"><span class="k">QUERY</span><input id="logq" placeholder="搜索日志内容" value="' + esc(S.log.q) + '"></div>' +
+          '<button class="swbtn" id="clearf">CLEAR</button>' +
+          '<button class="swbtn" id="rescan">RESCAN</button>' +
+        '</div>' +
+        '<div class="diag">' + d.diag.map(function (x) { return '<span>' + esc(x.name) + ' / ' + esc(x.text) + '</span>'; }).join('') + '</div></section>' +
+      '<section class="module" style="margin-top:16px"><div class="module-h"><h2>BATCH MEMORY</h2><span class="r">' + d.batches.length + ' SLOTS / CLICK TO FILTER</span></div>' +
+        '<div class="module-b"><div class="batch-grid">' + d.batches.map(function (b) {
+          return '<button class="batchcard" data-batch="' + b.id + '" aria-pressed="' + (S.log.batch === b.id) + '">' +
+            '<span class="h"><span class="dot' + (b.err ? ' err' : '') + '"></span>' + b.at.slice(5, 16) +
+            '<span class="st">' + ({ watch: 'WATCH', poll: 'POLL', manual: 'MANUAL' }[b.trigger]) + '</span></span>' +
+            '<span class="m">耗时 ' + b.ms + ' ms / 文件 ' + b.files + '</span>' +
+            '<span class="nums"><span>事件 <b>' + b.events + '</b></span><span>警 <b>' + b.warn + '</b></span><span>错 <b style="color:' + (b.err ? 'var(--red)' : 'inherit') + '">' + b.err + '</b></span></span></button>';
+        }).join('') + '</div></div></section>' +
+      '<section class="module" style="margin-top:16px"><div class="module-h"><h2>SERVICE LCD</h2><span class="r">' + d.logs.length + ' LINES' + (S.log.batch ? ' / BATCH ' + S.log.batch : '') + '</span></div>' +
+        '<div class="module-b"><div class="service">' + d.logs.map(function (l) {
+          return '<div class="line ' + l.lvl + '"><span class="t">' + l.at.slice(5) + '</span>' +
+            '<span class="lv">' + ({ ok: 'OK', info: '..', warn: '!', err: 'X' }[l.lvl]) + '</span>' +
+            '<span class="s">' + esc(l.src) + '</span><span class="m">' + esc(l.msg) + '</span></div>';
+        }).join('') + (d.logs.length ? '' : '<div class="empty" style="color:var(--lcd-dim)">没有符合条件的日志行。</div>') + '</div></div></section>';
+  }
+
+  function draw() {
+    const body = S.view === 'home' ? homeView() : S.view === 'conv' ? convView() : logView();
+    document.getElementById('app').innerHTML = topbar() + '<div class="wrap">' + body + '</div>';
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.nav === 'conv') TK.go('conv', { clearConv: true });
+        else TK.go(b.dataset.nav);
+      };
+    });
+    document.querySelectorAll('[data-unit]').forEach(function (b) {
+      b.onclick = function () { TK.setUnit(b.dataset.unit); };
+    });
+    document.getElementById('themeBtn').onclick = TK.toggleTheme;
+    if (S.view === 'home') {
+      document.getElementById('prev').onclick = function () { TK.shiftMonth(-1); TK.refresh(); };
+      document.getElementById('next').onclick = function () { TK.shiftMonth(1); TK.refresh(); };
+      document.getElementById('today').onclick = function () { TK.resetToday(); TK.refresh(); };
+      document.querySelectorAll('[data-day]').forEach(function (el) {
+        el.onclick = function () { TK.selectDay(el.dataset.day); TK.refresh(); };
+      });
+      document.querySelectorAll('[data-legend]').forEach(function (el) {
+        el.onclick = function () {
+          const p = el.dataset.legend;
+          const i = S.offDirs.indexOf(p);
+          if (i >= 0) S.offDirs.splice(i, 1); else S.offDirs.push(p);
+          TK.refresh();
+        };
+      });
+      document.querySelectorAll('.jack').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { agent: el.dataset.agent, model: el.dataset.model }); };
+      });
+    }
+    if (S.view === 'conv') {
+      document.querySelectorAll('[data-cv]').forEach(function (el) {
+        el.onclick = function () { S.convId = el.dataset.cv; TK.refresh(); };
+      });
+      const q = document.getElementById('convq');
+      if (q) q.oninput = function (e) {
+        S.convQ = e.target.value; TK.refresh();
+        const n = document.getElementById('convq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearF');
+      if (cf) cf.onclick = function () { TK.go('conv', { clearConv: true }); };
+      const toCal = document.getElementById('toCal');
+      if (toCal) {
+        const g = TK.convGroups();
+        if (g.cur) toCal.onclick = function () { TK.go('home', { day: g.cur.date }); };
+      }
+    }
+    if (S.view === 'log') {
+      document.querySelectorAll('[data-lvl]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ lvl: b.dataset.lvl }); };
+      });
+      document.querySelectorAll('[data-src]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ src: b.dataset.src }); };
+      });
+      document.querySelectorAll('[data-batch]').forEach(function (b) {
+        b.onclick = function () {
+          const id = Number(b.dataset.batch);
+          TK.setLog({ batch: S.log.batch === id ? null : id });
+        };
+      });
+      const q = document.getElementById('logq');
+      if (q) q.oninput = function (e) {
+        S.log.q = e.target.value; TK.refresh();
+        const n = document.getElementById('logq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearf');
+      if (cf) cf.onclick = function () { TK.setLog({ batch: null, lvl: 'all', src: 'all', q: '' }); };
+      const rs = document.getElementById('rescan');
+      if (rs) rs.onclick = function () { rs.textContent = '已触发 / 排队中'; };
+    }
+  }
+
+  TK.mount(draw);
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 05 · Riso 用量小报</title>
+<style>
+  :root[data-theme="light"] {
+    --paper: #f2ecdf;
+    --paper-2: #e9e2d2;
+    --panel: #f7f2e7;
+    --ink: #17161a;
+    --ink-2: #45423f;
+    --dim: #6d6862;
+    --faint: #9a948a;
+    --rule: #b9b1a2;
+    --rule-2: #17161a;
+    --pink: #ef3f74;
+    --pink-ink: #bd1652;
+    --blue: #2b4fd8;
+    --blue-ink: #1e3aa8;
+    --orange: #ff6b2c;
+    --teal: #0f8b7a;
+    --mustard: #b88700;
+    --violet: #6d3bd1;
+    --s1: #ef3f74; --s2: #2b4fd8; --s3: #6d3bd1; --s4: #ff6b2c; --s5: #0f8b7a; --s6: #b88700;
+    --halftone: rgba(23,22,26,.13);
+    --tint: rgba(239,63,116,.10);
+    --ok: #2c7a3f;
+    --err: #c02a1e;
+  }
+  :root[data-theme="dark"] {
+    --paper: #121216;
+    --paper-2: #1a1a20;
+    --panel: #1b1b21;
+    --ink: #f2ede1;
+    --ink-2: #d3ccbe;
+    --dim: #a49d90;
+    --faint: #736d63;
+    --rule: #3a393f;
+    --rule-2: #f2ede1;
+    --pink: #ff6f9e;
+    --pink-ink: #ff8fb4;
+    --blue: #7b95ff;
+    --blue-ink: #9db0ff;
+    --orange: #ff8a55;
+    --teal: #3fbfa9;
+    --mustard: #e8bd45;
+    --violet: #a982ff;
+    --s1: #ff6f9e; --s2: #7b95ff; --s3: #a982ff; --s4: #ff8a55; --s5: #3fbfa9; --s6: #e8bd45;
+    --halftone: rgba(242,237,225,.12);
+    --tint: rgba(255,111,158,.13);
+    --ok: #6fcf8a;
+    --err: #ff7a68;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background-color: var(--paper);
+    background-image: radial-gradient(var(--halftone) 0.55px, transparent 0.65px);
+    background-size: 5px 5px;
+    color: var(--ink);
+    font-family: Georgia, "Songti SC", "Times New Roman", serif;
+    font-size: 13px; line-height: 1.5;
+  }
+  button, input { font: inherit; color: inherit; }
+  ::selection { background: var(--pink); color: #fff8ee; }
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 0 24px 46px; }
+  .mast { border-bottom: 3px solid var(--rule-2); padding: 18px 22px 0; }
+  .mast-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 18px; padding-bottom: 10px; }
+  .wordmark { font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: 30px; letter-spacing: -.045em; line-height: 1; }
+  .wordmark i { color: var(--pink-ink); font-style: normal; }
+  .mast-mid { text-align: center; line-height: 1.15; }
+  .mast-mid b { display: block; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: 11px; letter-spacing: .3em; }
+  .mast-mid span { font-size: 8px; letter-spacing: .24em; color: var(--dim); }
+  .mast-meta { text-align: right; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); line-height: 1.6; }
+  .mast-nav { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--rule); padding: 6px 0; }
+  .tabs { display: flex; gap: 18px; }
+  .tabs button {
+    background: none; border: 0; padding: 3px 0; cursor: pointer; color: var(--dim);
+    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: 10px; letter-spacing: .12em;
+    border-bottom: 3px solid transparent;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-current="true"] { color: var(--ink); border-bottom-color: var(--pink); }
+  .nav-r { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .unit { display: flex; align-items: center; gap: 5px; }
+  .unit .k { font-family: "Arial Black", sans-serif; font-size: 7.5px; letter-spacing: .16em; color: var(--faint); }
+  .unit button { background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 1px 4px; font-size: 8.5px; cursor: pointer; color: var(--dim); }
+  .unit button[aria-pressed="true"] { color: var(--ink); border-bottom: 2px solid var(--pink); }
+  .stampbtn { background: none; border: 1.5px solid var(--ink); padding: 3px 8px; cursor: pointer; font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .12em; }
+  .stampbtn:hover { background: var(--ink); color: var(--paper); }
+  .ticker {
+    background: var(--blue); color: #fff9ec; overflow: hidden; white-space: nowrap;
+    border-bottom: 3px solid var(--rule-2);
+  }
+  .ticker-in { display: inline-block; padding: 5px 0; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; letter-spacing: .06em; animation: tick 42s linear infinite; }
+  .ticker-in b { font-weight: 400; color: #ffd9e4; }
+  @keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .ticker-in { animation: none; } }
+  .kicker { font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .26em; color: var(--pink-ink); }
+  .hero { display: grid; grid-template-columns: 1.4fr 1fr; gap: 30px; padding: 22px 0 20px; border-bottom: 1px solid var(--rule); align-items: end; }
+  .display {
+    position: relative; margin: 0; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+    font-size: clamp(52px, 9vw, 116px); line-height: .82; letter-spacing: -.055em; color: var(--blue);
+    text-transform: uppercase;
+  }
+  .display::before {
+    content: attr(data-t); position: absolute; left: 5px; top: 5px; color: var(--pink);
+    z-index: -1; mix-blend-mode: multiply; white-space: nowrap;
+  }
+  :root[data-theme="dark"] .display::before { mix-blend-mode: screen; opacity: .85; }
+  .display.pk { color: var(--pink-ink); }
+  .display.pk::before { color: var(--blue); }
+  .dek { font-size: 12px; color: var(--ink-2); margin: 12px 0 0; max-width: 44ch; font-style: italic; }
+  .hero-r { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--rule); border: 1px solid var(--rule-2); }
+  .hero-r > div { background: var(--panel); padding: 10px 12px; }
+  .hero-r .k { font-family: "Arial Black", sans-serif; font-size: 7.5px; letter-spacing: .18em; color: var(--dim); display: block; }
+  .hero-r .n { display: block; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: clamp(20px, 2.4vw, 31px); letter-spacing: -.04em; margin-top: 3px; }
+  .hero-r .n.pink { color: var(--pink-ink); }
+  .hero-r .s { display: block; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); margin-top: 2px; }
+  .hero-r .wide { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .hero-r .wide .stamp { font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .1em; border: 1.5px solid var(--pink); color: var(--pink-ink); padding: 3px 7px; transform: rotate(-2deg); }
+  .transport { display: flex; gap: 4px; }
+  .tbtn { background: none; border: 1px solid var(--rule-2); padding: 2px 7px; font-size: 8px; cursor: pointer; font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .tbtn:hover { background: var(--ink); color: var(--paper); }
+  .spread { display: grid; grid-template-columns: minmax(0,2.15fr) minmax(280px,1fr); gap: 26px; padding: 20px 0; border-bottom: 1px solid var(--rule); }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; border-bottom: 2px solid var(--rule-2); padding-bottom: 5px; }
+  .sec-head h2 { margin: 0; font-family: "Arial Black", sans-serif; font-size: 15px; letter-spacing: -.01em; }
+  .sec-head .en { font-family: "Arial Black", sans-serif; font-size: 7.5px; letter-spacing: .22em; color: var(--dim); }
+  .sec-head .r { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 7px 0; }
+  .lg { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; cursor: pointer; font-size: 8.5px; color: var(--ink-2); font-family: Georgia, serif; }
+  .lg .sw { width: 8px; height: 8px; background: var(--c); display: inline-block; }
+  .lg .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); }
+  .lg[aria-pressed="false"] { color: var(--faint); text-decoration: line-through; }
+  .lg[aria-pressed="false"] .sw { opacity: .2; }
+  .chart { position: relative; margin-top: 4px; }
+  .band { position: absolute; top: 0; bottom: 18px; background: var(--tint); border-left: 2px solid var(--pink); border-right: 2px solid var(--pink); pointer-events: none; z-index: 0; }
+  .band::after { content: "RANGE"; position: absolute; top: 2px; left: 3px; font-family: "Arial Black", sans-serif; font-size: 6.5px; letter-spacing: .14em; color: var(--pink-ink); }
+  .bars { display: grid; grid-template-columns: repeat(31, minmax(0,1fr)); gap: 2px; position: relative; z-index: 1; }
+  .col { background: none; border: 0; padding: 0; cursor: pointer; display: flex; flex-direction: column; height: 216px; }
+  .col:hover .dl { color: var(--pink-ink); }
+  .col:hover .bar { filter: brightness(1.08); }
+  .barwrap { flex: 1; display: flex; align-items: flex-end; min-height: 0; }
+  .bar { display: flex; flex-direction: column-reverse; gap: 2px; width: 100%; max-width: 22px; margin: 0 auto; min-height: 2px; position: relative; }
+  .bar i { display: block; width: 100%; flex: 0 0 auto; }
+  .bar i.s1 { background: var(--s1); }
+  .bar i.s2 { background: var(--s2); }
+  .bar i.s3 { background: var(--s3); }
+  .bar i.s4 { background: var(--s4); }
+  .bar i.s5 { background: var(--s5); }
+  .bar i.s6 { background: var(--s6); }
+  .dl { display: block; height: 18px; padding-top: 3px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7px; color: var(--faint); text-align: center; }
+  .col.iscur .dl { color: var(--pink-ink); font-weight: 700; }
+  .col.isoff { opacity: .28; }
+  .chart-foot { display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 6px; margin-top: 4px; font-size: 8.5px; color: var(--dim); }
+  .rail { display: flex; flex-direction: column; gap: 18px; }
+  .rail-block { border-top: 3px solid var(--rule-2); padding-top: 7px; }
+  .rail-block h3 { margin: 0 0 7px; font-family: "Arial Black", sans-serif; font-size: 9px; letter-spacing: .14em; }
+  .rail-block h3 span { font-weight: 400; color: var(--faint); margin-left: 5px; letter-spacing: .06em; }
+  .bucket { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: center; padding: 3px 0; }
+  .bucket .k { font-size: 8.5px; color: var(--ink-2); }
+  .bucket .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; text-align: right; }
+  .bucket .tr { grid-column: 1 / -1; height: 7px; background: var(--paper-2); }
+  .bucket .tr i { display: block; height: 7px; background: var(--pink); }
+  .bucket .tr i.b { background: var(--blue); }
+  .kvline { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted var(--rule); padding: 3px 0; font-size: 8.5px; }
+  .kvline .k { color: var(--dim); }
+  .kvline .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; }
+  .dirrow { display: grid; grid-template-columns: 8px 1fr auto; gap: 4px 7px; align-items: center; padding: 3px 0; background: none; border: 0; width: 100%; text-align: left; cursor: pointer; }
+  .dirrow .sw { width: 8px; height: 8px; background: var(--c); }
+  .dirrow .nm { font-size: 8.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dirrow .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--dim); }
+  .dirrow .tr { grid-column: 2 / -1; height: 3px; background: var(--paper-2); }
+  .dirrow .tr i { display: block; height: 3px; background: var(--c); }
+  .dirrow[aria-pressed="false"] { opacity: .35; }
+  .bottom { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(280px,1fr); gap: 26px; padding: 20px 0; }
+  .mtx { width: 100%; border-collapse: collapse; }
+  .mtx th { font-family: "Arial Black", sans-serif; font-size: 7px; letter-spacing: .04em; color: var(--dim); text-align: right; padding: 3px 4px 5px; border-bottom: 2px solid var(--rule-2); font-weight: 400; }
+  .mtx th.l { text-align: left; }
+  .mtx td { border-bottom: 1px solid var(--rule); padding: 5px 4px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; text-align: right; }
+  .mtx td.l { text-align: left; font-family: Georgia, serif; font-size: 8.5px; }
+  .mtx td.c { cursor: pointer; }
+  .mtx td.c:hover { outline: 2px solid var(--pink); outline-offset: -2px; }
+  .mtx tr.sum td { border-top: 2px solid var(--rule-2); border-bottom: 0; font-size: 7.5px; }
+  .modelrow { display: grid; grid-template-columns: 18px 1fr auto; gap: 3px 7px; align-items: baseline; border-bottom: 1px solid var(--rule); padding: 5px 0; }
+  .modelrow .no { font-family: "Arial Black", sans-serif; font-size: 8px; color: var(--pink-ink); }
+  .modelrow .nm { font-size: 8.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modelrow .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--dim); }
+  .modelrow .tr { grid-column: 2 / -1; height: 4px; background: var(--paper-2); }
+  .modelrow .tr i { display: block; height: 4px; background: var(--blue); }
+  .foot { border-top: 3px solid var(--rule-2); margin-top: 10px; padding-top: 6px; display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); }
+
+  /* conversation */
+  .conv-head { padding: 16px 0 8px; border-bottom: 1px solid var(--rule); }
+  .conv-head .kicker { color: var(--pink-ink); }
+  .conv-head h1 { margin: 4px 0 0; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: 11px; letter-spacing: .2em; }
+  .conv-wrap { display: grid; grid-template-columns: 270px minmax(0,1fr); gap: 28px; padding-top: 16px; }
+  .index { border-right: 1px solid var(--rule); padding-right: 16px; }
+  .index-h { display: flex; align-items: baseline; gap: 8px; border-bottom: 2px solid var(--rule-2); padding-bottom: 4px; margin-bottom: 7px; }
+  .index-h b { font-family: "Arial Black", sans-serif; font-size: 10px; letter-spacing: .12em; }
+  .index-h span { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--dim); }
+  .search { width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--rule-2); padding: 4px 0; font-size: 9px; outline: none; font-family: Georgia, serif; }
+  .search:focus { border-bottom-color: var(--pink); }
+  .filters { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; padding: 6px 0; font-size: 8px; color: var(--dim); }
+  .fpill { border: 1px solid var(--rule); padding: 1px 5px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; }
+  .clearlink { background: none; border: 0; padding: 0; color: var(--pink-ink); font-size: 8px; cursor: pointer; text-decoration: underline; }
+  .idx-list { max-height: calc(100vh - 190px); overflow: auto; }
+  .idx-item { display: grid; grid-template-columns: 24px 1fr; gap: 2px 6px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 6px 3px 6px 0; cursor: pointer; }
+  .idx-item:hover { background: var(--tint); }
+  .idx-item[aria-current="true"] { border-left: 3px solid var(--pink); padding-left: 5px; background: var(--tint); }
+  .idx-item .no { font-family: "Arial Black", sans-serif; font-size: 10px; color: var(--faint); }
+  .idx-item[aria-current="true"] .no { color: var(--pink-ink); }
+  .idx-item .ti { font-size: 9.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .idx-item .me { grid-column: 2; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .article { min-width: 0; }
+  .article .kicker { margin-top: 2px; }
+  .headline { margin: 6px 0 8px; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: clamp(27px, 3.6vw, 46px); line-height: 1.05; letter-spacing: -.03em; }
+  .byline { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 5px 0; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--dim); }
+  .link { background: none; border: 0; padding: 0; margin-left: auto; font-family: "Arial Black", sans-serif; font-size: 8px; color: var(--pink-ink); cursor: pointer; border-bottom: 2px solid var(--pink); letter-spacing: .04em; }
+  .statband { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 2px solid var(--rule-2); }
+  .statband > div { padding: 9px 10px 8px 0; border-right: 1px solid var(--rule); }
+  .statband > div:last-child { border-right: 0; }
+  .statband .k { font-family: "Arial Black", sans-serif; font-size: 7px; letter-spacing: .16em; color: var(--dim); }
+  .statband .v { font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: clamp(17px, 2vw, 25px); letter-spacing: -.03em; margin-top: 2px; }
+  .statband .s { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7px; color: var(--faint); }
+  .fareline { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+  .fareline .lab { font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .14em; color: var(--dim); }
+  .fareline .big { font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: 24px; color: var(--pink-ink); letter-spacing: -.03em; }
+  .fareline .usd { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); }
+  .daystrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .daycell .k { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--dim); }
+  .daycell .v { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; text-align: right; }
+  .daycell .h { display: flex; justify-content: space-between; }
+  .daycell .tr { height: 4px; background: var(--paper-2); margin-top: 2px; }
+  .daycell .tr i { display: block; height: 4px; background: var(--teal); }
+  .tablewrap { margin-top: 12px; overflow-x: auto; }
+  .tape { width: 100%; border-collapse: collapse; min-width: 650px; }
+  .tape th { font-family: "Arial Black", sans-serif; font-size: 6.8px; letter-spacing: .06em; color: var(--dim); text-align: right; padding: 3px 4px 5px; border-bottom: 2px solid var(--rule-2); font-weight: 400; }
+  .tape th.l { text-align: left; }
+  .tape td { border-bottom: 1px solid var(--rule); padding: 5px 4px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; text-align: right; white-space: nowrap; }
+  .tape td.l { text-align: left; }
+  .tape tr.sub td { color: var(--faint); background: var(--paper-2); }
+  .tape tr:hover td { background: var(--tint); }
+  .stamp { display: inline-block; border: 1px solid var(--pink); color: var(--pink-ink); font-family: "Arial Black", sans-serif; font-size: 6.5px; letter-spacing: .06em; padding: 0 3px; }
+  .stamp.ok { border-color: var(--rule); color: var(--dim); }
+  .notes2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 22px; border-top: 2px solid var(--rule-2); margin-top: 14px; padding-top: 8px; }
+  .notes2 h4 { margin: 0 0 4px; font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .14em; }
+  .notes2 p { margin: 0; font-size: 9.5px; color: var(--ink-2); line-height: 1.65; }
+  .pull { font-size: 15px; font-style: italic; line-height: 1.35; border-left: 4px solid var(--pink); padding-left: 10px; color: var(--ink); }
+  .empty { padding: 40px 0; text-align: center; color: var(--dim); font-style: italic; }
+
+  /* log */
+  .loghero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 18px 0 17px; border-bottom: 3px solid var(--rule-2); flex-wrap: wrap; }
+  .loghero h1 { margin: 0; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: clamp(30px, 5vw, 54px); line-height: .95; letter-spacing: -.04em; color: var(--blue); position: relative; }
+  .loghero h1::before { content: attr(data-t); position: absolute; left: 4px; top: 4px; color: var(--pink); z-index: -1; mix-blend-mode: multiply; white-space: nowrap; }
+  :root[data-theme="dark"] .loghero h1::before { mix-blend-mode: screen; }
+  .loghero .sub { font-size: 9px; color: var(--dim); max-width: 34ch; font-style: italic; }
+  .status4 { display: grid; grid-template-columns: repeat(4,1fr); border-bottom: 1px solid var(--rule); }
+  .status4 > div { padding: 10px 12px 9px 0; border-right: 1px solid var(--rule); }
+  .status4 > div:last-child { border-right: 0; }
+  .status4 .k { font-family: "Arial Black", sans-serif; font-size: 7px; letter-spacing: .16em; color: var(--dim); }
+  .status4 .v { font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: clamp(22px, 2.6vw, 34px); letter-spacing: -.04em; line-height: 1.05; margin-top: 2px; }
+  .status4 .v.pk { color: var(--pink-ink); }
+  .status4 .s { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); }
+  .filterstrip { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .fg { display: flex; align-items: center; gap: 3px; }
+  .fg .k { font-family: "Arial Black", sans-serif; font-size: 6.8px; letter-spacing: .14em; color: var(--faint); margin-right: 3px; }
+  .fbtn { background: none; border: 0; border-bottom: 2px solid transparent; padding: 1px 3px; font-size: 8px; cursor: pointer; color: var(--dim); font-family: Georgia, serif; }
+  .fbtn[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--pink); }
+  .fg input { background: transparent; border: 0; border-bottom: 1px solid var(--rule-2); padding: 2px 0; width: 150px; font-size: 8.5px; outline: none; font-family: Georgia, serif; }
+  .fg input:focus { border-bottom-color: var(--pink); }
+  .clearbtn { background: none; border: 1px solid var(--rule); padding: 2px 6px; font-size: 7.5px; cursor: pointer; }
+  .clearbtn:hover { border-color: var(--ink); }
+  .rescan { background: var(--ink); color: var(--paper); border: 0; padding: 3px 9px; font-family: "Arial Black", sans-serif; font-size: 7.5px; letter-spacing: .08em; cursor: pointer; }
+  .rescan:hover { background: var(--pink-ink); }
+  .diag { display: flex; flex-wrap: wrap; gap: 4px 15px; padding: 6px 0 0; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7px; color: var(--faint); }
+  .loggrid { display: grid; grid-template-columns: minmax(0,1.8fr) minmax(250px,1fr); gap: 26px; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+  .run { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 6px 4px; cursor: pointer; display: grid; grid-template-columns: 26px 84px 1fr auto; gap: 2px 8px; align-items: baseline; }
+  .run:hover { background: var(--tint); }
+  .run[aria-pressed="true"] { background: var(--tint); border-left: 3px solid var(--pink); padding-left: 1px; }
+  .run .no { font-family: "Arial Black", sans-serif; font-size: 10px; color: var(--faint); }
+  .run .tm { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; }
+  .run .mt { font-size: 8px; color: var(--dim); font-family: Georgia, serif; }
+  .run .st { font-family: "Arial Black", sans-serif; font-size: 6.5px; letter-spacing: .06em; border: 1px solid var(--rule); padding: 0 4px; color: var(--dim); }
+  .run .st.err { border-color: var(--pink); color: var(--pink-ink); }
+  .run .sub { grid-column: 2 / -1; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7px; color: var(--faint); }
+  .diagbox h3 { margin: 0 0 5px; font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .14em; }
+  .diagrow { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted var(--rule); padding: 3px 0; font-size: 8px; }
+  .diagrow .nm { font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .diagrow .tx { color: var(--dim); }
+  .diagrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 5px; }
+  .press { margin-top: 16px; border: 1px solid var(--rule-2); background: var(--panel); }
+  .press-h { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid var(--rule-2); padding: 5px 8px; }
+  .press-h b { font-family: "Arial Black", sans-serif; font-size: 8px; letter-spacing: .14em; }
+  .press-h span { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); }
+  .pressbody { max-height: 400px; overflow: auto; }
+  .lrow { display: grid; grid-template-columns: 104px 16px 76px minmax(0,1fr); gap: 7px; padding: 3px 8px; border-bottom: 1px solid var(--rule); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.2px; }
+  .lrow .t { color: var(--dim); }
+  .lrow .s { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lrow .lv { color: var(--faint); }
+  .lrow.warn .lv, .lrow.warn .m { color: var(--pink-ink); }
+  .lrow.err .lv, .lrow.err .m { color: var(--err); }
+  .lrow.ok .lv { color: var(--ok); }
+  .editor { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 16px; border-top: 2px solid var(--rule-2); margin-top: 10px; padding-top: 8px; align-items: start; }
+  .editor .pull { font-size: 14px; font-style: italic; line-height: 1.4; border-left: 4px solid var(--pink); padding-left: 9px; color: var(--ink); }
+  .edstat .k { display: block; font-family: "Arial Black", sans-serif; font-size: 6.8px; letter-spacing: .14em; color: var(--dim); }
+  .edstat .v { display: block; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-size: 21px; letter-spacing: -.03em; line-height: 1.15; margin-top: 1px; }
+  .edstat .s { display: block; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.2px; color: var(--faint); }
+  @media (max-width: 1100px) {
+    .spread, .bottom, .loggrid { grid-template-columns: 1fr; }
+    .spread > *, .bottom > *, .loggrid > *, .conv-wrap > * { min-width: 0; }
+    .conv-wrap { grid-template-columns: 1fr; }
+    .index { border-right: 0; padding-right: 0; }
+    .idx-list { max-height: 300px; }
+    .hero { grid-template-columns: 1fr; gap: 16px; }
+  }
+  @media (max-width: 760px) {
+    .wrap { padding: 0 14px 30px; }
+    .mast-top { grid-template-columns: 1fr auto; }
+    .mast-mid { display: none; }
+    .mast-nav { flex-wrap: wrap; gap: 8px; }
+    .tabs { gap: 12px; }
+    .nav-r { margin-left: 0; width: 100%; justify-content: space-between; }
+    .display { font-size: clamp(44px, 15vw, 80px); }
+    .hero-r { grid-template-columns: 1fr 1fr; }
+    .bars { grid-template-columns: repeat(31, 20px); overflow-x: auto; padding-bottom: 4px; }
+    .col { height: 180px; }
+    .statband { grid-template-columns: 1fr 1fr; }
+    .statband > div:nth-child(2) { border-right: 0; }
+    .status4 { grid-template-columns: 1fr 1fr; }
+    .notes2 { grid-template-columns: 1fr; }
+    .editor { grid-template-columns: 1fr 1fr; }
+    .editor .pull { grid-column: 1 / -1; }
+    .loghero { align-items: flex-start; }
+    .run { grid-template-columns: 24px 76px 1fr; }
+    .run .st { grid-column: 2 / -1; justify-self: start; }
+    .ticker-in { animation-duration: 70s; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="_core.js"></script>
+<script>
+(function () {
+  'use strict';
+  const TK = window.TK, W = TK.W, S = TK.state;
+  const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)', 'var(--s6)'];
+  const CLS = ['s1', 's2', 's3', 's4', 's5', 's6'];
+  function esc(v) {
+    return String(v).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+  function c(slot) { return SERIES[slot % SERIES.length]; }
+  function cls(slot) { return CLS[slot % CLS.length]; }
+
+  function masthead() {
+    const views = [['home', '总览'], ['conv', '会话'], ['log', '日志']];
+    return '<header class="mast"><div class="mast-top">' +
+      '<div class="wordmark">ATracker<i>.</i></div>' +
+      '<div class="mast-mid"><b>TOKEN LEDGER</b><span>用量小报 / 第 10 期 / 2026.10</span></div>' +
+      '<div class="mast-meta">内部发行 / 免费<br>数据截至 2026-10-20 21:41</div></div>' +
+      '<div class="mast-nav"><div class="tabs">' + views.map(function (v) {
+        return '<button data-nav="' + v[0] + '" aria-current="' + (S.view === v[0]) + '">' + v[1] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="nav-r"><div class="unit"><span class="k">UNIT</span>' + TK.UNITS.map(function (u) {
+        return '<button data-unit="' + u.id + '" aria-pressed="' + (TK.unit() === u.id) + '">' + u.label + '</button>';
+      }).join('') + '</div><button class="stampbtn" id="themeBtn">' + (S.theme === 'light' ? '夜班' : '日班') + '</button></div></div></header>';
+  }
+
+  function ticker() {
+    const a = TK.aggregate(TK.monthKeys(S.month));
+    const parts = W.DIRS.map(function (d) {
+      return '<b>' + esc(d.name) + '</b> ' + TK.fmtTok(a.byDir[d.path]);
+    });
+    parts.push('<b>CACHE HIT</b> ' + TK.fmtPct(a.buckets.cacheRead / (a.total || 1)));
+    parts.push('<b>UNPRICED</b> ' + TK.fmtTok(a.unpriced));
+    parts.push('<b>MODELS</b> ' + W.MODELS.filter(function (m) { return a.byModel[m.id] > 0; }).length + ' 个在用');
+    const text = parts.join('　·　') + '　·　';
+    return '<div class="ticker"><div class="ticker-in">' + text + '　·　' + text + '</div></div>';
+  }
+
+  function hero() {
+    const d = TK.detailData(TK.rangeKeys());
+    const a = TK.aggregate(TK.allKeys());
+    const hit = d.agg.total ? d.comp[2].v / d.agg.total : 0;
+    let peak = null;
+    TK.rangeKeys().forEach(function (k) {
+      const rec = W.days[k];
+      if (rec && (!peak || rec.total > peak.total)) peak = rec;
+    });
+    return '<section class="hero"><div><div class="kicker">封面 / COVER STORY</div>' +
+      '<h1 class="display" data-t="TOKEN">TOKEN</h1>' +
+      '<h1 class="display pk" data-t="LEDGER">LEDGER</h1>' +
+      '<p class="dek">一个人、一台机器、一年的 token 流水。这里记录每一次输入、每一段缓存，以及它们折算成的账单。</p></div>' +
+      '<div class="hero-r">' +
+        '<div><span class="k">当前总量 / TOKENS</span><span class="n">' + TK.fmtTok(d.agg.total) + '</span><span class="s">全期 ' + TK.abbr(a.total) + ' / ' + TK.allKeys().length + ' 天</span></div>' +
+        '<div><span class="k">预估成本 / FARE</span><span class="n pink">' + TK.money(d.agg.usd) + '</span><span class="s">' + TK.moneyUsd(d.agg.usd) + ' / 6.5</span></div>' +
+        '<div><span class="k">缓存命中 / HIT</span><span class="n">' + TK.fmtPct(hit) + '</span><span class="s">' + TK.fmtTok(d.comp[2].v) + '</span></div>' +
+        '<div><span class="k">峰值日 / PEAK</span><span class="n" style="font-size:19px">' + (peak ? peak.date.slice(5) : '--') + '</span><span class="s">' + (peak ? TK.fmtTok(peak.total) : '') + '</span></div>' +
+        '<div class="wide"><span class="s">范围 / ' + TK.scopeText() + '</span><span class="stamp">第 10 期</span></div>' +
+      '</div></section>';
+  }
+
+  function dayChart() {
+    const meta = TK.monthMeta(S.month);
+    const lg = TK.legend(TK.monthKeys(S.month));
+    const rows = [];
+    let max = 1;
+    for (let day = 1; day <= meta.dim; day++) {
+      const k = meta.y + '-' + W.d2(meta.m) + '-' + W.d2(day);
+      const rec = W.days[k];
+      const items = TK.dayItems(k, lg.ranked);
+      const sum = items.reduce(function (s, x) { return s + x.v; }, 0);
+      if (sum > max) max = sum;
+      rows.push({ k: k, rec: rec, items: items, sum: sum });
+    }
+    let peak = null, costPeak = null;
+    rows.forEach(function (r) {
+      if (!r.rec) return;
+      const usd = TK.aggregate([r.k]).usd;
+      if (!peak || r.sum > peak.sum) peak = { k: r.k, sum: r.sum };
+      if (!costPeak || usd > costPeak.usd) costPeak = { k: r.k, sum: r.sum, usd: usd };
+    });
+    let band = '';
+    if (S.sel) {
+      const mStart = meta.y + '-' + W.d2(meta.m) + '-01';
+      const mEnd = meta.y + '-' + W.d2(meta.m) + '-' + W.d2(meta.dim);
+      const s = S.sel.start > mStart ? S.sel.start : mStart;
+      const e = S.sel.end < mEnd ? S.sel.end : mEnd;
+      if (s <= e) {
+        const i0 = Number(s.slice(8, 10)) - 1;
+        const i1 = Number(e.slice(8, 10)) - 1;
+        band = '<div class="band" style="left:' + (i0 / meta.dim * 100).toFixed(2) + '%;width:' + ((i1 - i0 + 1) / meta.dim * 100).toFixed(2) + '%"></div>';
+      }
+    }
+    let cols = '';
+    rows.forEach(function (r, idx) {
+      const day = idx + 1;
+      const isCur = S.sel && r.k === S.sel.start && S.sel.start === S.sel.end;
+      const off = !r.rec;
+      const H = 196;
+      const totalH = r.sum ? Math.max(2, r.sum / max * H) : 0;
+      const gaps = Math.max(0, r.items.length - 1) * 2;
+      const usable = Math.max(0, totalH - gaps);
+      let segs = '';
+      if (r.sum) {
+        r.items.forEach(function (x) {
+          const h = Math.max(1, x.v / r.sum * usable);
+          segs += '<i class="' + cls(x.slot) + '" style="height:' + h.toFixed(1) + 'px" title="' + esc(x.path) + ' / ' + TK.fmtTok(x.v) + '"></i>';
+        });
+      }
+      cols += '<button class="col' + (isCur ? ' iscur' : '') + (off ? ' isoff' : '') + '" data-day="' + r.k + '" title="' + r.k + ' / ' + (r.rec ? TK.fmtTok(r.rec.total) : '无记录') + '">' +
+        '<span class="barwrap"><span class="bar" style="height:' + totalH.toFixed(1) + 'px">' + segs + '</span></span>' +
+        '<span class="dl">' + W.d2(day) + '</span></button>';
+    });
+    return '<section class="spread"><div><div class="sec-head"><h2>每日流量</h2><span class="en">DAILY VOLUME</span>' +
+      '<span class="r">' + S.month.replace('-', '.') + ' / ' + meta.dim + ' DAYS</span>' +
+      '<span class="transport" style="margin-left:8px"><button class="tbtn" id="prev">◀</button><button class="tbtn" id="today">本月</button><button class="tbtn" id="next">▶</button></span></div>' +
+      '<div class="legend">' + lg.ranked.map(function (x) {
+        const off = S.offDirs.indexOf(x.path) >= 0;
+        return '<button class="lg" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '">' +
+          '<span class="sw" style="--c:' + c(x.slot) + '"></span>' + esc(x.name) + ' <span class="v">' + TK.fmtTok(x.v) + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="chart">' + band + '<div class="bars">' + cols + '</div></div>' +
+      '<div class="chart-foot"><span>点一根柱子选一天，再点一根成区间</span><span>虚线范围 = 当前选择</span><span>柱高 = 当日总量</span></div>' +
+      '<div class="editor">' +
+        '<div class="pull">“缓存命中 ' + TK.fmtPct(lg.agg.buckets.cacheRead / (lg.agg.total || 1)) + '，接近一半的输入没有重新计费。”</div>' +
+        '<div class="edstat"><span class="k">峰值日 / PEAK</span><span class="v">' + (peak ? peak.k.slice(5) : '--') + '</span><span class="s">' + (peak ? TK.fmtTok(peak.sum) + ' / ' + TK.money(TK.aggregate([peak.k]).usd) : '') + '</span></div>' +
+        '<div class="edstat"><span class="k">最贵一天 / TOP FARE</span><span class="v">' + (costPeak ? costPeak.k.slice(5) : '--') + '</span><span class="s">' + (costPeak ? TK.money(costPeak.usd) + ' / ' + TK.fmtTok(costPeak.sum) : '') + '</span></div>' +
+      '</div></div>' +
+      '<aside class="rail">' + rail() + '</aside></section>';
+  }
+
+  function rail() {
+    const d = TK.detailData(TK.rangeKeys());
+    const lg = TK.legend(TK.monthKeys(S.month));
+    const hit = d.agg.total ? d.comp[2].v / d.agg.total : 0;
+    const labels = ['输入 / INPUT', '输出 / OUTPUT', '缓存命中 / READ', '缓存写入 / WRITE'];
+    return '<div class="rail-block"><h3>四桶 <span>CABIN LOAD</span></h3>' +
+      d.comp.map(function (x, i) {
+        return '<div class="bucket"><span class="k">' + labels[i] + '</span><span class="v">' + TK.fmtTok(x.v) + '</span>' +
+          '<span class="tr"><i class="' + (i % 2 ? 'b' : '') + '" style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></span></div>';
+      }).join('') +
+      '<div class="kvline"><span class="k">缓存命中率</span><span class="v">' + TK.fmtPct(hit) + '</span></div>' +
+      '<div class="kvline"><span class="k">未计价 token</span><span class="v" style="color:var(--err)">' + TK.fmtTok(d.agg.unpriced) + '</span></div></div>' +
+      '<div class="rail-block"><h3>目录 <span>DIRECTORIES / CLICK TO MUTE</span></h3>' +
+      lg.ranked.map(function (x) {
+        const off = S.offDirs.indexOf(x.path) >= 0;
+        return '<button class="dirrow" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '" style="--c:' + c(x.slot) + '">' +
+          '<span class="sw"></span><span class="nm">' + esc(x.name) + '</span><span class="v">' + TK.fmtTok(x.v) + '</span>' +
+          '<span class="tr"><i style="width:' + (x.v / (lg.agg.total || 1) * 100).toFixed(1) + '%"></i></span></button>';
+      }).join('') + '</div>' +
+      '<div class="rail-block"><h3>本期 <span>THIS ISSUE</span></h3>' +
+      '<div class="kvline"><span class="k">范围</span><span class="v">' + TK.scopeText() + '</span></div>' +
+      '<div class="kvline"><span class="k">账期天数</span><span class="v">' + TK.rangeKeys().length + ' 天</span></div></div>';
+  }
+
+  function bottom() {
+    const d = TK.matrixData(TK.rangeKeys());
+    const dd = TK.detailData(TK.rangeKeys());
+    let head = '<tr><th class="l">来源 / AGENT</th>';
+    d.keep.forEach(function (m) { head += '<th title="' + esc(m.id) + '">' + esc(m.id) + '</th>'; });
+    if (d.rest.length) head += '<th>其他</th>';
+    head += '<th>合计</th></tr>';
+    let rows = '';
+    d.agents.forEach(function (a) {
+      let r = '<tr><td class="l">' + esc(a.id) + '</td>';
+      d.keep.forEach(function (m) {
+        const v = d.cell[a.id][m.id];
+        const t = v / (d.maxCell || 1);
+        const bg = v ? 'background:color-mix(in srgb, var(--pink) ' + Math.round(6 + t * 58) + '%, transparent);color:' + (t > 0.55 ? '#fff8ee' : 'var(--ink)') : '';
+        r += '<td class="c" data-agent="' + esc(a.id) + '" data-model="' + esc(m.id) + '" style="' + bg + '">' + (v ? TK.fmtTok(v) : '-') + '</td>';
+      });
+      if (d.rest.length) r += '<td>' + (d.restColTotal(a) ? TK.fmtTok(d.restColTotal(a)) : '-') + '</td>';
+      r += '<td>' + TK.fmtTok(d.rowTotal(a)) + '</td></tr>';
+      rows += r;
+    });
+    let foot = '<tr class="sum"><td class="l">合计</td>';
+    d.keep.forEach(function (m) { foot += '<td>' + TK.fmtTok(d.colTotal[m.id]) + '</td>'; });
+    if (d.rest.length) foot += '<td>' + TK.fmtTok(d.rest.reduce(function (s, m) { return s + d.colTotal[m.id]; }, 0)) + '</td>';
+    foot += '<td>' + TK.fmtTok(d.agents.reduce(function (s, a) { return s + d.rowTotal(a); }, 0)) + '</td></tr>';
+    return '<section class="bottom"><div><div class="sec-head"><h2>来源 × 模型</h2><span class="en">PATCH MATRIX</span><span class="r">点格打开会话</span></div>' +
+      '<div class="tablewrap" style="margin-top:6px"><table class="mtx"><thead>' + head + '</thead><tbody>' + rows + foot + '</tbody></table></div></div>' +
+      '<div><div class="sec-head"><h2>机型用量</h2><span class="en">MODELS</span><span class="r">' + dd.models.length + ' 个</span></div>' +
+      '<div style="margin-top:5px">' + dd.models.map(function (x, i) {
+        return '<div class="modelrow"><span class="no">' + W.d2(i + 1) + '</span><span class="nm" title="' + esc(x.id) + '">' + esc(x.id) + '</span><span class="v">' + TK.fmtTok(x.v) + '</span>' +
+          '<span class="tr"><i style="width:' + (x.v / (dd.agg.total || 1) * 100).toFixed(1) + '%"></i></span></div>';
+      }).join('') + '</div></div></section>';
+  }
+
+  function homeView() {
+    return masthead() + ticker() + '<div class="wrap">' + hero() + dayChart() + bottom() + footline() + '</div>';
+  }
+
+  function footline() {
+    return '<div class="foot"><span>ATracker / TOKEN LEDGER / 第 10 期</span><span>价格为估算，人民币按 6.5 折算 / 数据截至 2026-10-20 21:41</span><span>内部发行</span></div>';
+  }
+
+  function convView() {
+    const g = TK.convGroups();
+    let index = '<aside class="index"><div class="index-h"><b>索引</b><span>SESSIONS / ' + g.convs.length + '</span></div>' +
+      '<input class="search" id="convq" placeholder="搜索目录、会话摘要" value="' + esc(S.convQ) + '">';
+    if (S.convFilter.dir || S.convFilter.agent || S.convFilter.model) {
+      index += '<div class="filters"><span>筛选</span>' +
+        (S.convFilter.dir ? '<span class="fpill">' + esc(S.convFilter.dir) + '</span>' : '') +
+        (S.convFilter.agent ? '<span class="fpill">' + esc(S.convFilter.agent) + '</span>' : '') +
+        (S.convFilter.model ? '<span class="fpill">' + esc(S.convFilter.model) + '</span>' : '') +
+        '<button class="clearlink" id="clearF">清除</button></div>';
+    }
+    index += '<div class="idx-list">';
+    let n = 0;
+    g.groups.forEach(function (grp) {
+      index += '<div class="kicker" style="margin:7px 0 3px;color:var(--dim)">' + esc(grp.dir.name) + ' / ' + TK.fmtTok(grp.total) + '</div>';
+      grp.list.forEach(function (cv) {
+        n++;
+        index += '<button class="idx-item" data-cv="' + cv.id + '" aria-current="' + (cv.id === S.convId) + '">' +
+          '<span class="no">' + W.d2(n) + '</span><span class="ti">' + esc(cv.title) + '</span>' +
+          '<span class="me">' + cv.date + ' / ' + esc(cv.source) + ' / ' + TK.fmtTok(cv.tokens) + '</span></button>';
+      });
+    });
+    index += '</div></aside>';
+
+    if (!g.cur) {
+      return masthead() + '<div class="wrap"><div class="conv-head"><div class="kicker">会话档案 / SESSION FILE</div><h1>INDEX</h1></div>' +
+        '<div class="empty">没有符合筛选条件的会话。清除筛选后重试。</div></div>';
+    }
+
+    const cur = g.cur;
+    const st = TK.convStats(cur);
+    const comp = [
+      ['输入 / INPUT', st.tb.input],
+      ['输出 / OUTPUT', st.tb.output],
+      ['缓存命中 / READ', st.tb.cacheRead],
+      ['缓存写入 / WRITE', st.tb.cacheWrite]
+    ];
+    let table = '<table class="tape"><thead><tr><th class="l">#</th><th class="l">时间</th><th class="l">模型</th><th>输入</th><th>输出</th><th>缓存</th><th>成本</th><th class="l">状态</th></tr></thead><tbody>';
+    cur.turnList.forEach(function (t, i) {
+      const tc = TK.turnCost(t);
+      table += '<tr><td class="l">' + W.d2(i + 1) + '</td><td class="l">' + t.time.slice(11) + '</td><td class="l">' + esc(t.model) + '</td>' +
+        '<td>' + TK.fmtTok(t.input) + '</td><td>' + TK.fmtTok(t.output) + '</td><td>' + TK.fmtTok(t.cache) + '</td>' +
+        '<td>' + (tc.priced ? TK.money(tc.usd) : '--') + '</td><td class="l">' +
+        (t.state === '失败' ? '<span class="stamp">FAIL</span>' : t.state === '进行中' ? '<span class="stamp ok">RUN</span>' : 'OK') + '</td></tr>';
+      if (t.sub) {
+        for (let j = 0; j < t.sub.turns; j++) {
+          table += '<tr class="sub"><td class="l">' + W.d2(i + 1) + 's</td><td class="l">' + t.time.slice(11) + '</td><td class="l">' + esc(t.model) + '</td>' +
+            '<td>' + TK.fmtTok(Math.round(t.input * 0.4)) + '</td><td>' + TK.fmtTok(Math.round(t.output * 0.5)) + '</td>' +
+            '<td>' + TK.fmtTok(Math.round(t.cache * 0.3)) + '</td><td>' + TK.money(tc.priced ? tc.usd * 0.12 : 0) + '</td><td class="l">子 agent</td></tr>';
+        }
+      }
+    });
+    table += '</tbody></table>';
+
+    const article = '<article class="article"><div class="kicker">会话档案 / SESSION FILE / ' + cur.id.toUpperCase() + '</div>' +
+      '<h1 class="headline">' + esc(cur.title) + '</h1>' +
+      '<div class="byline"><span>' + esc(cur.source) + '</span><span>' + esc(cur.model) + '</span><span>' + esc(cur.dirName) + '</span><span>' + cur.date + '</span>' +
+      '<button class="link" id="toCal">在日历中查看这天 →</button></div>' +
+      '<div class="statband">' + comp.map(function (x) {
+        return '<div><div class="k">' + x[0] + '</div><div class="v">' + TK.fmtTok(x[1]) + '</div><div class="s">' + (x[1] / (st.tsum || 1) * 100).toFixed(1) + '%</div></div>';
+      }).join('') + '</div>' +
+      '<div class="fareline"><span class="lab">票价 / FARE</span><span class="big">' + TK.money(st.usd) + '</span>' +
+        '<span class="usd">' + TK.moneyUsd(st.usd) + ' / 汇率 6.5</span>' +
+        '<span class="usd" style="margin-left:auto">' + cur.turns + ' 轮 / ' + cur.turnList.filter(function (t) { return t.sub; }).length + ' 个子 agent</span></div>' +
+      '<div class="daystrip">' + st.dayRows.map(function (k) {
+        return '<div class="daycell"><div class="h"><span class="k">' + k + '</span><span class="v">' + TK.money(st.byDay[k]) + '</span></div>' +
+          '<div class="tr"><i style="width:' + (st.byDay[k] / st.maxDay * 100).toFixed(1) + '%"></i></div></div>';
+      }).join('') + '</div>' +
+      '<div class="tablewrap">' + table + '</div>' +
+      '<div class="notes2"><div><h4>口径 / METHOD</h4><p>token 分四桶：未缓存输入、输出（含推理）、缓存命中、缓存写入。日期按 Asia/Shanghai 折算自然日。子 agent 的用量计入总量并归属到发起它的那一轮。子 agent 行按主轮用量比例拆分，仅作参考。</p></div>' +
+      '<div><h4>编者按 / NOTE</h4><p class="pull">缓存命中占了这份账单的 ' + (st.tb.cacheRead / (st.tsum || 1) * 100).toFixed(0) + '%。真正昂贵的，是那些没有命中缓存、也不曾留下痕迹的输入。</p></div></div>' +
+      '</article>';
+
+    return masthead() + ticker() + '<div class="wrap"><div class="conv-head"><div class="kicker">会话档案 / SESSION FILE</div><h1>INDEX</h1></div>' +
+      '<div class="conv-wrap">' + index + article + '</div>' + footline() + '</div>';
+  }
+
+  function logView() {
+    const d = TK.logData();
+    const last = d.last;
+    const levels = [['all', '全部'], ['warn', '警告'], ['err', '错误']];
+    let runs = '';
+    d.batches.forEach(function (b, i) {
+      runs += '<button class="run" data-batch="' + b.id + '" aria-pressed="' + (S.log.batch === b.id) + '">' +
+        '<span class="no">' + W.d2(i + 1) + '</span>' +
+        '<span class="tm">' + b.at.slice(5, 16) + '</span>' +
+        '<span class="mt">' + ({ watch: '文件变更', poll: '兜底轮询', manual: '手动触发' }[b.trigger]) + '</span>' +
+        '<span class="st' + (b.err ? ' err' : '') + '">' + (b.err ? 'ERROR' : 'OK') + '</span>' +
+        '<span class="sub">' + b.ms + ' ms / 文件 ' + b.files + ' / 事件 ' + b.events + ' / 警 ' + b.warn + ' / 错 ' + b.err + '</span></button>';
+    });
+    return masthead() + '<div class="wrap"><div class="loghero"><div><div class="kicker">后台 / BACK OFFICE</div>' +
+      '<h1 data-t="PRESS LOG">PRESS LOG</h1></div><div class="sub">扫描、去重、入库。每一期小报背后，是一台不停运转的印刷机。</div></div>' +
+      '<div class="status4">' +
+        '<div><div class="k">最近扫描 / LAST SCAN</div><div class="v">' + last.at.slice(5, 16) + '</div><div class="s">' + last.trigger + ' / ' + (last.ms / 1000).toFixed(1) + ' s</div></div>' +
+        '<div><div class="k">写入事件 / EVENTS</div><div class="v">' + TK.full(last.events) + '</div><div class="s">去重 ' + last.dup + ' 条</div></div>' +
+        '<div><div class="k">跳过文件 / SKIPPED</div><div class="v">' + last.skipped + '</div><div class="s">指纹未变</div></div>' +
+        '<div><div class="k">警告 / 错误</div><div class="v pk">' + last.warn + ' / ' + last.err + '</div><div class="s">队列 0 / 2000</div></div>' +
+      '</div>' +
+      '<div class="filterstrip">' +
+        '<div class="fg"><span class="k">LEVEL</span>' + levels.map(function (l) {
+          return '<button class="fbtn" data-lvl="' + l[0] + '" aria-pressed="' + (S.log.lvl === l[0]) + '">' + l[1] + '</button>';
+        }).join('') + '</div>' +
+        '<div class="fg"><span class="k">SOURCE</span>' + d.src.map(function (x) {
+          return '<button class="fbtn" data-src="' + (x === 'all' ? 'all' : esc(x)) + '" aria-pressed="' + (S.log.src === x) + '">' + (x === 'all' ? '全部' : esc(x)) + '</button>';
+        }).join('') + '</div>' +
+        '<div class="fg"><span class="k">QUERY</span><input id="logq" placeholder="搜索日志内容" value="' + esc(S.log.q) + '"></div>' +
+        '<button class="clearbtn" id="clearf">清除</button><button class="rescan" id="rescan">重新扫描</button>' +
+      '</div>' +
+      '<div class="diag">' + d.diag.map(function (x) { return '<span><span style="color:var(--ok)">●</span> ' + esc(x.name) + ' / ' + esc(x.text) + '</span>'; }).join('') + '</div>' +
+      '<div class="loggrid"><div><div class="sec-head"><h2>印次记录</h2><span class="en">PRESS RUNS</span><span class="r">最近 ' + d.batches.length + ' 次 / 点一行筛选</span></div>' +
+        '<div style="margin-top:6px">' + runs + '</div></div>' +
+        '<div class="diagbox"><h3>数据源诊断 / SOURCES</h3>' +
+        d.diag.map(function (x) {
+          return '<div class="diagrow"><span class="nm"><i class="dot"></i>' + esc(x.name) + '</span><span class="tx">' + esc(x.text) + '</span></div>';
+        }).join('') +
+        '<div class="kvline" style="margin-top:8px"><span class="k">批次筛选</span><span class="v">' + (S.log.batch === null ? '未筛选' : '#' + S.log.batch) + '</span></div>' +
+        '<div class="kvline"><span class="k">阅读方式</span><span class="v">watch + poll</span></div>' +
+        '<div class="kvline"><span class="k">队列上限</span><span class="v">2000</span></div></div></div>' +
+      '<div class="press"><div class="press-h"><b>印刷机日志 / SERVICE LOG</b><span>' + d.logs.length + ' 行' + (S.log.batch ? ' / 批次 #' + S.log.batch : '') + '</span></div>' +
+        '<div class="pressbody">' + d.logs.map(function (l) {
+          return '<div class="lrow ' + l.lvl + '"><span class="t">' + l.at.slice(5) + '</span>' +
+            '<span class="lv">' + ({ ok: 'OK', info: '..', warn: '!', err: 'X' }[l.lvl]) + '</span>' +
+            '<span class="s">' + esc(l.src) + '</span><span class="m">' + esc(l.msg) + '</span></div>';
+        }).join('') + (d.logs.length ? '' : '<div class="empty">没有符合条件的日志行。</div>') + '</div></div>' +
+      footline() + '</div>';
+  }
+
+  function draw() {
+    const body = S.view === 'home' ? homeView() : S.view === 'conv' ? convView() : logView();
+    document.getElementById('app').innerHTML = body;
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.nav === 'conv') TK.go('conv', { clearConv: true });
+        else TK.go(b.dataset.nav);
+      };
+    });
+    document.querySelectorAll('[data-unit]').forEach(function (b) {
+      b.onclick = function () { TK.setUnit(b.dataset.unit); };
+    });
+    const tb = document.getElementById('themeBtn');
+    if (tb) tb.onclick = TK.toggleTheme;
+    if (S.view === 'home') {
+      document.getElementById('prev').onclick = function () { TK.shiftMonth(-1); TK.refresh(); };
+      document.getElementById('next').onclick = function () { TK.shiftMonth(1); TK.refresh(); };
+      document.getElementById('today').onclick = function () { TK.resetToday(); TK.refresh(); };
+      document.querySelectorAll('[data-day]').forEach(function (el) {
+        el.onclick = function () { TK.selectDay(el.dataset.day); TK.refresh(); };
+      });
+      document.querySelectorAll('[data-legend]').forEach(function (el) {
+        el.onclick = function () {
+          const p = el.dataset.legend;
+          const i = S.offDirs.indexOf(p);
+          if (i >= 0) S.offDirs.splice(i, 1); else S.offDirs.push(p);
+          TK.refresh();
+        };
+      });
+      document.querySelectorAll('.mtx td.c').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { agent: el.dataset.agent, model: el.dataset.model }); };
+      });
+    }
+    if (S.view === 'conv') {
+      document.querySelectorAll('[data-cv]').forEach(function (el) {
+        el.onclick = function () { S.convId = el.dataset.cv; TK.refresh(); };
+      });
+      const q = document.getElementById('convq');
+      if (q) q.oninput = function (e) {
+        S.convQ = e.target.value; TK.refresh();
+        const n = document.getElementById('convq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearF');
+      if (cf) cf.onclick = function () { TK.go('conv', { clearConv: true }); };
+      const toCal = document.getElementById('toCal');
+      if (toCal) {
+        const g = TK.convGroups();
+        if (g.cur) toCal.onclick = function () { TK.go('home', { day: g.cur.date }); };
+      }
+    }
+    if (S.view === 'log') {
+      document.querySelectorAll('[data-lvl]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ lvl: b.dataset.lvl }); };
+      });
+      document.querySelectorAll('[data-src]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ src: b.dataset.src }); };
+      });
+      document.querySelectorAll('[data-batch]').forEach(function (b) {
+        b.onclick = function () {
+          const id = Number(b.dataset.batch);
+          TK.setLog({ batch: S.log.batch === id ? null : id });
+        };
+      });
+      const q = document.getElementById('logq');
+      if (q) q.oninput = function (e) {
+        S.log.q = e.target.value; TK.refresh();
+        const n = document.getElementById('logq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearf');
+      if (cf) cf.onclick = function () { TK.setLog({ batch: null, lvl: 'all', src: 'all', q: '' }); };
+      const rs = document.getElementById('rescan');
+      if (rs) rs.onclick = function () { rs.textContent = '已触发'; };
+    }
+  }
+
+  TK.mount(draw);
+  draw();
+})();
+</script>
+</body>
+</html>
