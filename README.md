@@ -5,16 +5,16 @@
 ## 跑起来
 
 ```bash
-npm install          # 只有 typescript 和 @types/node，运行时零依赖
+npm install          # 安装 React/Vite 构建依赖；服务端运行时仍零依赖
 npm run scan         # 扫描本机日志，写入 data/atracker.db
 npm run stats        # 看累计用量和成本
 npm run pricing      # 看哪些模型缺价
 node packages/cli/src/index.ts doctor     # 看各来源是否可读
 node packages/cli/src/index.ts reconcile  # 拿各来源自带的汇总数据对账
-npm run serve       # 起本地服务，默认 http://127.0.0.1:4178，打开就是热敏小票界面
+npm run serve       # 构建前端并起本地服务，默认 http://127.0.0.1:4178
 ```
 
-Node 24 以上直接跑 TypeScript，不需要构建步骤。
+Node 24 以上直接跑服务端 TypeScript，不需要构建步骤。前端是 React + Vite，`npm run serve` 会先构建，构建产物在 `packages/web/dist`。
 
 ## 文档
 
@@ -29,7 +29,8 @@ Node 24 以上直接跑 TypeScript，不需要构建步骤。
 ## 日常使用
 
 ```bash
-npm run serve       # 起服务，浏览器打开 http://127.0.0.1:4178
+npm run serve       # 构建前端并起服务，浏览器打开 http://127.0.0.1:4178
+npm run dev:web     # 只起 Vite 开发服务器，/api 代理到 4178
 npm run scan        # 手动扫一次（服务在跑的时候不用，文件变了会自动扫）
 node packages/cli/src/index.ts doctor    # 看各来源状态和缺价模型
 ```
@@ -59,16 +60,23 @@ packages/
   server/src/
     queries.ts   接口载荷，字段形状对齐 design/v3/_core.js
     app.ts       HTTP 路由、SSE 推送、文件监听、静态文件
-  web/public/
-    index.html   前端外壳
-    receipt.css  主题变量与组件样式（热敏小票）
-    app.js       视图代码与取数层
+  web/
+    index.html   Vite 入口
+    src/
+      main.tsx   挂载
+      App.tsx    页面状态、取数、路由参数
+      views/     总账 / 会话 / 日志三个视图
+      components/ 页头等公共组件
+      receipt.css 主题变量与组件样式（热敏小票）
+    dist/        构建产物，服务端直接托管
   cli/src/
     index.ts     命令行
     reconcile.ts 对账
 config/pricing.json   手写成本表，唯一生效的定价来源
 data/atracker.db     运行时生成
 ```
+
+当前前端用 React 19 + Vite，保留 `design/v3/02-receipt.html` 的热敏小票样式。重构前的原生版本备份在 `backup/web-pre-react-20261021/`。
 
 ## 加一个 agent
 
@@ -84,7 +92,7 @@ data/atracker.db     运行时生成
 
 - 五个采集器都已实现并对账通过：codex 和 opencode 与来源自带的汇总精确一致，Claude Code、pi、DeepSeek Harness 在双方都覆盖的会话上全部一致。
 - 接口已完成：`atracker serve` 提供只读接口、文件监听自动扫描和 SSE 推送。清单见 `doc/TECH.md` 第 6.4 节。
-- 前端已完成：按 `design/v3/02-receipt.html`（热敏小票）实现，三个视图都接了真数据。
+- 前端已完成：React 19 + Vite 实现，保留 `design/v3/02-receipt.html`（热敏小票）的样式，三个视图都接了真数据。
 
 ## 价格
 

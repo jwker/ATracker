@@ -12,7 +12,7 @@
 
 已确定的事项：
 
-- **技术栈**：TypeScript + Node 24 以上，SQLite 用 Node 自带的 `node:sqlite`，前端 React + Vite + ECharts。
+- **技术栈**：TypeScript + Node 24 以上，SQLite 用 Node 自带的 `node:sqlite`，前端 React 19 + Vite + TypeScript。
 - **成本**：不内置任何自动定价源。成本来自一个手动填写的配置文件，格式见第 4.2 节。
 - **参照**：可以参考本机已装的 TokenTracker（MIT 协议，源码在 `~/.tokentracker/tracker/app`）的 zstd 帧遍历实现和定价匹配思路，架构自己写。
 - **子 agent**：用量计入，但归属到父会话，同时保留父会话标识，看板可切换「含子 agent」和「仅主 agent」两种口径。详见第 6.4 节。
@@ -278,7 +278,7 @@ codex 的派生线程是独立线程，`state_5.sqlite` 的 `thread_spawn_edges`
 
 **M3 聚合 API。** 一套接口支持按任意维度分组与过滤：agent、目录树、模型、厂商、日期段。产出：API 能返回看板和热力图需要的所有数据。**已完成**：`atracker serve` 起本地服务，接口清单见 `doc/TECH.md` 第 6.4 节。载荷字段和 `design/v3/_core.js` 要的形状对齐，前端移植时不用改结构。文件监听自动扫描和 SSE 推送也一起做了。
 
-**M4 看板前端。** 顶部指标卡（总 token、输入、输出、缓存命中、成本、会话数、活跃天数）、按日热力图、维度切换、目录树下钻、日期区间选择、含子 agent 开关。产出：可用界面。**已完成**：按 `design/v3/02-receipt.html`（热敏小票）实现，视图代码从 v3 移植，数据层换成真接口。三个视图（总账 / 会话 / 日志）都接了真数据，日历选日与区间、交叉表下钻、单位与明暗切换都能用。
+**M4 看板前端。** 顶部指标卡（总 token、输入、输出、缓存命中、成本、会话数、活跃天数）、按日热力图、维度切换、目录树下钻、日期区间选择、含子 agent 开关。产出：可用界面。**已完成**：按 `design/v3/02-receipt.html`（热敏小票）实现，视图代码从 v3 移植，数据层换成真接口。三个视图（总账 / 会话 / 日志）都接了真数据，日历选日与区间、交叉表下钻、单位与明暗切换都能用。**2026-10-21 已重构为 React 19 + Vite**，样式和交互保持不变，源码在 `packages/web/src`。
 
 **M5 增量与体验。** 增量扫描、扫描耗时优化、`doctor` 命令、首次运行引导。产出：日常可用。**已完成**：文件指纹比对 + 字节偏移续读，首次全量 2873ms、之后每次 55ms；服务端每 5 分钟兜底轮询一次；`doctor` 列出每个来源的路径、文件数、事件数、上次扫描和缺价模型；库里没数据时界面显示引导。
 
@@ -290,16 +290,15 @@ codex 的派生线程是独立线程，`state_5.sqlite` 的 `thread_spawn_edges`
 ATracker/
   packages/
     core/         类型定义、归一化、厂商映射、成本表匹配
-    collectors/   codex.ts claude.ts pi.ts opencode.ts dsh.ts
+    collectors/   五个采集器 + 扫描编排
     storage/      SQLite schema、写入、聚合查询
-    server/       HTTP API
-    web/          React 看板
-  server/         HTTP 接口、SSE、文件监听
-  web/public/     前端静态文件：index.html、receipt.css、app.js
-  cli/            命令行入口
+    server/       HTTP API、SSE、文件监听
+    web/          React 19 + Vite 前端（src 是源码，dist 是构建产物）
+    cli/          命令行入口
   config/
     pricing.json  手写成本表
   data/           本地数据库（不入版本库）
+  backup/         重构前的前端备份（不入版本库）
 ```
 
 ## 9. 剩下待讨论的事

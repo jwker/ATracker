@@ -14,5 +14,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["packages/**/*.ts"]
+  "include": [
+    "packages/core/**/*.ts",
+    "packages/storage/**/*.ts",
+    "packages/collectors/**/*.ts",
+    "packages/server/**/*.ts",
+    "packages/cli/**/*.ts"
+  ]
 }

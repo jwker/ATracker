@@ -2,7 +2,7 @@
 
 对应 `doc/PRD.md` 的需求，本文只讲怎么实现。
 
-技术选型：TypeScript，Node 24 以上。数据库用 Node 自带的 `node:sqlite`，不引入原生编译依赖。前端 React + Vite + ECharts。
+技术选型：TypeScript，Node 24 以上。数据库用 Node 自带的 `node:sqlite`，不引入原生编译依赖。前端 React 19 + Vite + TypeScript，图表用 CSS 和表格实现，不引入图表库。
 
 ## 1. 分层
 
@@ -15,7 +15,7 @@
    ↓
 HTTP API（只读 + 一个扫描触发接口）
    ↓
-前端（React + ECharts）
+前端（React 19 + Vite）
 ```
 
 四个硬约束贯穿全文：
@@ -792,19 +792,25 @@ localStorage.setItem('atracker-mode', mode);
 
 ## 7. 前端
 
-不用构建步骤。`packages/web/public/` 下三个文件由服务端直接托管：
+前端用 React 19 + Vite + TypeScript。`npm run build:web` 把源码构建到 `packages/web/dist`，服务端直接托管这个目录。开发时先起 `atracker serve`，再跑 `npm run dev:web`（Vite 默认 5173），`/api` 会代理到 4178。
 
 | 文件 | 内容 |
 | --- | --- |
-| `index.html` | 外壳，一个挂载点 |
-| `receipt.css` | 主题变量和组件样式。第一套是「热敏小票」（`design/v3/02-receipt.html`） |
-| `app.js` | 视图代码 + 取数层 |
+| `packages/web/index.html` | Vite 入口 |
+| `packages/web/src/main.tsx` | 挂载 React 根节点 |
+| `packages/web/src/App.tsx` | 页面状态、取数、URL 参数、SSE 刷新 |
+| `packages/web/src/views/` | 总账、会话、日志三个视图 |
+| `packages/web/src/components/` | 页头等公共组件 |
+| `packages/web/src/receipt.css` | 主题变量和组件样式。第一套是「热敏小票」（`design/v3/02-receipt.html`） |
 
 **主题和明暗的分工。** CSS 用 `[data-mode="light"]` 和 `[data-mode="dark"]` 两段变量表示明暗，用 `data-theme` 表示风格（现在是 `receipt`）。加新风格就是再加一段 `[data-theme="<id>"]` 的变量，不动组件。
 
-**取数层。** `app.js` 里有一个适配层，把接口载荷转成视图代码期望的形状（`TK.detailData()`、`TK.matrixData()` 等）。视图代码因此和 `design/v3/_core.js` 保持一致，换主题时不用改视图。
+**取数层。** `src/api.ts` 只负责请求接口；`src/format.ts` 负责单位和货币换算。视图组件不自己拼单位、不自己算成本。
 
-**轮询改推送。** 页面用 `EventSource('/api/events')` 订阅，扫描完成后服务端推 `scan_done`，前端重新取数重画。
+**轮询改推送。** `App.tsx` 用 `EventSource('/api/events')` 订阅，扫描完成后服务端推 `scan_done`，前端重新取数重画。
+
+**备份。** 重构前的原生版本在 `backup/web-pre-react-20261021/`，仅作对照，不参与构建。
+
 
 ## 8. 落地顺序
 
