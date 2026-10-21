@@ -809,7 +809,7 @@ localStorage.setItem('atracker-mode', mode);
 
 **轮询改推送。** `App.tsx` 用 `EventSource('/api/events')` 订阅，扫描完成后服务端推 `scan_done`，前端重新取数重画。
 
-**备份。** 重构前的原生版本在 `backup/web-pre-react-20261021/`，仅作对照，不参与构建。
+**前端源码只有一份。** 页面代码在 `packages/web/src`，`packages/web/dist` 是构建产物，不手工改。
 
 
 ## 8. 落地顺序

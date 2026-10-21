@@ -298,7 +298,6 @@ ATracker/
   config/
     pricing.json  手写成本表
   data/           本地数据库（不入版本库）
-  backup/         重构前的前端备份（不入版本库）
 ```
 
 ## 9. 剩下待讨论的事
