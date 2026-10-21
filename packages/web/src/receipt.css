@@ -99,8 +99,11 @@
   .cell { border: 1px solid var(--rule); min-height: 62px; padding: 4px 5px 0; background: transparent; text-align: left; cursor: pointer; display: flex; flex-direction: column; border-radius: 0; }
   .cell:hover { border-color: var(--ink); }
   .cell.out { border-color: transparent; pointer-events: none; }
-  .cell.inrange { background: var(--wash); }
-  .cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+  /* 选中态：区间和单选用同一个浅红底，单选再加一圈红边。方案见 design/calendar/。 */
+  .cell.inrange, .cell.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .cell.inrange .d, .cell.sel .d { color: var(--accent); }
+  .cell.sel { border-color: var(--accent); }
+  .cell.sel .d { font-weight: 700; }
   .cell .d { font-size: 9px; color: var(--muted); }
   .cell .v { font-size: 9.5px; margin: 1px 0 auto; font-variant-numeric: tabular-nums; }
   .cell .stack { display: flex; gap: 2px; height: 7px; margin: 0 -5px; }
