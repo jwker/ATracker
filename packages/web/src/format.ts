@@ -1,7 +1,7 @@
 // 显示层格式化。口径与 packages/core/src/units.ts、money.ts、time.ts 保持一致。
 // 数字换算只在这里做，组件不自己拼单位。
 
-import type { Selection, Unit } from './state.ts';
+import type { Unit } from './state.ts';
 
 export const UNITS: { id: Unit; label: string }[] = [
   { id: 'zh', label: '中文' },
@@ -100,16 +100,6 @@ export function hhmm(ts: number): string {
 export function fmtTime(ts: number): string {
   if (!ts) return '';
   return dayOf(ts) + ' ' + hhmm(ts);
-}
-
-export function scopeText(sel: Selection | null, month: string): string {
-  if (!sel) {
-    const meta = monthMeta(month);
-    return `${meta.y} 年 ${meta.m} 月 / ${meta.dim} 天`;
-  }
-  if (sel.a === sel.b) return sel.a;
-  const n = Math.round((new Date(sel.b).getTime() - new Date(sel.a).getTime()) / 86400000) + 1;
-  return `${sel.a} → ${sel.b} / ${n} 天`;
 }
 
 export function monthRange(month: string): { from: string; to: string } {

@@ -160,7 +160,7 @@ export function App() {
   const [month, setMonth] = useState<string>(initialMonth);
   const [dayDate, setDayDate] = useState<string>(initialDayDate);
   const [sel, setSel] = useState<Selection | null>(initialSelection);
-  const [offDirs, setOffDirs] = useState<string[]>([]);
+  const [topScope, setTopScope] = useState<'range' | 'total'>('range');
   const [convFilter, setConvFilter] = useState<ConversationFilter>(initialConvFilter);
   const [convQ, setConvQ] = useState('');
   const [convId, setConvId] = useState<string | null>(null);
@@ -381,12 +381,6 @@ export function App() {
     });
   }
 
-  function toggleDir(path: string) {
-    setOffDirs(prev =>
-      prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]
-    );
-  }
-
   function prevMonth() {
     setMonth(m => shiftMonth(m, -1));
     setSel(null);
@@ -404,6 +398,14 @@ export function App() {
 
   function clearConversation() {
     navigate('conv', { clearConv: true });
+  }
+
+  /** 清掉日历上的选区，回到整月。 */
+  function clearSelection() {
+    setSel(null);
+    const url = new URL(location.href);
+    url.searchParams.delete('from');
+    history.replaceState({}, '', url);
   }
 
   /** 一级菜单选目录。只改二级菜单看哪一组，别的筛选不动。 */
@@ -450,13 +452,14 @@ export function App() {
         matrix={matrix}
         month={month}
         sel={sel}
-        offDirs={offDirs}
         unit={unit}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
         onToday={today}
         onSelectDay={selectDay}
-        onToggleDir={toggleDir}
+        onClearSelection={clearSelection}
+        topScope={topScope}
+        onTopScope={setTopScope}
         onOpenDir={dir => navigate('conv', { dir })}
         onOpenCell={(agent, model) => navigate('conv', { agent, model })}
       />
