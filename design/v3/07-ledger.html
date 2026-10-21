@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 07 · 用量账本</title>
+<style>
+  :root[data-theme="light"] {
+    --desk: #e4e7e0;
+    --sheet: #fbfcf8;
+    --ink: #1b231e;
+    --dim: #5c665f;
+    --faint: #8b948c;
+    --line: #d8ded5;
+    --line2: #b7c1b7;
+    --head: #edf0e9;
+    --green: #1c7a4d;
+    --green-2: #2f9463;
+    --fill: #1a7148;
+    --fill-ink: #ffffff;
+    --soft: #dfede3;
+    --sel: #d6ecdc;
+    --warn: #a96a00;
+    --err: #b53225;
+    --d0:#2a78d6; --d1:#eb6834; --d2:#1baf7a; --d3:#eda100; --d4:#e87ba4; --d5:#008300;
+  }
+  :root[data-theme="dark"] {
+    --desk: #090d0b;
+    --sheet: #121714;
+    --ink: #e6ede8;
+    --dim: #9ba79f;
+    --faint: #69766e;
+    --line: #263029;
+    --line2: #3c493f;
+    --head: #1a211c;
+    --green: #5bd094;
+    --green-2: #43b57c;
+    --fill: #1b4a34;
+    --fill-ink: #d9f2e4;
+    --soft: #1d3226;
+    --sel: #20402d;
+    --warn: #e0a33e;
+    --err: #ff7b68;
+    --d0:#3987e5; --d1:#d95926; --d2:#199e70; --d3:#c98500; --d4:#d55181; --d5:#008300;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--desk); color: var(--ink);
+    font-family: "Aptos", "Segoe UI", system-ui, -apple-system, "PingFang SC", sans-serif;
+    font-size: 12px; line-height: 1.45; padding: 20px 20px 92px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .app { max-width: 1380px; margin: 0 auto; background: var(--sheet); border: 1px solid var(--line2); box-shadow: 0 10px 30px rgba(23,33,26,.07); }
+  .titlebar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line2); background: var(--head); min-height: 40px; flex-wrap: wrap; }
+  .logo { width: 18px; height: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; flex: 0 0 auto; }
+  .logo i { background: var(--green); display: block; }
+  .logo i:nth-child(2), .logo i:nth-child(3) { background: var(--green-2); opacity: .55; }
+  .fname { font-weight: 650; font-size: 12.5px; letter-spacing: -.01em; }
+  .fmeta { font-size: 9.5px; color: var(--faint); }
+  .titlebar .sp { flex: 1; }
+  .menu { display: flex; gap: 3px; }
+  .menu button { border: 0; background: none; font-size: 10.5px; color: var(--dim); padding: 3px 8px; }
+  .menu button:hover { background: var(--soft); color: var(--ink); }
+  .unit { display: flex; border: 1px solid var(--line2); background: var(--sheet); }
+  .unit button { border: 0; border-left: 1px solid var(--line2); background: transparent; padding: 2px 7px; font-size: 9.5px; color: var(--dim); }
+  .unit button:first-child { border-left: 0; }
+  .unit button[aria-pressed="true"] { background: var(--fill); color: var(--fill-ink); }
+  .themeBtn { border: 1px solid var(--line2); background: var(--sheet); padding: 3px 8px; font-size: 9.5px; color: var(--dim); }
+  .themeBtn:hover { border-color: var(--green); color: var(--green); }
+  .formulabar { display: flex; align-items: stretch; border-bottom: 1px solid var(--line2); background: var(--sheet); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 10px; }
+  .namebox { width: 92px; flex: 0 0 auto; border-right: 1px solid var(--line2); padding: 7px 9px; color: var(--dim); background: var(--head); }
+  .fx { width: 34px; flex: 0 0 auto; border-right: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; color: var(--green); font-style: italic; font-weight: 700; }
+  .formula { flex: 1; padding: 7px 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .calc { flex: 0 0 auto; padding: 7px 10px; color: var(--faint); border-left: 1px solid var(--line2); white-space: nowrap; }
+  .sheet { padding: 22px 22px 34px; }
+  .band { display: flex; align-items: center; gap: 10px; background: var(--fill); color: var(--fill-ink); padding: 6px 10px; margin: 20px 0 0; font-size: 11px; letter-spacing: .08em; }
+  .band:first-child { margin-top: 0; }
+  .band .addr { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; opacity: .66; letter-spacing: .04em; border: 1px solid rgba(255,255,255,.35); padding: 0 4px; }
+  .band b { font-weight: 650; }
+  .band .r { margin-left: auto; font-weight: 400; font-size: 9.5px; opacity: .82; display: flex; align-items: center; gap: 6px; }
+  .band .r button { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.32); color: #fff; padding: 1px 7px; font-size: 9px; }
+  .band .r button:hover { background: rgba(255,255,255,.28); }
+  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); border-left: 1px solid var(--line); border-top: 1px solid var(--line); background: var(--sheet); }
+  .kpi { position: relative; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 20px 10px 11px; min-width: 0; }
+  .kpi .addr { position: absolute; top: 3px; right: 5px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7.5px; color: var(--faint); }
+  .kpi .k { font-size: 9px; letter-spacing: .1em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .v { font-size: clamp(17px, 1.95vw, 25px); font-weight: 650; letter-spacing: -.03em; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kpi .s { font-size: 8.5px; color: var(--faint); margin-top: 2px; font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .kpi.accent .v { color: var(--green); }
+  .cal-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0 7px; }
+  .cal-head .lab { font-size: 9px; letter-spacing: .14em; color: var(--faint); }
+  .cal-head .scope { font-size: 10px; color: var(--dim); }
+  .mini { border: 1px solid var(--line2); background: var(--sheet); padding: 2px 8px; font-size: 9.5px; color: var(--dim); }
+  .mini:hover { border-color: var(--green); color: var(--green); }
+  .mini:disabled { opacity: .5; cursor: default; }
+  .keys { display: flex; flex-wrap: wrap; gap: 4px 13px; margin: 0 0 9px; }
+  .key { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; font-size: 9.5px; color: var(--ink); }
+  .key .sw { width: 8px; height: 8px; background: var(--c); }
+  .key .v { color: var(--faint); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; }
+  .key[aria-pressed="false"] { color: var(--faint); text-decoration: line-through; }
+  .key[aria-pressed="false"] .sw { opacity: .2; }
+  .calwrap { border-top: 1px solid var(--line2); border-left: 1px solid var(--line2); overflow-x: auto; }
+  .cal { display: grid; grid-template-columns: 26px repeat(7, minmax(72px,1fr)); min-width: 600px; }
+  .cal > * { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .colletter { background: var(--head); color: var(--faint); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; display: flex; align-items: center; justify-content: center; padding: 2px 0; }
+  .rownum { background: var(--head); color: var(--faint); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; display: flex; align-items: center; justify-content: center; }
+  .daycell { position: relative; min-height: 66px; padding: 4px 6px 5px; background: var(--sheet); border-top: 0; border-left: 0; text-align: left; display: flex; flex-direction: column; gap: 1px; }
+  button.daycell { cursor: pointer; }
+  button.daycell:hover { background: var(--soft); }
+  .daycell .d { font-size: 9px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .daycell .v { font-size: 10.5px; font-weight: 600; margin-top: auto; font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; }
+  .daycell .stack { display: flex; gap: 1px; height: 4px; margin: 2px -6px 0; }
+  .daycell .stack i { display: block; height: 4px; }
+  .daycell.out { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--faint) 10%, transparent) 6px 7px); pointer-events: none; }
+  .daycell.inrange { background: var(--soft); }
+  .daycell.sel { background: var(--sel); box-shadow: inset 0 0 0 2px var(--green); }
+  .daycell.sel::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 7px; height: 7px; background: var(--green); border: 1px solid var(--sheet); }
+  .split { display: grid; grid-template-columns: 1.05fr .95fr; gap: 22px; margin-top: 26px; }
+  .split > * { min-width: 0; }
+  .tblwrap { overflow-x: auto; border-top: 1px solid var(--line2); border-left: 1px solid var(--line2); }
+  table.tbl { width: 100%; border-collapse: collapse; min-width: 360px; }
+  table.tbl th, table.tbl td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 5px 7px; text-align: left; font-size: 10.5px; }
+  table.tbl th { background: var(--head); color: var(--faint); font-weight: 500; font-size: 8.5px; letter-spacing: .06em; }
+  table.tbl th.n, table.tbl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  table.tbl td.n { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; }
+  table.tbl tbody tr[data-dir] { cursor: pointer; }
+  table.tbl tbody tr[data-dir]:hover td { background: var(--soft); }
+  .swcell { width: 14px; padding-right: 0 !important; }
+  .swcell i { display: block; width: 7px; height: 7px; background: var(--c); }
+  .barcell { width: 30%; min-width: 80px; }
+  .track { display: block; height: 6px; background: var(--line); position: relative; }
+  .track i { position: absolute; left: 0; top: 0; height: 6px; background: var(--green); }
+  .track i.c { background: var(--c); }
+  .pc { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--faint); }
+  .mxwrap { overflow-x: auto; border-top: 1px solid var(--line2); border-left: 1px solid var(--line2); margin-top: 7px; }
+  table.mx { width: 100%; border-collapse: collapse; min-width: 640px; font-variant-numeric: tabular-nums; }
+  table.mx th, table.mx td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: right; font-size: 10px; }
+  table.mx th { background: var(--head); font-size: 8.5px; color: var(--faint); font-weight: 500; }
+  table.mx th.l, table.mx td.l { text-align: left; }
+  table.mx td.c { cursor: pointer; }
+  table.mx td.c:hover { outline: 2px solid var(--green); outline-offset: -2px; }
+  table.mx .tot { font-weight: 650; }
+  .note { font-size: 9.5px; color: var(--faint); border-top: 1px solid var(--line); margin-top: 24px; padding-top: 9px; line-height: 1.65; }
+  .note b { color: var(--dim); }
+  /* conversation */
+  .conv-grid { display: grid; grid-template-columns: minmax(0,7fr) minmax(0,5fr); gap: 18px; margin-top: 18px; }
+  .conv-grid > * { min-width: 0; }
+  .filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 8px; border: 1px solid var(--line2); border-right: 0; border-left: 0; background: var(--head); }
+  .filters .flab { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); letter-spacing: .05em; }
+  .ffield { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .fcount { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); }
+  .fsel { border: 1px solid var(--line2); background: var(--sheet); padding: 2px 4px; font-size: 9.5px; color: var(--ink); max-width: 132px; }
+  .filters input { flex: 1; min-width: 140px; border: 1px solid var(--line2); background: var(--sheet); padding: 4px 7px; outline: none; font-size: 10.5px; }
+  .filters input:focus { border-color: var(--green); }
+  .chip { border: 1px solid var(--line2); background: var(--sheet); padding: 2px 7px; font-size: 9px; color: var(--dim); }
+  .chip:hover { border-color: var(--green); color: var(--green); }
+  .chip[aria-pressed="true"] { background: var(--fill); border-color: var(--fill); color: var(--fill-ink); }
+  .clearf { border: 0; background: none; color: var(--green); font-size: 9px; text-decoration: underline; text-underline-offset: 2px; }
+  table.sessions { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.sessions th, table.sessions td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 5px 7px; text-align: left; font-size: 10px; }
+  table.sessions th { background: var(--head); color: var(--faint); font-size: 8px; letter-spacing: .05em; font-weight: 500; position: sticky; top: 0; }
+  table.sessions th.n, table.sessions td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  table.sessions tbody tr[data-cv] { cursor: pointer; }
+  table.sessions tbody tr[data-cv]:hover td { background: var(--soft); }
+  table.sessions tbody tr[aria-current="true"] td { background: var(--sel); box-shadow: inset 0 1px 0 var(--green), inset 0 -1px 0 var(--green); }
+  table.sessions td.dt { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); white-space: nowrap; }
+  table.sessions td.src, table.sessions td.mdl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.sessions td.tt { max-width: none; }
+  table.sessions .ttx { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.sessions .tsub { display: block; margin-top: 2px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grouphd td { background: var(--soft) !important; font-weight: 650; font-size: 9px; color: var(--dim); letter-spacing: .04em; }
+  .inspector { border: 1px solid var(--line2); background: var(--sheet); align-self: start; }
+  .insp-hd { display: flex; align-items: center; gap: 8px; padding: 6px 9px; background: var(--fill); color: var(--fill-ink); font-size: 10px; letter-spacing: .06em; }
+  .insp-hd .addr { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; border: 1px solid rgba(255,255,255,.35); padding: 0 4px; opacity: .8; }
+  .insp-bd { padding: 12px 14px 16px; }
+  .insp-bd .meta { display: flex; gap: 9px; flex-wrap: wrap; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--faint); }
+  .insp-bd h2 { margin: 7px 0 8px; font-size: 21px; line-height: 1.15; letter-spacing: -.03em; font-weight: 650; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .kv { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .kv div { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 8px; }
+  .kv .k { font-size: 8.5px; color: var(--faint); }
+  .kv .v { font-size: 14px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .insp-bd h3 { margin: 18px 0 6px; font-size: 9px; letter-spacing: .14em; color: var(--faint); font-weight: 500; border-bottom: 1px solid var(--line2); padding-bottom: 3px; }
+  .comp { display: flex; height: 9px; gap: 2px; margin: 6px 0 9px; }
+  .comp i { display: block; height: 9px; }
+  .legend4 { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 8.5px; color: var(--dim); margin-bottom: 6px; }
+  .legend4 span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend4 i { width: 7px; height: 7px; display: block; }
+  .dayline { display: grid; grid-template-columns: 82px 1fr 66px; gap: 6px; align-items: center; font-size: 9px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+  .dayline .tr { height: 5px; background: var(--line); position: relative; }
+  .dayline .tr i { position: absolute; left: 0; top: 0; height: 5px; background: var(--green); }
+  .dayline .v { text-align: right; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); }
+  .turnwrap { overflow-x: auto; }
+  table.turns { width: 100%; border-collapse: collapse; min-width: 430px; }
+  table.turns th, table.turns td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px 5px; text-align: right; font-size: 9px; font-variant-numeric: tabular-nums; }
+  table.turns th { background: var(--head); color: var(--faint); font-size: 8px; font-weight: 500; }
+  table.turns th.l, table.turns td.l { text-align: left; }
+  table.turns th:last-child, table.turns td:last-child { width: 48px; white-space: nowrap; }
+  table.turns tr.sub td { color: var(--faint); }
+  .state { display: inline-block; font-size: 8.5px; line-height: 1.2; padding: 1px 4px; border: 1px solid var(--line2); white-space: nowrap; }
+  .state.err { border-color: var(--warn); color: var(--warn); }
+  .state.live { border-color: var(--d0); color: var(--d0); }
+  .placeholder { border: 1px dashed var(--line2); padding: 28px 12px; text-align: center; color: var(--faint); font-size: 11px; margin-top: 12px; }
+  /* log */
+  .loggrid { display: grid; grid-template-columns: 290px minmax(0,1fr); gap: 20px; margin-top: 20px; }
+  .loggrid > * { min-width: 0; }
+  .panel { border: 1px solid var(--line2); }
+  .panel-h { background: var(--head); border-bottom: 1px solid var(--line2); padding: 5px 8px; font-size: 9px; letter-spacing: .1em; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  .panel-h .addr { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8px; color: var(--faint); }
+  .panel-b { padding: 9px; }
+  .frow { margin-bottom: 12px; }
+  .frow .flab { font-size: 8px; letter-spacing: .12em; color: var(--faint); margin-bottom: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 3px; }
+  .diag { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 7px; }
+  .diag div { display: flex; justify-content: space-between; gap: 8px; padding: 1.5px 0; color: var(--dim); }
+  .diag .ok { color: var(--green); }
+  .log q { quotes: none; }
+  .logrow { display: grid; grid-template-columns: 28px 92px 24px 86px minmax(0,1fr); gap: 0; border-bottom: 1px solid var(--line); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; }
+  .logrow > span { padding: 4px 6px; border-right: 1px solid var(--line); min-width: 0; }
+  .logrow .rn { background: var(--head); color: var(--faint); text-align: right; font-size: 8px; }
+  .logrow .t { color: var(--faint); white-space: nowrap; overflow: hidden; }
+  .logrow .lv { font-weight: 700; text-align: center; }
+  .logrow.ok .lv { color: var(--green); }
+  .logrow.info .lv { color: var(--faint); }
+  .logrow.warn .lv { color: var(--warn); }
+  .logrow.err .lv { color: var(--err); }
+  .logrow.err > .m { color: var(--err); }
+  .logrow .s { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logrow .m { overflow-wrap: anywhere; }
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--head); border-top: 1px solid var(--line2); box-shadow: 0 -4px 14px rgba(20,30,24,.06); }
+  .tabbar .in { max-width: 1380px; margin: 0 auto; display: flex; align-items: stretch; gap: 2px; padding: 0 14px; }
+  .tab { border: 0; border-right: 1px solid var(--line); background: transparent; padding: 9px 16px 8px; font-size: 10.5px; color: var(--dim); border-bottom: 2px solid transparent; }
+  .tab:hover { background: var(--soft); }
+  .tab[aria-current="true"] { color: var(--green); font-weight: 650; border-bottom-color: var(--green); background: var(--sheet); }
+  .tabbar .sp { flex: 1; }
+  .tabbar .status { align-self: center; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--faint); padding-right: 2px; }
+  @media (max-width: 980px) {
+    .kpis { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .split, .conv-grid, .loggrid { grid-template-columns: 1fr; }
+    .cal { min-width: 560px; }
+  }
+  @media (max-width: 620px) {
+    body { padding: 0 0 82px; }
+    .app { border-left: 0; border-right: 0; box-shadow: none; }
+    .sheet { padding: 14px 12px 26px; }
+    .titlebar { padding: 7px 10px; gap: 8px; }
+    .menu { display: none; }
+    .formulabar .calc { display: none; }
+    .namebox { width: 66px; }
+    .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .kpi .v { font-size: 18px; }
+    .split { gap: 18px; }
+    .filters input { flex-basis: 100%; order: 9; }
+    .tab { padding: 9px 13px 8px; }
+    .filters { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px 6px; }
+    .ffield { flex-direction: column; align-items: stretch; gap: 2px; }
+    .fsel { width: 100%; max-width: none; }
+    .fcount { grid-column: 1/-1; justify-self: end; margin-left: 0; }
+    .filters input { grid-column: 1/-1; order: 9; }
+    .filters .clearf { justify-self: start; align-self: center; }
+    table.sessions .ttx { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
+    table.sessions th:nth-child(3), table.sessions td:nth-child(3) { width: 62px; }
+    .titlebar .themeBtn { margin-left: auto; }
+    .band > span:not(.addr):not(.r) { display: none; }
+    .band .r { font-size: 8.5px; }
+    .cal { min-width: 0; grid-template-columns: 26px repeat(7, minmax(38px, 1fr)); }
+    .daycell { min-height: 58px; padding: 3px 4px; }
+    .daycell .d { font-size: 8px; }
+    .daycell .v { font-size: 8.5px; letter-spacing: -.02em; }
+    .daycell .stack { margin: 2px -4px 0; }
+    .colletter { font-size: 7px; letter-spacing: -.02em; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="_core.js"></script>
+<script>
+(function () {
+  'use strict';
+  const TK = window.TK, W = TK.W, S = TK.state;
+  const PAL = ['var(--d0)', 'var(--d1)', 'var(--d2)', 'var(--d3)', 'var(--d4)', 'var(--d5)'];
+  const MQ = window.matchMedia('(max-width: 620px)');
+  function esc(v) {
+    return String(v).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+  function c(slot) { return PAL[slot % PAL.length]; }
+  function pct(v, all) { return all ? TK.fmtPct(v / all) : '0.0%'; }
+  const COL = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+
+  function nameBox() {
+    if (S.view === 'conv') return 'B4';
+    if (S.view === 'log') return 'C4';
+    if (S.view === 'home' && S.sel && S.sel.start.slice(0, 7) === S.month) {
+      const meta = TK.monthMeta(S.month);
+      const idx = meta.lead + Number(S.sel.start.slice(8)) - 1;
+      return COL[idx % 7] + (Math.floor(idx / 7) + 2);
+    }
+    return 'A1';
+  }
+
+  function formulaText() {
+    if (S.view === 'conv') return '=VLOOKUP(选中会话, 会话!A:F, 6, FALSE)';
+    if (S.view === 'log') return '=FILTER(日志!A:G, 日志!C:C = "' + (S.log.lvl === 'all' ? '*' : S.log.lvl) + '")';
+    if (S.sel) return '=SUMIFS(用量!E:E, 用量!A:A, ">=' + S.sel.start + '", 用量!A:A, "<=' + S.sel.end + '")';
+    return '=SUM(用量!E2:E366)';
+  }
+
+  function shell(body) {
+    const views = [['home', '总览'], ['conv', '会话'], ['log', '日志']];
+    return '<div class="app">' +
+      '<div class="titlebar"><span class="logo"><i></i><i></i><i></i><i></i></span>' +
+        '<div><div class="fname">atracker-用量账本.xlsx</div><div class="fmeta">本地文件 · 只读视图 · 共 3 个工作表</div></div>' +
+        '<div class="menu"><button data-nav="home">文件</button><button data-nav="conv">数据</button><button data-nav="log">视图</button></div>' +
+        '<span class="sp"></span>' +
+        '<div class="unit">' + TK.UNITS.map(function (u) {
+          return '<button data-unit="' + u.id + '" aria-pressed="' + (TK.unit() === u.id) + '">' + u.label + '</button>';
+        }).join('') + '</div>' +
+        '<button class="themeBtn" id="themeBtn">' + (S.theme === 'light' ? '深色表格' : '浅色表格') + '</button></div>' +
+      '<div class="formulabar"><div class="namebox">' + nameBox() + '</div>' +
+        '<div class="fx">fx</div><div class="formula">' + esc(formulaText()) + '</div>' +
+        '<div class="calc">自动计算 · ' + TK.scopeText() + '</div></div>' +
+      '<div class="sheet">' + body + '</div></div>' +
+      '<div class="tabbar"><div class="in">' + views.map(function (v) {
+        return '<button class="tab" data-nav="' + v[0] + '" aria-current="' + (S.view === v[0]) + '">' + v[1] + '</button>';
+      }).join('') + '<button class="tab" style="color:var(--faint);cursor:default" title="视图由代码定义">＋</button>' +
+        '<span class="sp"></span><span class="status">本地 · 自动计算 · 汇率 6.5</span></div></div>';
+  }
+
+  function kpi(addr, k, v, s, cls) {
+    return '<div class="kpi' + (cls ? ' ' + cls : '') + '"><span class="addr">' + addr + '</span>' +
+      '<div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>';
+  }
+
+  function homeView() {
+    const all = TK.aggregate(TK.allKeys());
+    const d = TK.detailData(TK.rangeKeys());
+    const hit = d.agg.total ? d.comp[2].v / d.agg.total : 0;
+    return '<div class="band"><span class="addr">A1</span><b>用量总账</b><span>本机 365 天记录</span><span class="r">数据截至 ' + W.BATCHES[0].at.slice(5, 16) + ' · 本机只读</span></div>' +
+      '<div class="kpis">' +
+        kpi('B3', '全部 TOKEN', TK.fmtTok(all.total), TK.abbr(all.total) + ' / 四桶合计', 'accent') +
+        kpi('C3', '全部成本', TK.money(all.usd), TK.moneyUsd(all.usd) + ' / 汇率 6.5') +
+        kpi('D3', '当前范围', TK.fmtTok(d.agg.total), TK.scopeText()) +
+        kpi('E3', '当前成本', TK.money(d.agg.usd), pct(d.agg.priced, d.agg.total) + ' 已计价') +
+        kpi('F3', '缓存命中', TK.fmtPct(hit), TK.fmtTok(d.comp[2].v) + ' token') +
+        kpi('G3', '未定价', String(W.MODELS.filter(function (m) { return !TK.PRICE[m.id]; }).length), '个模型 / 金额排除') +
+      '</div>' +
+      '<div class="band"><span class="addr">A6</span><b>月视图</b><span>MONTH SHEET</span><span class="r">' + TK.scopeText() + '</span></div>' +
+      '<div class="cal-head"><button class="mini" id="prev">上一月</button><button class="mini" id="next">下一月</button>' +
+        '<button class="mini" id="today">本月</button><span class="lab">当前表</span><span class="scope">' + TK.monthMeta(S.month).y + ' 年 ' + TK.monthMeta(S.month).m + ' 月</span>' +
+        '<span class="lab" style="margin-left:auto">点单元格选择，再点另一格成区间</span></div>' +
+      calendar() +
+      '<div class="split"><div><div class="band" style="margin-top:0"><span class="addr">A15</span><b>目录</b><span>DIRECTORIES</span><span class="r">点行下钻</span></div>' + dirTable() + '</div>' +
+        '<div><div class="band" style="margin-top:0"><span class="addr">E15</span><b>模型</b><span>MODELS</span><span class="r">按 token 降序</span></div>' + modelTable() + '</div></div>' +
+      '<div class="band"><span class="addr">A24</span><b>来源 × 模型</b><span>PIVOT</span><span class="r">底色表示量级，点击单元格下钻</span></div>' +
+      '<div class="mxwrap">' + matrix() + '</div>' +
+      '<div class="note"><b>口径</b>　金额为估算值。四个 token 桶分别计价：输入、输出、缓存命中、缓存写入。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。人民币按固定汇率 6.5 折算。目录颜色跟随实体，不随排名或筛选变化。</div>';
+  }
+
+  function calendar() {
+    const meta = TK.monthMeta(S.month);
+    const lg = TK.legend(TK.monthKeys(S.month));
+    let html = '<div class="calwrap"><div class="cal">';
+    html += '<div class="colletter"></div>' + W.WEEK.map(function (w, i) {
+      return '<div class="colletter" style="color:' + (i >= 5 ? 'var(--warn)' : 'var(--faint)') + '">' + COL[i] + ' · ' + w + '</div>';
+    }).join('');
+    for (let r = 0; r < 6; r++) {
+      html += '<div class="rownum">' + (r + 2) + '</div>';
+      for (let col = 0; col < 7; col++) {
+        const idx = r * 7 + col - meta.lead;
+        if (idx < 0 || idx >= meta.dim) { html += '<div class="daycell out"></div>'; continue; }
+        const day = idx + 1;
+        const k = meta.y + '-' + W.d2(meta.m) + '-' + W.d2(day);
+        const rec = W.days[k];
+        const inRange = S.sel && k >= S.sel.start && k <= S.sel.end;
+        const isSel = S.sel && k === S.sel.start && k === S.sel.end;
+        const items = TK.dayItems(k, lg.ranked);
+        html += '<button class="daycell' + (isSel ? ' sel' : (inRange ? ' inrange' : '')) + '" data-day="' + k + '" title="' + k + (rec ? ' / ' + TK.fmtTok(rec.total) : ' / 无记录') + '">' +
+          '<span class="d">' + day + '</span><span class="v">' + (rec ? TK.fmtTok(rec.total).replace(' ', '') : '·') + '</span>' +
+          '<span class="stack">' + items.map(function (x) {
+            return '<i style="width:' + x.pct.toFixed(2) + '%;background:' + c(x.slot) + '"></i>';
+          }).join('') + '</span></button>';
+      }
+    }
+    html += '</div></div>';
+    return '<div class="keys">' + lg.ranked.map(function (x) {
+      const off = S.offDirs.indexOf(x.path) >= 0;
+      return '<button class="key" data-legend="' + esc(x.path) + '" aria-pressed="' + (!off) + '">' +
+        '<span class="sw" style="--c:' + c(x.slot) + '"></span>' + esc(x.name) + '<span class="v">' + TK.fmtTok(x.v) + '</span></button>';
+    }).join('') + '</div>' + html;
+  }
+
+  function dirTable() {
+    const d = TK.detailData(TK.rangeKeys());
+    return '<div class="tblwrap"><table class="tbl"><thead><tr><th class="swcell"></th><th>目录</th><th class="n">TOKEN</th><th class="n">占比</th><th class="barcell">分布</th></tr></thead><tbody>' +
+      d.dirs.map(function (x) {
+        return '<tr data-dir="' + esc(x.path) + '" style="--c:' + c(x.slot) + '"><td class="swcell"><i></i></td>' +
+          '<td>' + esc(x.name) + '</td><td class="n">' + TK.fmtTok(x.v) + '</td><td class="n pc">' + pct(x.v, d.agg.total) + '</td>' +
+          '<td class="barcell"><span class="track"><i class="c" style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></span></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function modelTable() {
+    const d = TK.detailData(TK.rangeKeys());
+    return '<div class="tblwrap"><table class="tbl"><thead><tr><th class="swcell"></th><th>模型</th><th class="n">TOKEN</th><th class="n">占比</th><th class="barcell">分布</th></tr></thead><tbody>' +
+      d.models.map(function (x) {
+        return '<tr><td class="swcell"><i style="--c:var(--green)"></i></td><td title="' + esc(x.id) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(x.id) + '</td>' +
+          '<td class="n">' + TK.fmtTok(x.v) + '</td><td class="n pc">' + pct(x.v, d.agg.total) + '</td>' +
+          '<td class="barcell"><span class="track"><i style="width:' + (x.v / (d.agg.total || 1) * 100).toFixed(1) + '%"></i></span></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function matrix() {
+    const d = TK.matrixData(TK.rangeKeys());
+    let cellMax = 1;
+    d.agents.forEach(function (a) { d.keep.concat(d.rest).forEach(function (m) { if (d.cell[a.id][m.id] > cellMax) cellMax = d.cell[a.id][m.id]; }); });
+    let head = '<th class="l">模型 / 来源</th>';
+    d.agents.forEach(function (a) { head += '<th>' + esc(a.id) + '</th>'; });
+    head += '<th>合计</th>';
+    let body = '';
+    d.keep.concat(d.rest).forEach(function (m) {
+      let row = '<tr><td class="l">' + esc(m.id) + '</td>';
+      d.agents.forEach(function (a) {
+        const v = d.cell[a.id][m.id];
+        row += '<td class="c" data-agent="' + esc(a.id) + '" data-model="' + esc(m.id) + '" title="' + esc(a.id) + ' / ' + esc(m.id) + ' · ' + TK.fmtTok(v) + ' token" style="' + heat(v, cellMax) + '">' + (v ? TK.fmtTok(v) : '·') + '</td>';
+      });
+      const total = d.agents.reduce(function (s, a) { return s + d.cell[a.id][m.id]; }, 0);
+      row += '<td class="tot">' + TK.fmtTok(total) + '</td></tr>';
+      body += row;
+    });
+    let foot = '<tr><td class="l tot">合计</td>';
+    d.agents.forEach(function (a) { foot += '<td class="tot">' + TK.fmtTok(d.rowTotal(a)) + '</td>'; });
+    foot += '<td class="tot">' + TK.fmtTok(d.agents.reduce(function (s, a) { return s + d.rowTotal(a); }, 0)) + '</td></tr>';
+    return '<table class="mx"><thead><tr>' + head + '</tr></thead><tbody>' + body + foot + '</tbody></table>';
+  }
+  function heat(v, max) {
+    if (!v) return 'background:transparent';
+    const t = Math.min(1, v / (max || 1));
+    const cap = S.theme === 'dark' ? 40 : 68;
+    return 'background:color-mix(in srgb, var(--green) ' + Math.round(4 + t * cap) + '%, transparent);color:var(--ink)';
+  }
+
+  function convView() {
+    const g = TK.convGroups();
+    const f = S.convFilter;
+    const compact = MQ.matches;
+    const span = compact ? 3 : 5;
+    let filters = '<div class="filters">' +
+      '<label class="ffield"><span class="flab">目录</span><select class="fsel" id="fDir"><option value="">全部</option>' +
+      W.DIRS.map(function (d) {
+        return '<option value="' + esc(d.path) + '"' + (f.dir === d.path ? ' selected' : '') + '>' + esc(d.name) + '</option>';
+      }).join('') + '</select></label>' +
+      '<label class="ffield"><span class="flab">来源</span><select class="fsel" id="fAgent"><option value="">全部</option>' +
+      W.AGENTS.map(function (a) {
+        return '<option value="' + esc(a.id) + '"' + (f.agent === a.id ? ' selected' : '') + '>' + esc(a.id) + '</option>';
+      }).join('') + '</select></label>' +
+      '<label class="ffield"><span class="flab">模型</span><select class="fsel" id="fModel"><option value="">全部</option>' +
+      W.MODELS.map(function (m) {
+        return '<option value="' + esc(m.id) + '"' + (f.model === m.id ? ' selected' : '') + '>' + esc(m.id) + '</option>';
+      }).join('') + '</select></label>' +
+      (f.dir || f.agent || f.model ? '<button class="clearf" id="clearF">清除</button>' : '') +
+      '<span class="fcount">' + g.convs.length + ' 条</span>' +
+      '<input id="convq" placeholder="搜索标题、目录或来源" value="' + esc(S.convQ) + '"></div>';
+    let list = '<div class="tblwrap" style="border-top:0"><table class="sessions"><thead><tr>' +
+      '<th style="width:' + (compact ? '44' : '52') + 'px">日期</th><th>会话标题</th>' +
+      (compact ? '' : '<th style="width:76px">来源</th><th style="width:96px">模型</th>') +
+      '<th class="n" style="width:66px">TOKEN</th></tr></thead><tbody>';
+    if (!g.convs.length) list += '<tr><td colspan="' + span + '"><div class="placeholder">没有符合筛选条件的会话。</div></td></tr>';
+    g.groups.forEach(function (grp) {
+      list += '<tr class="grouphd"><td colspan="' + span + '">' + esc(grp.dir.name) + ' · ' + TK.fmtTok(grp.total) + '</td></tr>';
+      grp.list.forEach(function (cv) {
+        list += '<tr data-cv="' + cv.id + '" aria-current="' + (cv.id === S.convId) + '">' +
+          '<td class="dt">' + cv.date.slice(5) + '</td><td class="tt" title="' + esc(cv.title) + '"><span class="ttx">' + esc(cv.title) + '</span>' +
+          (compact ? '<span class="tsub">' + esc(cv.source) + ' · ' + esc(cv.model) + '</span>' : '') + '</td>' +
+          (compact ? '' : '<td class="src">' + esc(cv.source) + '</td><td class="mdl">' + esc(cv.model) + '</td>') +
+          '<td class="n">' + TK.fmtTok(cv.tokens) + '</td></tr>';
+      });
+    });
+    list += '</tbody></table></div>';
+    let inspector = '';
+    if (!g.cur) {
+      inspector = '<div class="inspector"><div class="insp-hd"><span class="addr">H4</span>会话检查器</div><div class="insp-bd"><div class="placeholder">没有符合筛选条件的会话。换个来源或模型，或者清除筛选。</div></div></div>';
+    } else {
+      const cur = g.cur, st = TK.convStats(cur);
+      const comp = [['输入', st.tb.input, 'var(--d0)'], ['输出', st.tb.output, 'var(--d1)'], ['缓存命中', st.tb.cacheRead, 'var(--d2)'], ['缓存写入', st.tb.cacheWrite, 'var(--d3)']];
+      inspector = '<div class="inspector"><div class="insp-hd"><span class="addr">H4</span>会话检查器 <span style="margin-left:auto;font-family:\'SF Mono\',Menlo,monospace;font-size:8px;opacity:.8">' + cur.id.toUpperCase() + '</span></div><div class="insp-bd">' +
+        '<div class="meta"><span>' + cur.date + '</span><span>' + esc(cur.source) + '</span><span>' + esc(cur.model) + '</span><span>' + esc(cur.dirName) + '</span></div>' +
+        '<h2>' + esc(cur.title) + '</h2>' +
+        '<div class="acts"><button class="mini" id="toCal">在日历中查看</button><button class="mini" id="backDir">该目录全部会话</button></div>' +
+        '<div class="kv"><div><div class="k">轮次</div><div class="v">' + cur.turns + '</div></div>' +
+          '<div><div class="k">失败轮次</div><div class="v">' + cur.turnList.filter(function (t) { return t.state === '失败'; }).length + '</div></div>' +
+          '<div><div class="k">含子 AGENT</div><div class="v">' + cur.turnList.filter(function (t) { return t.sub; }).length + '</div></div>' +
+          '<div><div class="k">合计 TOKEN</div><div class="v">' + TK.fmtTok(st.tsum) + '</div></div></div>' +
+        '<h3>TOKEN 构成 / COMPOSITION</h3><div class="comp">' + comp.map(function (x) {
+          return '<i style="width:' + (x[1] / st.tsum * 100).toFixed(2) + '%;background:' + x[2] + '"></i>';
+        }).join('') + '</div><div class="legend4">' + comp.map(function (x) {
+          return '<span><i style="background:' + x[2] + '"></i>' + x[0] + ' ' + pct(x[1], st.tsum) + '</span>';
+        }).join('') + '</div>' +
+        '<h3>成本 / COST · ' + TK.money(st.usd) + (st.unpriced ? ' · ' + st.unpriced + ' 轮未计价' : '') + '</h3>' +
+        st.dayRows.map(function (k) {
+          return '<div class="dayline"><span>' + k + '</span><span class="tr"><i style="width:' + (st.byDay[k] / st.maxDay * 100).toFixed(1) + '%"></i></span><span class="v">' + TK.money(st.byDay[k]) + '</span></div>';
+        }).join('') +
+        '<h3>逐轮明细 / TURNS</h3><div class="turnwrap"><table class="turns"><thead><tr><th class="l">时间</th><th class="l">模型</th><th>输入</th><th>输出</th><th>缓存</th><th>成本</th><th class="l">状态</th></tr></thead><tbody>' +
+        cur.turnList.map(function (t) {
+          const tc = TK.turnCost(t);
+          let r = '<tr><td class="l">' + t.time.slice(11) + '</td><td class="l">' + esc(t.model) + '</td>' +
+            '<td>' + TK.fmtTok(t.input) + '</td><td>' + TK.fmtTok(t.output) + '</td><td>' + TK.fmtTok(t.cache) + '</td>' +
+            '<td>' + (tc.priced ? TK.money(tc.usd) : '无价格') + '</td><td class="l">' +
+            (t.state === '失败' ? '<span class="state err">失败</span>' : t.state === '进行中' ? '<span class="state live">进行中</span>' : '成功') + '</td></tr>';
+          if (t.sub) {
+            for (let i = 0; i < t.sub.turns; i++) {
+              r += '<tr class="sub"><td class="l">↳ 子 agent</td><td class="l">' + esc(t.model) + '</td>' +
+                '<td>' + TK.fmtTok(Math.round(t.input * 0.4)) + '</td><td>' + TK.fmtTok(Math.round(t.output * 0.5)) + '</td>' +
+                '<td>' + TK.fmtTok(Math.round(t.cache * 0.3)) + '</td><td>' + TK.money(tc.priced ? tc.usd * 0.12 : 0) + '</td><td class="l"></td></tr>';
+            }
+          }
+          return r;
+        }).join('') + '</tbody></table></div>' +
+        '<div class="note" style="margin-top:14px">子 agent 的用量计入总量并归属到发起它的那一轮。未配置价格的模型不计入金额合计。</div>' +
+        '</div></div>';
+    }
+    return '<div class="band"><span class="addr">A1</span><b>会话</b><span>SESSIONS</span><span class="r">' + g.convs.length + ' 条记录 · 按目录分组</span></div>' +
+      filters + '<div class="conv-grid"><div style="min-width:0">' + list + '</div>' + inspector + '</div>';
+  }
+
+  function logView() {
+    const d = TK.logData();
+    const last = d.last;
+    const levels = [['all', '全部'], ['warn', '警告'], ['err', '错误']];
+    let rows = '';
+    let n = 4;
+    d.logs.forEach(function (l) {
+      rows += '<div class="logrow ' + l.lvl + '"><span class="rn">' + n + '</span><span class="t">' + l.at.slice(5) + '</span>' +
+        '<span class="lv">' + ({ ok: 'OK', info: '··', warn: '!', err: 'X' }[l.lvl]) + '</span><span class="s">' + esc(l.src) + '</span>' +
+        '<span class="m">' + esc(l.msg) + '</span></div>';
+      n++;
+    });
+    return '<div class="band"><span class="addr">A1</span><b>扫描状态</b><span>SCAN STATUS</span><span class="r">最近 ' + last.at + ' · ' + last.trigger + '</span></div>' +
+      '<div class="kpis">' +
+        kpi('B3', '最近扫描', last.at.slice(5, 16), (last.ms / 1000).toFixed(1) + ' 秒', 'accent') +
+        kpi('C3', '写入事件', TK.full(last.events), '去重 ' + last.dup + ' 条') +
+        kpi('D3', '跳过文件', String(last.skipped), '指纹未变') +
+        kpi('E3', '警告 / 错误', last.warn + ' / ' + last.err, '队列 0 / 2000') +
+      '</div>' +
+      '<div class="loggrid"><div><div class="panel"><div class="panel-h"><span class="addr">A6</span>筛选 <span style="margin-left:auto">FILTER</span></div><div class="panel-b">' +
+        '<div class="frow"><div class="flab">级别</div><div class="chips">' + levels.map(function (l) {
+          return '<button class="chip" data-lvl="' + l[0] + '" aria-pressed="' + (S.log.lvl === l[0]) + '">' + l[1] + '</button>';
+        }).join('') + '</div></div>' +
+        '<div class="frow"><div class="flab">来源</div><div class="chips">' + d.src.map(function (x) {
+          return '<button class="chip" data-src="' + (x === 'all' ? 'all' : esc(x)) + '" aria-pressed="' + (S.log.src === x) + '">' + (x === 'all' ? '全部' : esc(x)) + '</button>';
+        }).join('') + '</div></div>' +
+        '<div class="frow"><div class="flab">关键字</div><input id="logq" placeholder="例如 database is locked" value="' + esc(S.log.q) + '" style="width:100%;border:1px solid var(--line2);background:var(--sheet);padding:4px 6px;font-size:10px;outline:none"></div>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="mini" id="clearf">清除筛选</button><button class="mini" id="rescan">重新扫描</button><span id="scanmsg" style="font-size:8.5px;color:var(--dim)"></span></div>' +
+        '<div class="diag">' + d.diag.map(function (x) {
+          return '<div><span>' + esc(x.name) + '</span><span class="ok">' + esc(x.text) + '</span></div>';
+        }).join('') + '</div></div></div></div>' +
+      '<div><div class="panel"><div class="panel-h"><span class="addr">D6</span>扫描批次 <span style="margin-left:auto">BATCHES · 点一行过滤</span></div>' +
+        '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>时间</th><th>触发</th><th class="n">耗时 ms</th><th class="n">文件</th><th class="n">事件</th><th class="n">警告</th><th class="n">错误</th></tr></thead><tbody>' +
+        d.batches.map(function (b) {
+          return '<tr data-batch="' + b.id + '" style="cursor:pointer;' + (S.log.batch === b.id ? 'background:var(--sel)' : '') + '">' +
+            '<td style="font-family:\'SF Mono\',Menlo,monospace;font-size:8.5px">' + b.at.slice(5) + '</td><td>' + ({ watch: '文件变更', poll: '兜底轮询', manual: '手动' }[b.trigger]) + '</td>' +
+            '<td class="n">' + b.ms + '</td><td class="n">' + b.files + '</td><td class="n">' + b.events + '</td><td class="n">' + b.warn + '</td><td class="n">' + b.err + '</td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        '<div class="panel" style="margin-top:14px"><div class="panel-h"><span class="addr">A20</span>日志流 <span style="margin-left:auto">' + d.logs.length + ' 行' + (S.log.batch ? ' / 批次 ' + S.log.batch : ' / 全部批次') + '</span></div>' +
+        '<div class="log">' + rows + (d.logs.length ? '' : '<div class="placeholder">没有符合条件的日志行。</div>') + '</div></div></div></div>';
+  }
+
+  function draw() {
+    const body = S.view === 'home' ? homeView() : S.view === 'conv' ? convView() : logView();
+    document.getElementById('app').innerHTML = shell(body);
+    wire();
+  }
+
+  function wire() {
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.nav === 'conv') TK.go('conv', { clearConv: true });
+        else TK.go(b.dataset.nav);
+      };
+    });
+    document.querySelectorAll('[data-unit]').forEach(function (b) {
+      b.onclick = function () { TK.setUnit(b.dataset.unit); };
+    });
+    document.getElementById('themeBtn').onclick = TK.toggleTheme;
+    if (S.view === 'home') {
+      document.getElementById('prev').onclick = function () { TK.shiftMonth(-1); TK.refresh(); };
+      document.getElementById('next').onclick = function () { TK.shiftMonth(1); TK.refresh(); };
+      document.getElementById('today').onclick = function () { TK.resetToday(); TK.refresh(); };
+      document.querySelectorAll('[data-day]').forEach(function (el) {
+        el.onclick = function () { TK.selectDay(el.dataset.day); TK.refresh(); };
+      });
+      document.querySelectorAll('[data-legend]').forEach(function (el) {
+        el.onclick = function () {
+          const p = el.dataset.legend;
+          const i = S.offDirs.indexOf(p);
+          if (i >= 0) S.offDirs.splice(i, 1); else S.offDirs.push(p);
+          TK.refresh();
+        };
+      });
+      document.querySelectorAll('[data-dir]').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { dir: el.dataset.dir }); };
+      });
+      document.querySelectorAll('td.c').forEach(function (el) {
+        el.onclick = function () { TK.go('conv', { agent: el.dataset.agent, model: el.dataset.model }); };
+      });
+    }
+    if (S.view === 'conv') {
+      const q = document.getElementById('convq');
+      if (q) q.oninput = function (e) {
+        S.convQ = e.target.value; TK.refresh();
+        const n = document.getElementById('convq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearF');
+      if (cf) cf.onclick = function () { S.convFilter = { dir: null, agent: null, model: null }; S.convId = null; TK.refresh(); };
+      const fd = document.getElementById('fDir');
+      if (fd) fd.onchange = function () { S.convFilter.dir = fd.value || null; S.convId = null; TK.refresh(); };
+      const fa = document.getElementById('fAgent');
+      if (fa) fa.onchange = function () { S.convFilter.agent = fa.value || null; S.convId = null; TK.refresh(); };
+      const fm = document.getElementById('fModel');
+      if (fm) fm.onchange = function () { S.convFilter.model = fm.value || null; S.convId = null; TK.refresh(); };
+      document.querySelectorAll('[data-cv]').forEach(function (el) {
+        el.onclick = function () { S.convId = el.dataset.cv; TK.refresh(); };
+      });
+      const g = TK.convGroups();
+      const toCal = document.getElementById('toCal');
+      if (toCal && g.cur) toCal.onclick = function () { TK.go('home', { day: g.cur.date }); };
+      const bd = document.getElementById('backDir');
+      if (bd && g.cur) bd.onclick = function () { TK.go('conv', { dir: g.cur.dir }); };
+    }
+    if (S.view === 'log') {
+      document.querySelectorAll('[data-lvl]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ lvl: b.dataset.lvl }); };
+      });
+      document.querySelectorAll('[data-src]').forEach(function (b) {
+        b.onclick = function () { TK.setLog({ src: b.dataset.src }); };
+      });
+      document.querySelectorAll('[data-batch]').forEach(function (tr) {
+        tr.onclick = function () {
+          const id = Number(tr.dataset.batch);
+          TK.setLog({ batch: S.log.batch === id ? null : id });
+        };
+      });
+      const q = document.getElementById('logq');
+      if (q) q.oninput = function (e) {
+        S.log.q = e.target.value; TK.refresh();
+        const n = document.getElementById('logq');
+        if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      };
+      const cf = document.getElementById('clearf');
+      if (cf) cf.onclick = function () { TK.setLog({ batch: null, lvl: 'all', src: 'all', q: '' }); };
+      const rs = document.getElementById('rescan');
+      if (rs) rs.onclick = function () {
+        if (rs.disabled) return;
+        const msg = document.getElementById('scanmsg');
+        rs.disabled = true; rs.textContent = '扫描中…';
+        if (msg) msg.textContent = '已排队';
+        setTimeout(function () {
+          if (!document.body.contains(rs)) return;
+          rs.disabled = false; rs.textContent = '重新扫描';
+          if (msg) msg.textContent = '完成 · 无新增';
+        }, 1200);
+      };
+    }
+  }
+
+  TK.mount(draw);
+  draw();
+  if (MQ.addEventListener) MQ.addEventListener('change', draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 线框原型</title>
+<link rel="stylesheet" href="wireframe.css">
+<style>
+.page { max-width: 720px; }
+.lnk { display: block; padding: 14px 16px; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--fg); }
+.lnk:hover { background: var(--panel-2); }
+.lnk b { display: block; font-size: 15px; }
+.lnk span { color: var(--fg-2); font-size: 12.5px; }
+.lnk code { font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+</style>
+</head>
+<body>
+<div class="top"><span class="brand">ATracker<small>线框原型</small></span><span class="sp"></span>
+<a href="home.html">主页面</a><a href="conversation.html">对话页</a><a href="log.html">日志</a></div>
+<div class="page">
+  <section class="block">
+    <div class="body">
+      <p style="margin-bottom:10px">低保真线框，用来评审 PRD 里的结构与交互，不是最终视觉设计。角标上的数字对应 PRD 的章节号。界面只有两个页面：主页面（日历）和对话页，两边各有回对面的按钮。</p>
+      <p class="hint" style="margin-bottom:14px">右上角可以切主题和单位，页头有另外两个页面的入口。主页面的日历格可点：点一天选中，再点另一天形成区间，再点同一天取消。来源 × 模型交叉表的格子可点，跳到对话页并带上筛选。</p>
+      <a class="lnk" href="home.html"><b>主页面（日历）</b><span>预估总价、token 总数、日历视图、详细数据（构成 + 模型条形图 + 目录条形图）</span><code>home.html</code></a>
+      <a class="lnk" href="conversation.html"><b>对话页</b><span>左侧目录与会话列表，右侧会话头、token 构成、成本、逐轮明细、口径说明</span><code>conversation.html</code></a>
+      <a class="lnk" href="log.html"><b>日志页</b><span>状态条、扫描批次表、日志流（可按级别、来源、关键字过滤）和诊断区</span><code>log.html</code></a>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "atracker",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "scan": "node packages/cli/src/index.ts scan",
+    "stats": "node packages/cli/src/index.ts stats",
+    "pricing": "node packages/cli/src/index.ts pricing",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
+  }
+}

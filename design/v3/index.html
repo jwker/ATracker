@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 v3 · 十个方向</title>
+<style>
+  :root {
+    --bg: #f4f2ed;
+    --ink: #17171a;
+    --dim: #6c6a66;
+    --faint: #9d9a94;
+    --line: #d7d3ca;
+    --card: #fbfaf7;
+    --amber: #a86b00;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Helvetica Neue", Arial, "PingFang SC", sans-serif; line-height: 1.5;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 42px 28px 60px; }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 22px; }
+  .kicker { font-size: 10px; letter-spacing: .28em; color: var(--dim); text-transform: uppercase; }
+  h1 { margin: 12px 0 12px; font-size: clamp(38px, 6vw, 76px); line-height: .96; letter-spacing: -.045em; font-weight: 700; max-width: 14ch; }
+  header p { max-width: 62ch; margin: 0; color: var(--dim); font-size: 13px; }
+  .meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 10px; color: var(--faint); }
+  .meta b { color: var(--ink); font-weight: 500; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 30px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(20,18,12,.08); }
+  .card.wide { grid-column: 1 / -1; }
+  .thumb { height: 186px; position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .card-body { padding: 15px 17px 16px; display: flex; flex-direction: column; flex: 1; }
+  .card-top { display: flex; align-items: baseline; gap: 10px; }
+  .no { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11px; color: var(--faint); }
+  .card h2 { margin: 0; font-size: 21px; letter-spacing: -.02em; font-weight: 650; }
+  .card .en { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; letter-spacing: .12em; color: var(--faint); text-transform: uppercase; }
+  .card p { margin: 7px 0 0; font-size: 12px; color: var(--dim); max-width: 56ch; }
+  .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+  .tag { border: 1px solid var(--line); padding: 1px 6px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5px; color: var(--dim); }
+  .links { display: flex; gap: 14px; margin-top: auto; padding-top: 14px; }
+  .links a { font-size: 10.5px; color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--ink); padding-bottom: 1px; }
+  .links a:hover { color: var(--amber); border-color: var(--amber); }
+  .links .sp { flex: 1; }
+  .links .start { font-weight: 700; }
+  footer { border-top: 1px solid var(--line); margin-top: 34px; padding-top: 12px; display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; color: var(--faint); }
+
+  /* thumbnails */
+  .t1 { background: #101416; background-image: linear-gradient(rgba(84,120,150,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(84,120,150,.16) 1px, transparent 1px); background-size: 22px 22px; color: #d8e6f2; }
+  .t1 .big { position: absolute; left: 18px; top: 18px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 40px; color: #7fd0ff; letter-spacing: -.03em; }
+  .t1 .sub { position: absolute; left: 20px; top: 70px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7px; letter-spacing: .16em; color: #7e9cb0; }
+  .t1 .cal { position: absolute; right: 18px; top: 18px; display: grid; grid-template-columns: repeat(7, 13px); gap: 3px; }
+  .t1 .cal i { height: 13px; background: rgba(127,208,255,.14); border: 1px solid rgba(127,208,255,.35); }
+  .t1 .cal i:nth-child(3n) { background: rgba(127,208,255,.32); }
+  .t1 .bars { position: absolute; left: 20px; right: 20px; bottom: 16px; display: flex; gap: 3px; align-items: flex-end; height: 46px; }
+  .t1 .bars i { flex: 1; background: #3f9fd6; opacity: .65; }
+
+  .t2 { background: #d8d4ca; display: flex; justify-content: center; align-items: stretch; }
+  .t2 .paper { width: 44%; background: #fbfaf4; margin: 12px 0; box-shadow: 0 2px 10px rgba(0,0,0,.16); padding: 12px 13px; position: relative; }
+  .t2 .paper::before, .t2 .paper::after { content: ""; position: absolute; left: 0; right: 0; height: 5px; background: repeating-linear-gradient(135deg, #d8d4ca 0 4px, transparent 4px 8px); }
+  .t2 .paper::before { top: -1px; }
+  .t2 .paper::after { bottom: -1px; }
+  .t2 .logo { text-align: center; font-family: "Courier New", monospace; font-weight: 700; font-size: 12px; letter-spacing: .28em; }
+  .t2 .bc { height: 18px; margin: 6px 0 8px; background: repeating-linear-gradient(90deg, #1b1b1b 0 1px, transparent 1px 3px, #1b1b1b 3px 5px, transparent 5px 6px); }
+  .t2 .row { display: flex; justify-content: space-between; font-family: "Courier New", monospace; font-size: 6.5px; color: #555; border-bottom: 1px dotted #c9c5bb; padding: 2px 0; }
+  .t2 .row b { color: #111; }
+  .t2 .stamp { position: absolute; right: 12px; top: 36px; border: 1px solid #c33a22; color: #c33a22; font-family: "Courier New", monospace; font-size: 6px; padding: 1px 3px; transform: rotate(-5deg); }
+
+  .t3 { background: #0b0c0d; }
+  .t3 .flap { position: absolute; left: 20px; top: 26px; display: flex; gap: 2px; }
+  .t3 .flap i { width: 20px; height: 34px; background: #08090a; border: 1px solid #33383a; color: #f0b13c; font-family: "SF Mono", Menlo, Consolas, monospace; font-style: normal; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .t3 .flap i::after { content: ""; position: absolute; width: 20px; height: 1px; background: rgba(255,255,255,.1); margin-top: 0; }
+  .t3 .rows { position: absolute; left: 20px; right: 20px; top: 78px; }
+  .t3 .rows i { display: flex; height: 15px; border-bottom: 1px solid #2a2e2f; align-items: center; gap: 5px; }
+  .t3 .rows i::before { content: ""; width: 6px; height: 6px; background: #f0b13c; opacity: .8; }
+  .t3 .rows i::after { content: ""; flex: 1; height: 4px; background: #2a2e2f; margin-left: 8px; }
+  .t3 .tag { position: absolute; right: 20px; top: 24px; border: 1px solid #f0b13c; color: #f0b13c; font-family: "SF Mono", monospace; font-size: 7px; letter-spacing: .1em; padding: 2px 5px; }
+
+  .t4 { background: #221f1a; background-image: radial-gradient(rgba(255,255,255,.05) .6px, transparent .7px); background-size: 4px 4px; }
+  .t4 .faders { position: absolute; left: 20px; top: 22px; display: flex; gap: 8px; }
+  .t4 .faders i { width: 14px; height: 88px; background: #2b251d; border: 1px solid #4c4538; position: relative; }
+  .t4 .faders i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--h); background: var(--c); opacity: .9; }
+  .t4 .jacks { position: absolute; right: 20px; top: 26px; display: grid; grid-template-columns: repeat(6, 14px); gap: 8px; }
+  .t4 .jacks i { width: 14px; height: 14px; border-radius: 50%; background: #f2a83e; opacity: var(--o,.5); }
+  .t4 .jacks i:nth-child(4n) { opacity: .9; }
+  .t4 .lcd { position: absolute; left: 20px; right: 20px; bottom: 14px; background: #171b15; border: 1px solid #0b0d0a; height: 26px; display: flex; align-items: center; padding: 0 8px; color: #ffb849; font-family: "SF Mono", monospace; font-size: 11px; letter-spacing: .04em; }
+
+  .t5 { background: #f2ecdf; background-image: radial-gradient(rgba(23,22,26,.1) .55px, transparent .65px); background-size: 5px 5px; }
+  .t5 .big { position: absolute; left: 20px; top: 22px; font-family: "Arial Black", Arial, sans-serif; font-size: 58px; line-height: .82; letter-spacing: -.06em; color: #2b4fd8; }
+  .t5 .big span { display: block; color: #ef3f74; }
+  .t5 .halftone { position: absolute; right: 20px; top: 22px; width: 90px; height: 90px; background-image: radial-gradient(#ef3f74 1.5px, transparent 1.6px); background-size: 7px 7px; opacity: .8; }
+  .t5 .line { position: absolute; right: 20px; bottom: 37px; left: 20px; border-top: 2px solid #17161a; }
+  .t5 .small { position: absolute; right: 20px; bottom: 16px; font-family: "SF Mono", monospace; font-size: 7px; letter-spacing: .1em; color: #6d6862; }
+
+  .t6 { background: #f6f6f3; color: #151515; }
+  .t6 .k { position: absolute; left: 18px; top: 14px; font-size: 6.5px; letter-spacing: .2em; text-transform: uppercase; color: #6d6d68; }
+  .t6 .n { position: absolute; left: 16px; top: 28px; font-size: 62px; font-weight: 800; letter-spacing: -.07em; line-height: .9; }
+  .t6 .u { position: absolute; left: 20px; top: 92px; font-size: 7px; letter-spacing: .14em; color: #6d6d68; }
+  .t6 .r { position: absolute; left: 20px; right: 20px; top: 108px; height: 7px; background: #df3b2a; }
+  .t6 .cols { position: absolute; left: 20px; right: 20px; top: 126px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .t6 .cols span { font-size: 6px; letter-spacing: .08em; color: #55554f; border-top: 1px solid #151515; padding-top: 4px; }
+  .t6 .cols b { display: block; font-size: 13px; letter-spacing: -.03em; color: #151515; }
+
+  .t7 { background: #f2eddd; color: #253226; background-image: repeating-linear-gradient(transparent 0 17px, rgba(45,70,46,.12) 17px 18px); }
+  .t7 .hd { position: absolute; left: 18px; top: 14px; font-family: "Courier New", monospace; font-size: 9px; letter-spacing: .18em; font-weight: 700; border-bottom: 2px solid #253226; padding-bottom: 3px; right: 18px; display: flex; justify-content: space-between; }
+  .t7 .hd span { color: #72805f; font-weight: 400; letter-spacing: .05em; }
+  .t7 .lr { position: absolute; left: 18px; right: 18px; display: grid; grid-template-columns: 1.5fr 1fr .8fr; gap: 6px; font-family: "Courier New", monospace; font-size: 7px; color: #44523f; padding: 2px 0; }
+  .t7 .lr b { color: #1e2b1f; font-weight: 700; text-align: right; }
+  .t7 .lr:nth-child(2) { top: 43px; }
+  .t7 .lr:nth-child(3) { top: 65px; }
+  .t7 .lr:nth-child(4) { top: 87px; }
+  .t7 .lr:nth-child(5) { top: 109px; }
+  .t7 .lr:nth-child(6) { top: 131px; }
+  .t7 .gt { position: absolute; right: 18px; bottom: 12px; font-family: "Courier New", monospace; font-size: 20px; font-weight: 700; color: #2f5d3a; }
+
+  .t8 { background: #070b09; color: #9df5c0; font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .t8 .bar { position: absolute; left: 18px; right: 18px; top: 12px; display: flex; justify-content: space-between; font-size: 6px; letter-spacing: .12em; color: #4f7a60; border-bottom: 1px solid #1c3a29; padding-bottom: 5px; }
+  .t8 .prompt { position: absolute; left: 18px; top: 30px; font-size: 8px; color: #6ee79b; }
+  .t8 .out { position: absolute; left: 18px; top: 46px; font-size: 7px; line-height: 1.55; color: #79b68f; }
+  .t8 .big { position: absolute; left: 16px; top: 82px; font-size: 46px; letter-spacing: -.05em; color: #b6ffd4; line-height: 1; }
+  .t8 .asc { position: absolute; left: 18px; right: 18px; bottom: 18px; font-size: 9px; letter-spacing: .05em; color: #3fbf76; white-space: nowrap; overflow: hidden; }
+  .t8 .cur { display: inline-block; width: 5px; height: 9px; background: #b6ffd4; vertical-align: -1px; }
+
+  .t9 { background: #f1eadb; color: #15120e; overflow: hidden; }
+  .t9 .circ { position: absolute; right: 54px; top: 18px; width: 64px; height: 64px; border-radius: 50%; background: #e0a91c; }
+  .t9 .tri { position: absolute; right: 28px; top: 58px; width: 0; height: 0; border-left: 36px solid transparent; border-right: 36px solid transparent; border-bottom: 52px solid #2c56a8; }
+  .t9 .sq { position: absolute; right: 18px; top: 106px; width: 30px; height: 30px; background: #c93a24; }
+  .t9 .word { position: absolute; left: 16px; top: 20px; font-size: 40px; font-weight: 800; letter-spacing: -.06em; line-height: .84; }
+  .t9 .word span { display: block; color: #c93a24; }
+  .t9 .rule { position: absolute; left: 18px; right: 18px; top: 96px; height: 5px; background: #15120e; }
+  .t9 .sub { position: absolute; left: 18px; bottom: 14px; font-size: 7px; letter-spacing: .12em; color: #655d50; }
+  .t9 .dots { position: absolute; left: 18px; bottom: 34px; display: flex; gap: 3px; }
+  .t9 .dots i { width: 8px; height: 8px; border-radius: 2px; background: #15120e; opacity: var(--o); }
+
+  .t10 { background: #eef2f8; }
+  .t10 .tile { position: absolute; background: #fff; border-radius: 12px; box-shadow: 0 5px 14px rgba(18,35,60,.08); }
+  .t10 .a { left: 16px; top: 16px; width: 104px; height: 66px; background: #111c2e; }
+  .t10 .a b { display: block; padding: 10px 11px 0; font-size: 19px; letter-spacing: -.04em; color: #fff; }
+  .t10 .a span { display: block; padding: 2px 11px; font-size: 5.5px; letter-spacing: .1em; color: #8fa4c0; text-transform: uppercase; }
+  .t10 .b { right: 16px; top: 16px; width: 58px; height: 66px; }
+  .t10 .b i { display: block; width: 12px; height: 12px; border-radius: 4px; background: #2a78d6; position: absolute; }
+  .t10 .b i:nth-child(1) { left: 12px; top: 12px; opacity: .35; }
+  .t10 .b i:nth-child(2) { left: 30px; top: 22px; opacity: .6; }
+  .t10 .b i:nth-child(3) { left: 18px; top: 38px; opacity: .95; }
+  .t10 .c { left: 16px; top: 92px; width: 66px; height: 60px; }
+  .t10 .c i { display: block; height: 5px; border-radius: 3px; background: #2a78d6; margin: 7px 10px; }
+  .t10 .c i:nth-child(1) { width: 36px; opacity: .35; }
+  .t10 .c i:nth-child(2) { width: 28px; opacity: .6; }
+  .t10 .c i:nth-child(3) { width: 42px; opacity: .9; }
+  .t10 .d { left: 90px; top: 92px; right: 16px; height: 60px; }
+  .t10 .d svg { width: 100%; height: 100%; padding: 12px 10px 8px; box-sizing: border-box; color: #2a78d6; }
+  .t10 .d path { fill: none; stroke: currentColor; stroke-width: 2; }
+  .t10 .d .fill { fill: currentColor; opacity: .12; stroke: none; }
+
+  .card.wide .t10 .a { left: 28px; top: 30px; width: 250px; height: 126px; }
+  .card.wide .t10 .a b { padding: 26px 22px 0; font-size: 36px; }
+  .card.wide .t10 .a span { padding: 6px 22px; font-size: 7px; }
+  .card.wide .t10 .b { left: 296px; right: auto; top: 30px; width: 126px; height: 126px; }
+  .card.wide .t10 .b i { width: 20px; height: 20px; border-radius: 6px; }
+  .card.wide .t10 .b i:nth-child(1) { left: 22px; top: 22px; }
+  .card.wide .t10 .b i:nth-child(2) { left: 60px; top: 40px; }
+  .card.wide .t10 .b i:nth-child(3) { left: 36px; top: 76px; }
+  .card.wide .t10 .c { left: 440px; top: 30px; width: 160px; height: 126px; }
+  .card.wide .t10 .c i { height: 10px; margin: 16px 22px; border-radius: 5px; }
+  .card.wide .t10 .c i:nth-child(1) { width: 80px; }
+  .card.wide .t10 .c i:nth-child(2) { width: 62px; }
+  .card.wide .t10 .c i:nth-child(3) { width: 96px; }
+  .card.wide .t10 .d { left: 618px; right: 28px; top: 30px; height: 126px; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .card.wide { grid-column: auto; }
+    .card.wide .t10 .a { left: 16px; top: 16px; width: 104px; height: 66px; }
+    .card.wide .t10 .a b { padding: 10px 11px 0; font-size: 19px; }
+    .card.wide .t10 .a span { padding: 2px 11px; font-size: 5.5px; }
+    .card.wide .t10 .b { left: auto; right: 16px; top: 16px; width: 58px; height: 66px; }
+    .card.wide .t10 .b i { width: 12px; height: 12px; border-radius: 4px; }
+    .card.wide .t10 .b i:nth-child(1) { left: 12px; top: 12px; }
+    .card.wide .t10 .b i:nth-child(2) { left: 30px; top: 22px; }
+    .card.wide .t10 .b i:nth-child(3) { left: 18px; top: 38px; }
+    .card.wide .t10 .c { left: 16px; top: 92px; width: 66px; height: 60px; }
+    .card.wide .t10 .c i { height: 5px; margin: 7px 10px; border-radius: 3px; }
+    .card.wide .t10 .c i:nth-child(1) { width: 36px; }
+    .card.wide .t10 .c i:nth-child(2) { width: 28px; }
+    .card.wide .t10 .c i:nth-child(3) { width: 42px; }
+    .card.wide .t10 .d { left: 90px; right: 16px; top: 92px; height: 60px; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 28px 16px 40px; }
+    .thumb { height: 160px; }
+    .t5 .big { font-size: 46px; }
+    .t7 .lr:nth-child(6) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">ATracker / Design Studies / v3</div>
+    <h1>十张面孔，同一份<br>用量数据。</h1>
+    <p>从线框原型的功能出发，不沿用它的界面与排版。十个方向各自重建了信息架构、视觉语言和交互节奏，但共享同一套数据与计算逻辑。每套设计都包含总览、会话与日志三个视图。</p>
+    <div class="meta"><span><b>10</b> 个方向</span><span><b>3</b> 个视图：总览 / 会话 / 日志</span><span><b>0</b> 依赖 / 直接打开</span><span>数据：2025.10 - 2026.10</span></div>
+  </header>
+
+  <main class="grid">
+    <article class="card">
+      <div class="thumb t1">
+        <div class="big">16.62 亿</div>
+        <div class="sub">TOKEN TOTAL / 365 DAYS</div>
+        <div class="cal">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <div class="bars">
+          <i style="height:38%"></i><i style="height:62%"></i><i style="height:24%"></i><i style="height:80%"></i>
+          <i style="height:52%"></i><i style="height:94%"></i><i style="height:40%"></i><i style="height:66%"></i>
+          <i style="height:78%"></i><i style="height:30%"></i><i style="height:58%"></i><i style="height:88%"></i>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">01</span><h2>工程蓝图</h2><span class="en">Blueprint</span></div>
+        <p>青色制图网格、单线框、标题栏与图签。像一张摊开的工程图，所有数字都被标注、引用、对齐。适合长时间盯着看的桌面端。</p>
+        <div class="tags"><span class="tag">制图网格</span><span class="tag">单线框</span><span class="tag">深色优先</span><span class="tag">日历 + 矩阵</span></div>
+        <div class="links"><a class="start" href="01-blueprint.html?view=home">总览</a><a href="01-blueprint.html?view=conv">会话</a><a href="01-blueprint.html?view=log">日志</a><span class="sp"></span><a href="01-blueprint.html?theme=light">日间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t2">
+        <div class="paper">
+          <div class="logo">ATRACKER</div>
+          <div class="bc"></div>
+          <div class="row"><span>NO.</span><b>20261020-42</b></div>
+          <div class="row"><span>TOKENS</span><b>16.62 亿</b></div>
+          <div class="row"><span>TOTAL</span><b>¥11,333.86</b></div>
+          <div class="row"><span>CACHE</span><b>48.0%</b></div>
+          <div class="stamp">PAID</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">02</span><h2>热敏小票</h2><span class="en">Receipt</span></div>
+        <p>窄幅、等宽、逐行打印。把一年的用量压成一张可以撕下来的小票，所有细节按行排列，信息密度高但不打扰。</p>
+        <div class="tags"><span class="tag">窄幅</span><span class="tag">等宽</span><span class="tag">单色 + 朱红</span><span class="tag">打印质感</span></div>
+        <div class="links"><a class="start" href="02-receipt.html?view=home">总览</a><a href="02-receipt.html?view=conv">会话</a><a href="02-receipt.html?view=log">日志</a><span class="sp"></span><a href="02-receipt.html?theme=dark">夜间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t3">
+        <div class="flap"><i>1</i><i>6</i><i>.</i><i>6</i><i>2</i></div>
+        <div class="tag">DEPARTURES</div>
+        <div class="rows">
+          <i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">03</span><h2>出发时刻表</h2><span class="en">Departure</span></div>
+        <p>机场翻牌、琥珀色数字、按日排列的出发板。日历不再是格子，而是一张可以逐行扫读的时刻表，适合快速找峰值。</p>
+        <div class="tags"><span class="tag">翻牌数字</span><span class="tag">琥珀 + 近黑</span><span class="tag">列表日历</span><span class="tag">时刻表</span></div>
+        <div class="links"><a class="start" href="03-departure.html?view=home">总览</a><a href="03-departure.html?view=conv">会话</a><a href="03-departure.html?view=log">日志</a><span class="sp"></span><a href="03-departure.html?theme=light">日间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t4">
+        <div class="faders">
+          <i style="--c:#3987e5;--h:82%"></i><i style="--c:#d95926;--h:90%"></i><i style="--c:#199e70;--h:74%"></i>
+          <i style="--c:#c98500;--h:66%"></i><i style="--c:#d55181;--h:58%"></i><i style="--c:#008300;--h:48%"></i>
+        </div>
+        <div class="jacks">
+          <i style="--o:.85"></i><i style="--o:.4"></i><i style="--o:.55"></i><i style="--o:.7"></i><i style="--o:.3"></i><i style="--o:.5"></i>
+          <i style="--o:.4"></i><i style="--o:.9"></i><i style="--o:.2"></i><i style="--o:.6"></i><i style="--o:.8"></i><i style="--o:.3"></i>
+          <i style="--o:.6"></i><i style="--o:.4"></i><i style="--o:.75"></i><i style="--o:.2"></i><i style="--o:.5"></i><i style="--o:.9"></i>
+        </div>
+        <div class="lcd">MASTER 2.10 亿 / ¥1,463.74</div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">04</span><h2>模块合成器</h2><span class="en">Modular</span></div>
+        <p>硬件面板、LED 推子、跳线矩阵。日历变成 31 步音序器，目录变成通道条，来源与模型的关系变成一块可以点击的跳线盘。</p>
+        <div class="tags"><span class="tag">硬件面板</span><span class="tag">LED 推子</span><span class="tag">音序器</span><span class="tag">跳线矩阵</span></div>
+        <div class="links"><a class="start" href="04-synth.html?view=home">总览</a><a href="04-synth.html?view=conv">会话</a><a href="04-synth.html?view=log">日志</a><span class="sp"></span><a href="04-synth.html?theme=light">日间</a></div>
+      </div>
+    </article>
+
+    <article class="card wide">
+      <div class="thumb t5">
+        <div class="big">TOKEN<span>LEDGER</span></div>
+        <div class="halftone"></div>
+        <div class="line"></div>
+        <div class="small">RISO / 2 INKS / 31 DAYS / 6 DIRECTORIES</div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">05</span><h2>Riso 用量小报</h2><span class="en">Riso Zine</span></div>
+        <p>双色孔版印刷的质感：米色纸、荧光粉与蓝的叠印、半调网点、超粗标题。用一张小报的版面来讲数据，柱状图就是日历，矩阵就是插图。</p>
+        <div class="tags"><span class="tag">双色叠印</span><span class="tag">半调网点</span><span class="tag">报纸版面</span><span class="tag">柱状日历</span></div>
+        <div class="links"><a class="start" href="05-riso.html?view=home">总览</a><a href="05-riso.html?view=conv">会话</a><a href="05-riso.html?view=log">日志</a><span class="sp"></span><a href="05-riso.html?theme=dark">夜间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t6">
+        <div class="k">ATracker / typographic study</div>
+        <div class="n">16.62</div>
+        <div class="u">亿 TOKENS / 365 DAYS</div>
+        <div class="r"></div>
+        <div class="cols">
+          <span>DIRECTORIES<b>6</b></span>
+          <span>SOURCES<b>5</b></span>
+          <span>MODELS<b>6</b></span>
+          <span>CACHE<b>48%</b></span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">06</span><h2>瑞士网格</h2><span class="en">Swiss Grid</span></div>
+        <p>白底、黑字、一条红色规则线。严格的栏网格、字号阶梯与左对齐，把数字当成海报来排版；密度很高，读起来却很安静。</p>
+        <div class="tags"><span class="tag">国际主义</span><span class="tag">栏网格</span><span class="tag">红黑</span><span class="tag">左对齐</span></div>
+        <div class="links"><a class="start" href="06-swiss.html?view=home">总览</a><a href="06-swiss.html?view=conv">会话</a><a href="06-swiss.html?view=log">日志</a><span class="sp"></span><a href="06-swiss.html?theme=dark">夜间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t7">
+        <div class="hd">TOKEN LEDGER <span>2025—2026</span></div>
+        <div class="lr"><span>host/ATracker</span><b>3725.1 万</b><b>17.7%</b></div>
+        <div class="lr"><span>host/pi-web</span><b>3375.3 万</b><b>16.1%</b></div>
+        <div class="lr"><span>host/deepseek-harness</span><b>3355.2 万</b><b>16.0%</b></div>
+        <div class="lr"><span>ai-host/pi-chat-box</span><b>3331.5 万</b><b>15.9%</b></div>
+        <div class="lr"><span>host/my-git</span><b>3318.5 万</b><b>15.8%</b></div>
+        <div class="gt">¥11,333.86</div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">07</span><h2>横线账簿</h2><span class="en">Ledger</span></div>
+        <p>横线纸、双栏数字、合计线。没有卡片和阴影，只有纸、墨水与对齐；像一本被翻开的使用量账簿，适合打印和逐行核对。</p>
+        <div class="tags"><span class="tag">账簿</span><span class="tag">横线纸</span><span class="tag">等宽数字</span><span class="tag">打印友好</span></div>
+        <div class="links"><a class="start" href="07-ledger.html?view=home">总览</a><a href="07-ledger.html?view=conv">会话</a><a href="07-ledger.html?view=log">日志</a><span class="sp"></span><a href="07-ledger.html?theme=dark">夜间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t8">
+        <div class="bar"><span>ATRACKER / TTY0</span><span>LOCAL / READ-ONLY</span></div>
+        <div class="prompt">$ atracker status --range 2026-10</div>
+        <div class="out">scan 2026-10-20 21:41:02 · 5 sources<br>events 4,182 · dup 37 · skip 61 · warn 1</div>
+        <div class="big">2.10 亿</div>
+        <div class="asc">▁▂▅▃▇▂▄▆▁▅▇▃▂▆▄▁▅▂▇▄▆▁▃▅▇▂▄▁▆▃▅▇▁▂▄▆▃▇▅▁▂▆▄▇▃▅▁▆▂ <span class="cur"></span></div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">08</span><h2>本地终端</h2><span class="en">Terminal</span></div>
+        <p>磷光绿、盒子字符、命令行提示符。把用量当成一台本地服务来巡检：键盘优先、状态常驻，所有视图都像同一个会话的不同输出。</p>
+        <div class="tags"><span class="tag">TUI</span><span class="tag">等宽</span><span class="tag">磷光绿</span><span class="tag">键盘优先</span></div>
+        <div class="links"><a class="start" href="08-terminal.html?view=home">总览</a><a href="08-terminal.html?view=conv">会话</a><a href="08-terminal.html?view=log">日志</a><span class="sp"></span><a href="08-terminal.html?theme=light">日间</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="thumb t9">
+        <div class="circ"></div>
+        <div class="tri"></div>
+        <div class="sq"></div>
+        <div class="word">TOKEN<span>USE</span></div>
+        <div class="rule"></div>
+        <div class="dots"><i style="--o:.95"></i><i style="--o:.7"></i><i style="--o:.45"></i><i style="--o:.25"></i></div>
+        <div class="sub">CREAM / BLACK / RED / BLUE / YELLOW</div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">09</span><h2>包豪斯构成</h2><span class="en">Bauhaus</span></div>
+        <p>奶油纸、黑规线、红蓝黄几何。海报尺度的标题、方形日历和圆形矩阵，把仪表盘做成一幅构成主义海报，同时保留全部下钻。</p>
+        <div class="tags"><span class="tag">几何构成</span><span class="tag">原色</span><span class="tag">海报标题</span><span class="tag">方形日历</span></div>
+        <div class="links"><a class="start" href="09-bauhaus.html?view=home">总览</a><a href="09-bauhaus.html?view=conv">会话</a><a href="09-bauhaus.html?view=log">日志</a><span class="sp"></span><a href="09-bauhaus.html?theme=dark">夜间</a></div>
+      </div>
+    </article>
+
+    <article class="card wide">
+      <div class="thumb t10">
+        <div class="tile a"><b>2.10 亿</b><span>month to date</span></div>
+        <div class="tile b"><i></i><i></i><i></i></div>
+        <div class="tile c"><i></i><i></i><i></i></div>
+        <div class="tile d">
+          <svg viewBox="0 0 220 60" preserveAspectRatio="none" aria-hidden="true">
+            <path class="fill" d="M0 52 L18 38 L36 44 L54 20 L72 34 L90 12 L108 30 L126 24 L144 42 L162 18 L180 36 L198 26 L220 44 L220 60 L0 60 Z"></path>
+            <path d="M0 52 L18 38 L36 44 L54 20 L72 34 L90 12 L108 30 L126 24 L144 42 L162 18 L180 36 L198 26 L220 44"></path>
+          </svg>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-top"><span class="no">10</span><h2>圆角便当盒</h2><span class="en">Bento</span></div>
+        <p>柔和的白卡片、混合尺寸的格子、单一蓝色强调。数据像一组可以重新排列的小组件，轻阴影和圆角让高密度信息保持松弛。</p>
+        <div class="tags"><span class="tag">圆角卡片</span><span class="tag">混合栅格</span><span class="tag">单一强调色</span><span class="tag">柔和阴影</span></div>
+        <div class="links"><a class="start" href="10-bento.html?view=home">总览</a><a href="10-bento.html?view=conv">会话</a><a href="10-bento.html?view=log">日志</a><span class="sp"></span><a href="10-bento.html?theme=dark">夜间</a></div>
+      </div>
+    </article>
+  </main>
+
+  <footer>
+    <span>ATracker / ten design directions / v3</span>
+    <span>共享 data.js 与 _core.js / 无网络请求 / 无构建步骤</span>
+    <span>金额为估算 / 人民币按 6.5 折算</span>
+  </footer>
+</div>
+</body>
+</html>
