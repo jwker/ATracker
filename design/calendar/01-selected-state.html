@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker · 日历选中态 · 方案</title>
+<style>
+  :root[data-mode="light"] {
+    --desk:#cfd0cb; --paper:#f6f5f0; --ink:#17181a; --muted:#6c6e69; --faint:#a9aba5;
+    --rule:#c9cbc4; --accent:#bf3b22; --wash:#e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk:#0d0e0f; --paper:#1a1b1d; --ink:#ecebe4; --muted:#a2a39d; --faint:#6f716c;
+    --rule:#3b3c39; --accent:#ff6a4d; --wash:#232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; min-height:100%; }
+  body {
+    background:var(--desk); color:var(--ink);
+    font-family:"Courier New","SF Mono",Menlo,monospace;
+    font-size:12px; line-height:1.55; padding:22px 12px 46px;
+  }
+  button { font:inherit; color:inherit; }
+  .sheet { max-width:760px; margin:0 auto; background:var(--paper); padding:22px 28px 28px;
+           box-shadow:0 18px 50px rgba(0,0,0,.16); }
+  .rhead { text-align:center; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  .rhead .name { font-size:22px; letter-spacing:.30em; font-weight:700; }
+  .rhead .sub { font-size:9px; letter-spacing:.24em; color:var(--muted); margin-top:3px; }
+  .toolbar { display:flex; gap:8px; align-items:center; margin:12px 0 0; }
+  .ghost { border:1px dashed var(--rule); background:transparent; padding:3px 8px; font-size:9px;
+          letter-spacing:.1em; cursor:pointer; color:var(--muted); }
+  .ghost:hover { color:var(--ink); border-color:var(--ink); }
+  .sp { flex:1; }
+
+  .variant { margin-top:22px; }
+  .vhead { display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--ink);
+           padding-bottom:3px; margin-bottom:9px; }
+  .vhead b { font-size:11px; letter-spacing:.12em; }
+  .vhead span { font-size:9px; color:var(--muted); }
+  .vhead .r { margin-left:auto; font-size:9px; color:var(--muted); }
+  .vnote { font-size:9px; color:var(--muted); line-height:1.8; margin-top:7px; }
+  .vnote code { color:var(--ink); }
+  .vnote b { color:var(--ink); font-weight:700; }
+
+  /* ---------- 日历基础样式，和 packages/web/src/receipt.css 保持一致 ---------- */
+  .wk, .cal { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 3px; }
+  .wk div { font-size: 8.5px; letter-spacing: .18em; color: var(--muted); text-align: center; padding-bottom: 2px; }
+  .wk div:nth-child(6), .wk div:nth-child(7) { color: var(--accent); }
+  .cell { border: 1px solid var(--rule); min-height: 62px; padding: 4px 5px 0; background: transparent;
+          text-align: left; cursor: pointer; display: flex; flex-direction: column; border-radius: 0; position: relative; }
+  .cell.out { border-color: transparent; pointer-events: none; }
+  .cell .d { font-size: 9px; color: var(--muted); }
+  .cell .v { font-size: 9.5px; margin: 1px 0 auto; font-variant-numeric: tabular-nums; }
+  .cell .stack { display: flex; gap: 2px; height: 7px; margin: 0 -5px; }
+  .cell .stack i { height: 100%; display: block; background: var(--c); }
+  .legend { display:flex; flex-wrap:wrap; gap:3px 13px; margin:8px 0 9px; font-size:9px; color:var(--muted); }
+  .legend .sw { width:10px; height:10px; display:inline-block; margin-right:4px; vertical-align:-1px; }
+
+  /* ================= 方案 0：现状 ================= */
+  .v0 .cell.inrange { background: var(--wash); }
+  .v0 .cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  /* ================= 方案 A：区间上下双线 + 端点封口 ================= */
+  .vA .cell.inrange {
+    border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .vA .cell.inrange.first { border-left: 2px solid var(--accent); }
+  .vA .cell.inrange.last { border-right: 2px solid var(--accent); }
+  .vA .cell.sel { border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .vA .cell.sel .d { color: var(--accent); font-weight: 700; }
+
+  /* ================= 方案 B：区间浅底 + 端点反白 ================= */
+  .vB .cell.inrange { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .vB .cell.inrange .d { color: var(--accent); }
+  .vB .cell.sel { background: var(--accent); border-color: var(--accent); }
+  .vB .cell.sel .d, .vB .cell.sel .v { color: var(--paper); }
+  .vB .cell.sel .d { font-weight: 700; }
+
+  /* ================= 方案 C：区间左右竖条（书签边）+ 端点压印 ================= */
+  .vC .cell.inrange { background: transparent; box-shadow: inset 3px 0 0 var(--accent); }
+  .vC .cell.inrange.last { box-shadow: inset 3px 0 0 var(--accent), inset -3px 0 0 var(--accent); }
+  .vC .cell.sel {
+    box-shadow: inset 0 0 0 2px var(--accent), 0 2px 0 var(--ink);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  .vC .cell.sel .d { color: var(--accent); font-weight: 700; font-size: 11px; }
+
+  /* ================= 方案 D：整段压印（外框 + 内阴影 + 端点加粗） ================= */
+  .vD .cell.inrange {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    box-shadow: inset 0 1px 0 var(--ink), inset 0 -1px 0 var(--ink);
+  }
+  .vD .cell.inrange.first { box-shadow: inset 1px 0 0 var(--ink), inset 0 1px 0 var(--ink), inset 0 -1px 0 var(--ink); }
+  .vD .cell.inrange.last { box-shadow: inset -1px 0 0 var(--ink), inset 0 1px 0 var(--ink), inset 0 -1px 0 var(--ink); }
+  .vD .cell.sel {
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink), 0 3px 0 var(--accent);
+  }
+  .vD .cell.sel .d { color: var(--ink); font-weight: 700; }
+
+  /* ================= 方案 E：骑缝色条（底部粗条）+ 角标 ================= */
+  .vE .cell.inrange { background: var(--wash); }
+  .vE .cell.inrange::after {
+    content: ""; position: absolute; left: -1px; right: -1px; bottom: -1px; height: 5px;
+    background: var(--accent);
+  }
+  .vE .cell.sel {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  .vE .cell.sel::after {
+    content: ""; position: absolute; left: -1px; right: -1px; bottom: -1px; height: 5px;
+    background: var(--accent);
+  }
+  .vE .cell.sel::before {
+    content: "●"; position: absolute; top: 1px; right: 3px; font-size: 8px; color: var(--accent);
+  }
+  .vE .cell.sel .d { color: var(--accent); font-weight: 700; }
+
+  /* ================= 方案 F：整列粗边 + 强调底 ================= */
+  .vF .cell.inrange {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-left: 1px solid var(--accent); border-right: 1px solid var(--accent);
+  }
+  .vF .cell.inrange.first { border-left: 3px solid var(--accent); }
+  .vF .cell.inrange.last { border-right: 3px solid var(--accent); }
+  .vF .cell.sel {
+    border: 3px solid var(--accent); background: var(--accent);
+  }
+  .vF .cell.sel .d, .vF .cell.sel .v { color: var(--paper); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="rhead">
+    <div class="name">ATRACKER</div>
+    <div class="sub">CALENDAR SELECTION · 选中态方案</div>
+  </div>
+  <div class="toolbar">
+    <button class="ghost" id="mode">切到深色</button>
+    <span class="sp"></span>
+    <span style="font-size:9px;color:var(--muted)">示例数据：2026 年 10 月，区间选中 15–19 日，单选 21 日</span>
+  </div>
+
+  <div id="root"></div>
+
+  <div class="variant">
+    <div class="vhead"><b>怎么读这页</b><span>NOTES</span></div>
+    <div class="vnote">
+      每个方案下面都是同一份 2026 年 10 月的日历：<b>15–19 日是一个连续选中的区间</b>，<b>21 日是单选的一天</b>。
+      现在的实现里，区间只给了一层浅灰底（<code>.cell.inrange</code>），单选只给了一圈 2px 的强调色描边（<code>.cell.sel</code>），
+      在深浅两种主题下都不够显眼。<br>
+      所有方案都只用现有的 CSS 变量（<code>--accent</code>、<code>--ink</code>、<code>--wash</code>），
+      深色主题自动跟着变，不需要额外的颜色。<br>
+      A 和 F 需要在组件里多两个 class（区间首格 <code>first</code>、末格 <code>last</code>）才能把区间封口；
+      B、C、D、E 只改样式，不用改组件结构。
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS = {
+  2:  { tok: 6708.7, dirs: [['#c9536f',64],['#3f5a8a',27],['#6f9f46',9]] },
+  3:  { tok: 884.6,  dirs: [['#c9536f',95],['#6f9f46',5]] },
+  15: { tok: 7.2,    dirs: [['#3d93b8',100]] },
+  16: { tok: 85.7,   dirs: [['#6f9f46',100]] },
+  17: { tok: 4264.2, dirs: [['#6f9f46',95],['#3f9e6b',2],['#5b6ed0',2],['#3aa087',1]] },
+  18: { tok: 852.7,  dirs: [['#6f9f46',100]] },
+  19: { tok: 25229.4,dirs: [['#c9503f',99],['#6f9f46',1]] },
+  20: { tok: 25457.1,dirs: [['#c9503f',80],['#5f7a92',13],['#7a8a9e',7]] },
+  21: { tok: 36562.4,dirs: [['#5f7a92',63],['#6a63cc',16],['#4a7fc9',13],['#8a9e3f',5],['#4a5a8a',2],['#c9503f',2]] }
+};
+
+const VARIANTS = [
+  { id:'v0', title:'方案 0 · 现状（对照）', sub:'区间浅灰底，单选 2px 描边', note:'现在的样子。区间只有一层浅灰底，在浅色主题下几乎看不出是一段；单选的描边能看到，但和区间不是一个强度。' },
+  { id:'vA', title:'方案 A · 区间上下双线 + 端点封口', sub:'像小票上画的选区框', note:'区间用上下两条 2px 强调色线夹住，首格补左边线、末格补右边线，形成一个连续的框。单选那天用 2px 整圈强调色加 8% 底色。框是线不是面，纸面还是干净的，最贴热敏小票的调子。' },
+  { id:'vB', title:'方案 B · 区间浅底 + 单选反白', sub:'选中那天整格变红', note:'区间给 16% 强调色底，单选那天整格铺满强调色、文字反成纸色。最醒目，远看一眼就知道选的是哪天，代价是单选那格在整页里非常跳。' },
+  { id:'vC', title:'方案 C · 区间书签边 + 单选压印', sub:'左边一道竖条，端点像盖章', note:'区间用左侧 3px 竖条（末格再加一道右竖条），像书签边；单选那天用内描边加一道向下的硬阴影，像在纸上压了个章，日期数字同时放大加粗。' },
+  { id:'vD', title:'方案 D · 整段压印 + 单选带色底边', sub:'黑白为主，只在单选那天用红色', note:'区间用黑线上下夹住（首尾补左右线），底色是极浅的灰；单选那天黑框加一道红色底边。和纸面是黑白关系，只在最需要强调的地方用一次红。' },
+  { id:'vE', title:'方案 E · 骑缝色条 + 角标', sub:'像小票的骑缝章', note:'区间用浅灰底加一条 5px 底部强调色横条；单选那天加边框、浅底、右上角一个圆点角标。角标位置固定，扫视时容易定位。' },
+  { id:'vF', title:'方案 F · 整列粗边 + 单选满格', sub:'区间的边界用粗线封', note:'区间用 10% 底色加左右 1px 强调色边，首格左边线加粗到 3px、末格右边线加粗到 3px，边界比 A 更硬；单选那天整格铺满强调色、文字反白。' }
+];
+
+function fmtTok(v) {
+  if (v >= 10000) return (v / 10000).toFixed(1) + ' 万';
+  return v.toFixed(1);
+}
+
+function renderCal(vid) {
+  const lead = 3; // 2026-10-01 是星期四
+  let html = '<div class="wk">' +
+    ['一','二','三','四','五','六','日'].map(w => `<div>${w}</div>`).join('') + '</div>';
+  html += '<div class="cal">';
+  for (let i = 0; i < lead; i++) html += '<div class="cell out"></div>';
+  for (let d = 1; d <= 31; d++) {
+    const rec = DAYS[d];
+    let cls = 'cell';
+    if (d >= 15 && d <= 19) {
+      cls += ' inrange';
+      if (d === 15) cls += ' first';
+      if (d === 19) cls += ' last';
+    }
+    if (d === 21) cls += ' sel';
+    const stack = rec ? rec.dirs.map(([c, p]) =>
+      `<i style="width:${p}%;background:${c}"></i>`).join('') : '';
+    html += `<div class="${cls}">
+      <span class="d">${d}</span>
+      <span class="v">${rec ? fmtTok(rec.tok) : '--'}</span>
+      <span class="stack">${stack}</span>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+const root = document.getElementById('root');
+root.innerHTML = VARIANTS.map(v => `
+  <div class="variant ${v.id}">
+    <div class="vhead"><b>${v.title}</b><span>${v.sub}</span></div>
+    ${renderCal(v.id)}
+    <div class="vnote">${v.note}</div>
+  </div>
+`).join('');
+
+document.getElementById('mode').onclick = () => {
+  const dark = document.documentElement.dataset.mode === 'dark';
+  document.documentElement.dataset.mode = dark ? 'light' : 'dark';
+  document.getElementById('mode').textContent = dark ? '切到深色' : '切到浅色';
+};
+</script>
+</body>
+</html>
