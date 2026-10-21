@@ -150,11 +150,17 @@ export class Pricing {
     buckets: { input: number; output: number; cacheRead: number; cacheWrite: number },
     reportedUsd: number | null
   ): CostResult {
-    if (reportedUsd !== null) {
+    const r = this.resolve(model, agent);
+
+    // 价格表用人民币定价的模型，一律按表里的官方人民币价算，不用来源自报的数。
+    // 来源自报的是美元（pi 的模型目录按 6.694 的汇率从人民币价折出来），
+    // 再乘 6.5 会和表里的口径差 3% 左右，两套汇率混在一个报表里对不上账。
+    const useTable = r !== null && r.entry.currency === 'CNY';
+
+    if (!useTable && reportedUsd !== null) {
       return { cny: reportedUsd * RATE, source: 'reported', note: '来源自带' };
     }
 
-    const r = this.resolve(model, agent);
     if (!r) return { cny: null, source: 'missing', note: `没有 ${model} 的价格` };
 
     let entry = r.entry;

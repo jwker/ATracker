@@ -202,3 +202,66 @@ export interface DoctorSource {
 export interface DoctorPayload {
   sources: DoctorSource[];
 }
+
+/* ---------- 单日详情 ---------- */
+
+export interface DayTotals {
+  events: number;
+  tokens: number;
+  buckets: TokenBuckets;
+  costCny: number;
+  costUsd: number;
+  unpriced: number;
+}
+
+export interface DayHour {
+  hour: number;
+  events: number;
+  tokens: number;
+  costCny: number;
+}
+
+export interface DaySession {
+  id: string;
+  agent: string;
+  sessionId: string;
+  title: string | null;
+  dir: string;
+  dirName: string;
+  color: string;
+  events: number;
+  tokens: number;
+  costCny: number;
+  firstTs: number;
+  lastTs: number;
+}
+
+export interface DayTopCall {
+  ts: number;
+  time: string;
+  agent: string;
+  model: string;
+  vendor: string | null;
+  dir: string;
+  dirName: string;
+  tokens: number;
+  costCny: number | null;
+}
+
+export interface DayPayload {
+  date: string;
+  weekday: string;
+  isToday: boolean;
+  cutoff: string;
+  today: DayTotals;
+  prev: DayTotals;
+  prevFull: DayTotals;
+  hourly: DayHour[];
+  byAgent: AgentAggregate[];
+  byModel: ModelAggregate[];
+  byDir: (DirAggregate & { sessions: number })[];
+  matrix: MatrixPayload;
+  sessions: DaySession[];
+  topCalls: DayTopCall[];
+  batches: { count: number; errors: number; events_written: number };
+}

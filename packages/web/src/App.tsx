@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api } from './api.ts';
 import { Header } from './components/Header.tsx';
 import { HomeView } from './views/HomeView.tsx';
+import { TodayView } from './views/TodayView.tsx';
 import { ConversationsView } from './views/ConversationsView.tsx';
 import { LogsView } from './views/LogsView.tsx';
 import {
@@ -25,6 +26,7 @@ import type {
   CalendarPayload,
   ConversationDetail,
   ConversationsPayload,
+  DayPayload,
   DoctorPayload,
   LogsPayload,
   MatrixPayload,
@@ -37,13 +39,29 @@ interface NavOptions {
   agent?: string;
   model?: string | null;
   day?: string;
+  date?: string;
 }
 
 const params = new URLSearchParams(location.search);
 
 function initialView(): View {
   const v = params.get('view');
-  return v === 'conv' || v === 'log' ? v : 'home';
+  return v === 'today' || v === 'conv' || v === 'log' ? v : 'home';
+}
+
+/** 当日详情页看哪一天。默认今天，可以用 date 参数打开某一天。 */
+function initialDayDate(): string {
+  const d = params.get('date');
+  return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : dayOf(Date.now());
+}
+
+/** 日期加减一天。 */
+function shiftDay(date: string, delta: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const t = Date.UTC(y, m - 1, d) + delta * 86400000;
+  const nd = new Date(t);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${nd.getUTCFullYear()}-${p(nd.getUTCMonth() + 1)}-${p(nd.getUTCDate())}`;
 }
 
 function initialUnit(): Unit {
@@ -140,6 +158,7 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [unit, setUnit] = useState<Unit>(initialUnit);
   const [month, setMonth] = useState<string>(initialMonth);
+  const [dayDate, setDayDate] = useState<string>(initialDayDate);
   const [sel, setSel] = useState<Selection | null>(initialSelection);
   const [offDirs, setOffDirs] = useState<string[]>([]);
   const [convFilter, setConvFilter] = useState<ConversationFilter>(initialConvFilter);
@@ -155,6 +174,7 @@ export function App() {
   const [convDetail, setConvDetail] = useState<ConversationDetail | null>(null);
   const [logs, setLogs] = useState<LogsPayload | null>(null);
   const [doctor, setDoctor] = useState<DoctorPayload | null>(null);
+  const [day, setDay] = useState<DayPayload | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -193,12 +213,12 @@ export function App() {
     return () => { alive = false; };
   }, [view, month, sel, refreshToken]);
 
-  // 会话列表
+  // 会话列表。目录不进请求参数：一级菜单要列出所有目录，
+  // 选哪个目录是前端的二级菜单状态。
   useEffect(() => {
     if (view !== 'conv') return;
     let alive = true;
     api.conversations({
-      dir: convFilter.dir,
       agent: convFilter.agent,
       model: convFilter.model,
       q: convQ
@@ -206,15 +226,28 @@ export function App() {
       .then(data => {
         if (!alive) return;
         setConv(data);
-        const list = data.groups.flatMap(g => g.list);
-        setConvId(prev => list.some(c => c.id === prev) ? prev : (list[0]?.id ?? null));
         setError(null);
       })
       .catch(err => {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, convFilter, convQ, refreshToken]);
+  }, [view, convFilter.agent, convFilter.model, convQ, refreshToken]);
+
+  // 选中的会话必须落在当前这一组里。目录换了就换成新组里的第一个；
+  // 选中的目录在这批结果里不存在，就退回全部目录。
+  useEffect(() => {
+    if (view !== 'conv' || !conv) return;
+    const groups = conv.groups;
+    if (convFilter.dir && !groups.some(g => g.dir.path === convFilter.dir)) {
+      setConvFilter(prev => ({ ...prev, dir: null }));
+      return;
+    }
+    const list = convFilter.dir
+      ? (groups.find(g => g.dir.path === convFilter.dir)?.list ?? [])
+      : groups.flatMap(g => g.list);
+    setConvId(prev => (list.some(c => c.id === prev) ? prev : (list[0]?.id ?? null)));
+  }, [view, conv, convFilter.dir]);
 
   // 单个会话详情
   useEffect(() => {
@@ -260,6 +293,22 @@ export function App() {
     return () => { alive = false; };
   }, [view, logFilter, refreshToken]);
 
+  // 当日详情
+  useEffect(() => {
+    if (view !== 'today') return;
+    let alive = true;
+    api.day(dayDate)
+      .then(data => {
+        if (!alive) return;
+        setDay(data);
+        setError(null);
+      })
+      .catch(err => {
+        if (alive) setError((err as Error).message);
+      });
+    return () => { alive = false; };
+  }, [view, dayDate, refreshToken]);
+
   // 扫描完成后刷新所有数据
   useEffect(() => {
     const es = new EventSource('/api/events');
@@ -270,8 +319,14 @@ export function App() {
   function navigate(next: View, opts: NavOptions = {}) {
     let nextFilter = convFilter;
     let nextSel = sel;
+    let nextDate = dayDate;
 
     setView(next);
+
+    if (opts.date) {
+      nextDate = opts.date;
+      setDayDate(nextDate);
+    }
 
     if (opts.clearConv) {
       nextFilter = EMPTY_CONV_FILTER;
@@ -298,18 +353,20 @@ export function App() {
 
     const url = new URL(location.href);
     url.searchParams.set('view', next);
-    for (const key of ['dir', 'agent', 'model', 'from']) url.searchParams.delete(key);
+    for (const key of ['dir', 'agent', 'model', 'from', 'date']) url.searchParams.delete(key);
     if (next === 'conv') {
       if (nextFilter.dir) url.searchParams.set('dir', nextFilter.dir);
       if (nextFilter.agent) url.searchParams.set('agent', nextFilter.agent);
       if (nextFilter.model) url.searchParams.set('model', nextFilter.model);
     }
+    if (next === 'today') url.searchParams.set('date', nextDate);
     if (nextSel) url.searchParams.set('from', nextSel.a);
     history.replaceState({}, '', url);
   }
 
   function handleNav(next: View) {
     if (next === 'conv') navigate('conv', { clearConv: true });
+    else if (next === 'today') navigate('today', { date: dayDate });
     else navigate(next);
   }
 
@@ -349,8 +406,34 @@ export function App() {
     navigate('conv', { clearConv: true });
   }
 
+  /** 一级菜单选目录。只改二级菜单看哪一组，别的筛选不动。 */
+  function selectDir(path: string | null) {
+    setConvFilter(prev => ({ ...prev, dir: path }));
+    const url = new URL(location.href);
+    url.searchParams.set('view', 'conv');
+    if (path) url.searchParams.set('dir', path);
+    else url.searchParams.delete('dir');
+    history.replaceState({}, '', url);
+  }
+
   function clearLog() {
     setLogFilter(EMPTY_LOG_FILTER);
+  }
+
+  function gotoDay(date: string) {
+    navigate('today', { date });
+  }
+
+  function prevDay() {
+    gotoDay(shiftDay(dayDate, -1));
+  }
+
+  function nextDay() {
+    gotoDay(shiftDay(dayDate, 1));
+  }
+
+  function backToToday() {
+    gotoDay(dayOf(Date.now()));
   }
 
   if (error) return <ErrorScreen message={error} />;
@@ -378,6 +461,19 @@ export function App() {
         onOpenCell={(agent, model) => navigate('conv', { agent, model })}
       />
     );
+  } else if (view === 'today') {
+    if (!day) return <LoadingScreen />;
+    body = (
+      <TodayView
+        day={day}
+        unit={unit}
+        onPrevDay={prevDay}
+        onNextDay={nextDay}
+        onToday={backToToday}
+        onOpenCell={(agent, model) => navigate('conv', { agent, model })}
+        onOpenDir={dir => navigate('conv', { dir })}
+      />
+    );
   } else if (view === 'conv') {
     if (!conv) return <LoadingScreen />;
     body = (
@@ -388,6 +484,8 @@ export function App() {
         filter={convFilter}
         q={convQ}
         unit={unit}
+        dirPath={convFilter.dir}
+        onSelectDir={selectDir}
         onSelect={setConvId}
         onSearch={setConvQ}
         onClear={clearConversation}

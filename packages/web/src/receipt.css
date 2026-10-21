@@ -122,6 +122,20 @@
   .stamp { display: inline-block; border: 2px solid var(--accent); color: var(--accent); padding: 1px 7px; font-size: 9px; letter-spacing: .16em; transform: rotate(-2deg); }
   .stamp.ok { border-color: var(--t3); color: var(--t3); transform: rotate(1deg); }
   .pick { display: flex; gap: 10px; overflow-x: auto; padding: 3px 0 8px; border-bottom: 1px dashed var(--rule); }
+  /* 一级菜单：目录。每一项高度固定，切换目录时整块不跳。 */
+  .dirlvl { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; border-bottom: 1px dashed var(--rule); }
+  .dirlvl .d {
+    flex: 0 0 auto; border: 1px solid var(--rule); background: transparent; padding: 5px 9px 6px;
+    cursor: pointer; text-align: left; min-width: 132px; position: relative;
+  }
+  .dirlvl .d:hover { border-color: var(--ink); }
+  .dirlvl .d.on { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); background: var(--wash); }
+  .dirlvl .d .nm { display: block; font-size: 10px; white-space: nowrap; }
+  .dirlvl .d .nm .sw { display: inline-block; width: 8px; height: 8px; margin-right: 5px; }
+  .dirlvl .d .mt { display: block; font-size: 8.5px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dirlvl .d .bar { height: 3px; background: var(--wash); margin-top: 4px; }
+  .dirlvl .d .bar i { display: block; height: 3px; background: var(--t3); }
+  .dirlvl .d.on .bar i { background: var(--accent); }
   .stub { flex: 0 0 200px; border: 1px solid var(--rule); background: transparent; text-align: left; padding: 7px 8px; cursor: pointer; border-radius: 0; }
   .stub:hover { border-color: var(--ink); }
   .stub[aria-current="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
@@ -170,6 +184,43 @@
   .diag { display: flex; flex-wrap: wrap; gap: 3px 16px; font-size: 8.5px; color: var(--muted); }
   .diag b { color: var(--ink); font-weight: 400; }
   .placeholder { text-align: center; color: var(--muted); padding: 30px 0; }
+
+  /* ---------- 当日详情 ---------- */
+  .daybar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0 12px; }
+  .daybar .scope { font-size: 10px; letter-spacing: .06em; color: var(--muted); }
+  .cmp { margin-top: 12px; }
+  .cmp .row { margin: 7px 0; }
+  .cmp .lab { display: flex; justify-content: space-between; gap: 12px; font-size: 9.5px; color: var(--muted); }
+  .cmp .track { height: 9px; background: var(--wash); margin-top: 3px; }
+  .cmp .track i { display: block; height: 9px; background: var(--t3); }
+  .cmp .lab .acc { color: var(--accent); }
+  .cmp .lab .sep { color: var(--faint); margin: 0 5px; }
+  .cmpnote { font-size: 8.5px; color: var(--faint); margin-top: 3px; }
+  .delta { font-size: 9.5px; color: var(--muted); margin-top: 7px; line-height: 1.7; }
+  .delta b { color: var(--accent); font-size: 12px; }
+  /* 小时图。柱区固定高，柱子用百分比填，标签行固定 15px，切换日期时图不会跳。 */
+  .hours { display: flex; align-items: flex-end; gap: 2px; }
+  .hours .h { flex: 1; display: flex; flex-direction: column; }
+  .hours .plot { display: flex; align-items: flex-end; }
+  .hours .bar { width: 100%; background: var(--t2); min-height: 2px; }
+  .hours .h.peak .bar { background: var(--accent); }
+  .hours .h.empty .bar { background: var(--wash); }
+  .hours .h .lb { font-size: 8px; color: var(--faint); height: 15px; line-height: 15px; margin-top: 3px; text-align: center; }
+  .hourpeak { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); margin-top: 5px; }
+  .daytable { width: 100%; border-collapse: collapse; }
+  .daytable th, .daytable td { border-bottom: 1px dotted var(--rule); padding: 5px 3px; font-size: 9.5px; text-align: right; font-variant-numeric: tabular-nums; }
+  .daytable th { letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--ink); font-weight: 700; }
+  .daytable th.l, .daytable td.l { text-align: left; }
+  .daytable td .muted { color: var(--muted); font-size: 8.5px; }
+  .daysess { display: flex; gap: 10px; align-items: flex-start; border-bottom: 1px dotted var(--rule); padding: 7px 0; }
+  .daysess .t { flex: 1; min-width: 0; font-size: 10px; }
+  .daysess .t .muted { color: var(--muted); font-size: 9px; }
+  .daysess .m { font-size: 9px; color: var(--muted); margin-top: 3px; }
+  .daysess .m .dot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 5px; }
+  .daysess .v { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 9.5px; }
+  @media (max-width: 700px) {
+    .daytable { display: block; overflow-x: auto; }
+  }
   @media (max-width: 700px) {
     body { padding: 16px 6px 34px; }
     .receipt { padding: 18px 16px 24px; }

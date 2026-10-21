@@ -6,6 +6,7 @@ import type {
   TotalPayload
 } from '../types.ts';
 import type { Selection, Unit } from '../state.ts';
+import { LeadRow } from '../components/LeadRow.tsx';
 import {
   abbr,
   fmtPct,
@@ -33,16 +34,6 @@ interface HomeViewProps {
   onToggleDir: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenCell: (agent: string, model: string) => void;
-}
-
-function LeadRow({ label, value, cls }: { label: string; value: string; cls?: string }) {
-  return (
-    <div className="leadrow">
-      <span className="nm">{label}</span>
-      <span className="dots" />
-      <span className={'v ' + (cls ?? '')}>{value}</span>
-    </div>
-  );
 }
 
 function heatStyle(v: number, max: number): CSSProperties {

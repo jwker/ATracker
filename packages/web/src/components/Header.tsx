@@ -3,6 +3,7 @@ import { dayOf, fmtTime, UNITS } from '../format.ts';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'home', label: '总账' },
+  { id: 'today', label: '今日' },
   { id: 'conv', label: '会话' },
   { id: 'log', label: '日志' }
 ];

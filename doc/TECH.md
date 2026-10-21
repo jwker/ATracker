@@ -346,6 +346,8 @@ zstd 多帧要用自己写的帧遍历器（Node 的 `zlib.zstdDecompressSync` �
 
 **任何情况下都不用 0 代替未知。** 0 是一个确切的结论（免费），未知不是。
 
+**人民币定价的模型一律用价格表。** 价格表里带 `currency: CNY` 的条目（比如 MiniMax 全系）不采用来源自报的成本。原因是来源自报的是美元：pi 的模型目录按 6.694 的汇率从官方人民币价折出来，再乘 6.5 会和表里的口径差 3% 左右，两套汇率混在一个报表里对不上账。价格表用美元定价的模型仍然优先用来源自报的值，因为它和表里的价格同单位。
+
 ### 3.1.1 多币种
 
 价格表每条可以带 `currency` 字段，不写默认 `USD`，中国厂商填 `CNY`。
@@ -403,7 +405,7 @@ gpt-5.6-sol-preview            12,400       未计入
 atracker pricing reload
 ```
 
-这条命令重新读 `config/pricing.json`，重算所有 `cost_source` 为 `priced`/`estimated` 的事件成本，并更新聚合表里的成本字段。`reported` 的成本不动。几百万行的话是秒级。
+这条命令重新读 `config/pricing.json`，按新价重算所有事件成本，再重建聚合表。规则和扫描时一致：价格表里有人民币定价的模型按表算，其他模型有来源自报成本就用自报的，没有自报就按表算，没有价格就留空。改完价格表跑这一条就行，不用重新采集日志。几百万行的话是秒级。
 
 **从 litellm 拉草稿。** `atracker pricing import` 按 jsDelivr 主分支、jsDelivr 固定 tag、本地快照的顺序取数据，转成每百万 token 的四桶结构，写进 `config/pricing.draft.json`，同时输出和手写 `config/pricing.json` 的差异报告。**任何情况下都不覆盖手写文件。**
 
@@ -746,7 +748,8 @@ localStorage.setItem('atracker-mode', mode);
 | `GET /api/calendar?month=YYYY-MM` | 某月每天的总量和按目录的拆分，加上目录图例 |
 | `GET /api/aggregate?from=&to=` | 区间内的四桶、按来源、按模型、按目录 |
 | `GET /api/matrix?from=&to=` | 来源 × 模型交叉表 |
-| `GET /api/conversations?dir=&agent=&model=&q=` | 会话列表 |
+| `GET /api/day?date=YYYY-MM-DD` | 单日详情：四桶、小时分布、来源 × 模型、当天会话、最贵调用、采集状态 |
+| `GET /api/conversations?dir=&agent=&model=&q=` | 会话列表，按目录分组 |
 | `GET /api/conversation?id=codex:<会话uuid>` | 单个会话的逐轮明细 |
 | `GET /api/logs?batch=&level=&source=&q=` | 日志行 |
 | `GET /api/scan/batches` | 扫描批次 |
@@ -799,7 +802,7 @@ localStorage.setItem('atracker-mode', mode);
 | `packages/web/index.html` | Vite 入口 |
 | `packages/web/src/main.tsx` | 挂载 React 根节点 |
 | `packages/web/src/App.tsx` | 页面状态、取数、URL 参数、SSE 刷新 |
-| `packages/web/src/views/` | 总账、会话、日志三个视图 |
+| `packages/web/src/views/` | 总账、今日、会话、日志四个视图 |
 | `packages/web/src/components/` | 页头等公共组件 |
 | `packages/web/src/receipt.css` | 主题变量和组件样式。第一套是「热敏小票」（`design/v3/02-receipt.html`） |
 
