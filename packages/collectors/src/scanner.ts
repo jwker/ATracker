@@ -14,6 +14,7 @@ import type { Collector, ScanContext, LogLevel } from './types.ts';
 import type { UsageEvent } from '../../core/src/types.ts';
 import type { CostResult, Pricing } from '../../core/src/pricing.ts';
 import { resolveVendor } from '../../core/src/catalog.ts';
+import { assignColors } from '../../core/src/palette.ts';
 import { localDay, localMonth } from '../../core/src/time.ts';
 import { zstdLines } from './zstd.ts';
 import type { Repo } from '../../storage/src/repo.ts';
@@ -230,6 +231,11 @@ export async function runScan(
 
   // 没有变化就不重算聚合
   if (affectedDays.size) repo.rebuildAggregates([...affectedDays]);
+
+  // 给这批出现的目录分配颜色，已经有的保持不变
+  const paths = repo.db.prepare('SELECT DISTINCT cwd FROM usage_event').all().map((r: any) => r.cwd);
+  const assigned = assignColors(repo.dirColors(), paths);
+  repo.setDirColors(assigned);
   repo.finishBatch(batchId, {
     finishedAt: Date.now(),
     filesTotal: filesScanned,

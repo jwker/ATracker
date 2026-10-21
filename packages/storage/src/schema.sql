@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS file_cursor (
   last_error    TEXT
 );
 
+-- 目录配色。颜色跟随实体，分配一次不再变。
+CREATE TABLE IF NOT EXISTS dir_color (
+  path        TEXT PRIMARY KEY,
+  color       TEXT NOT NULL,
+  assigned_at INTEGER NOT NULL
+);
+
 -- 会话元信息。标题各来源都有，字段位置不同。
 CREATE TABLE IF NOT EXISTS session_title (
   agent      TEXT NOT NULL,

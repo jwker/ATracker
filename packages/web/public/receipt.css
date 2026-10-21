@@ -113,7 +113,8 @@
   .matrix td.c:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
   .bars .row { margin: 6px 0 8px; }
   .bars .row .top { display: flex; align-items: baseline; gap: 5px; font-size: 9.5px; }
-  .bars .row .top .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
+  .bars .row .top .dot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.bars .row .top .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
   .bars .row .top .v { color: var(--muted); font-variant-numeric: tabular-nums; }
   .bars .row .track { height: 7px; background: var(--wash); margin-top: 2px; }
   .bars .row .track i { display: block; height: 7px; background: var(--ink); }

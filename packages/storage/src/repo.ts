@@ -95,6 +95,29 @@ export class Repo {
     return this.db.prepare(sql).all(...args);
   }
 
+  /* ---------- 目录配色 ---------- */
+
+  dirColors(): Map<string, string> {
+    const rows = this.db.prepare('SELECT path, color FROM dir_color').all() as any[];
+    return new Map(rows.map(r => [r.path, r.color]));
+  }
+
+  setDirColors(entries: Map<string, string>): void {
+    if (!entries.size) return;
+    const stmt = this.db.prepare(
+      'INSERT INTO dir_color (path, color, assigned_at) VALUES (?,?,?) ON CONFLICT(path) DO NOTHING'
+    );
+    const now = Date.now();
+    this.db.exec('BEGIN');
+    try {
+      for (const [path, color] of entries) stmt.run(path, color, now);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   /* ---------- 会话元信息 ---------- */
 
   upsertSessions(rows: { agent: string; sessionId: string; title: string | null; cwd: string | null; firstTs: number | null; lastTs: number | null }[]): void {
