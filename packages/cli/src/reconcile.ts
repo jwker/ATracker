@@ -159,11 +159,19 @@ function checkOpencode(): Line | null {
   const dbPath = join(home, '.local', 'share', 'opencode', 'opencode.db');
   if (!existsSync(dbPath)) return null;
   const db = new DatabaseSync(dbPath, { readOnly: true });
-  const r = db.prepare(
-    'SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t FROM session'
-  ).get() as any;
+  // 桌面端用新表，旧表是迁移前的副本，两边不能相加
+  const v2 = !!(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session_v2'").get());
+  const r = v2
+    ? db.prepare(
+      `SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t
+       FROM session_v2`
+    ).get() as any
+    : db.prepare(
+      `SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t
+       FROM session`
+    ).get() as any;
   db.close();
-  return { name: 'opencode', ours: 0, theirs: r.t, note: 'session 表汇总列', ok: true };
+  return { name: 'opencode', ours: 0, theirs: r.t, note: v2 ? 'session_v2 汇总列' : 'session 表汇总列（旧格式）', ok: true };
 }
 
 /* ---------- DeepSeek Harness：session_projcache ---------- */

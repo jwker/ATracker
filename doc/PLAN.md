@@ -27,7 +27,7 @@
 | codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.zst` | zstd 压缩的 JSONL | 每轮一次 `event_msg`，其 `payload.type` 为 `token_count` | `turn_context.payload.model`；厂商看 `session_meta.payload.model_provider` |
 | Claude Code | `~/.claude/projects/<目录slug>/<会话uuid>.jsonl`，子 agent 在 `<会话uuid>/subagents/` 下 | 纯 JSONL | 每条 `type` 为 `assistant` 的消息，`message.usage` | `message.model` |
 | pi | `~/.pi/agent/sessions/<目录slug>/<时间戳>_<会话uuid>.jsonl` | 纯 JSONL | 每条 `type` 为 `message` 且 `message.role` 为 `assistant` 的记录，`message.usage` | `message.provider` 与 `message.model` |
-| opencode | `~/.local/share/opencode/opencode.db` | SQLite | `message` 表每行 `data` 里的 `tokens` 与 `cost` | `data.providerID` 与 `data.modelID` |
+| opencode | `~/.local/share/opencode/opencode.db` | SQLite | 新表 `session_v2` / `session_message`（桌面端在用），旧表 `session` / `message` 是迁移前的副本 | `session_message.data.model.providerID` 与 `.id` |
 | DeepSeek Harness | `~/.dsh/sessions/<目录slug>/<会话id>/session[.vN].jsonl.zstd` | zstd 压缩的 JSONL | `assistant/message` 事件的 `data.usage` | `data.message.source.provider` 与 `.model`；`request/header` 的 `data.header.config` 也带一份 |
 
 补充的旁路数据，用于补齐上下文和交叉校验，不作为用量主来源：
@@ -59,6 +59,8 @@
 - **Claude Code**：`input_tokens` 是不含缓存的输入，`cache_read_input_tokens` 是缓存命中，`cache_creation_input_tokens` 是缓存写入，`output_tokens_details.thinking_tokens` 是推理 token。**同一条 assistant 消息会按内容块写成多行**（`apiBlockIndex` 不同、uuid 也不同），每行带的是同一份 usage，直接累加会翻倍，要按 `message.id` 去重。
 - **pi**：`usage.input` 是不含缓存的输入，`cacheRead` 是缓存命中，`cacheWrite` 是缓存写入，`reasoning` 是推理 token。pi 自己报的 `totalTokens` 等于输入加输出加缓存命中加缓存写入，不含推理 token，符合上面的口径。
 - **opencode**：`tokens.input` 是不含缓存的输入，`tokens.cache.read` 是缓存命中，`tokens.cache.write` 是缓存写入，`tokens.reasoning` 是推理 token。
+  **两代存储格式要分清**：同一个 `opencode.db` 里既有旧表 `session` / `message`，也有 opencode 2.x（桌面端在用）的新表 `session_v2` / `session_message`。新表是旧表迁移过来的，同一批会话在两边各存一份（实测 `ses_0de322576f` 两边的 `tokens_input` 都是 24481），**两张都读会重复计算**。所以只要 `session_v2` 有数据就只读新表。
+  **压缩掉的旧消息要补差**：会话被压缩后，旧消息从消息表里删掉，但 token 数仍留在 `session_v2` 的汇总列里（实测差 336.9 万，占 0.8%）。总量以来源自己的口径为准，差出来的量按四个桶分别补成一条事件，模型取会话的模型，日期取会话最后活动时间。差额的**成本**也按来源口径：来源报 0 就是 0（免费模型），`null` 才表示不知道，两者不能混。
 - **DeepSeek Harness**：`data.usage` 里的 `inputTokens` 是不含缓存的输入，`cacheReadTokens` 是缓存命中，`cacheWriteTokens` 是缓存写入，`reasoningTokens` 是推理 token。一个会话目录里可能有多个版本文件（`session.jsonl.zstd` 是 v0，`session.v2/v4` 是后来的格式），新版是旧版的延续不是叠加，**只读编号最高的那个**，全加起来会重复计算。
 
 每一家的口径都要在 M2 阶段用旁路数据核对一遍，发现不一致就在采集器里做转换并写进测试。
@@ -67,7 +69,7 @@
 
 每个 agent 都有工作目录，取值优先级：
 
-1. 记录里直接带的 `cwd`（Claude Code 的每一行、pi 的 `session` 行、opencode 的 `message.data.path.cwd`、codex 的 `turn_context.payload.cwd`、DeepSeek Harness 的 `session` 头行）。这是最可靠的来源。
+1. 记录里直接带的 `cwd`（Claude Code 的每一行、pi 的 `session` 行、opencode 的 `session_v2.directory`（旧格式是 `message.data.path.cwd`）、codex 的 `turn_context.payload.cwd`、DeepSeek Harness 的 `session` 头行）。这是最可靠的来源。
 2. 目录名 slug（例如 `-Users-jiangjiang-Documents-host-film`）是 cwd 的编码，但编码规则有损（点号会被替换），只用于定位文件，不作为取值来源。
 
 ## 4. 数据模型

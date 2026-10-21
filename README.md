@@ -90,7 +90,11 @@ data/atracker.db     运行时生成
 
 成本表 `config/pricing.json` 是唯一生效的定价来源，手写维护。`cache_write` 填 0 表示厂商不单独收缓存写入费，这部分 token 按输入价计费。
 
-## 三个容易踩的坑
+## 采集器的版本号
+
+改了采集器的解析逻辑就把 `version` 往上加一位。游标里存的是 `agent:version`，版本对不上时这个来源的文件会自动全部重扫，不用手动清库。
+
+## 四个容易踩的坑
 
 **codex 的每轮用量要用 `total_token_usage` 的增量，不能用 `last_token_usage`。** 一轮里可能有多次 API 调用，`last_token_usage` 只记最后一次。实测一个 61 轮的会话两者相差 4 万 token。
 
@@ -99,5 +103,7 @@ data/atracker.db     运行时生成
 **Claude Code 的同一条消息会写成多行。** 一条 assistant 消息按内容块分行写，每行带同一份 usage，要按 `message.id` 去重，否则用量翻倍。
 
 **DeepSeek Harness 一个会话目录里有多个版本文件。** 只读编号最高的那个，全加起来会重复计算。
+
+**opencode 有两代存储格式。** 同一个库里旧表 `session`/`message` 和新表 `session_v2`/`session_message` 存着同一批会话，两张都读会翻倍。会话被压缩后旧消息不在消息表里了，只在会话汇总列里，差出来的量要按四个桶补一条事件。
 
 详见 `doc/PLAN.md` 第 3.1 节。
