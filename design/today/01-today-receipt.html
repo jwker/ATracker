@@ -63,12 +63,9 @@
 
   .cmp { margin-top:12px; }
   .cmp .row { margin:7px 0; }
-  .cmp .lab { display:flex; justify-content:space-between; font-size:9.5px; color:var(--muted); }
-  .cmp .track { height:9px; background:var(--wash); margin-top:3px; }
-  .cmp .track i { display:block; height:9px; background:var(--t3); }
+  .cmp .lab { display:flex; align-items:baseline; gap:8px; justify-content:flex-start; font-size:9.5px; color:var(--muted); }
   .cmp .lab .acc { color:var(--accent); }
   .cmp .lab .sep { color:var(--faint); margin:0 5px; }
-  .cmpnote { font-size:8.5px; color:var(--faint); margin-top:3px; }
 
   .kv { display:grid; grid-template-columns:1fr auto; gap:2px 10px; font-size:10px; margin-top:8px; }
   .kv .k { color:var(--muted); }
@@ -147,8 +144,6 @@
     <div class="cmp">
       <div class="row">
         <div class="lab"><span id="cmpL2">昨天同一时刻</span><span id="cmpV2" class="acc"></span></div>
-        <div class="track"><i id="cmpB2"></i></div>
-        <div class="cmpnote">满格是今天的总量</div>
       </div>
     </div>
   </div>
@@ -204,121 +199,73 @@
 
 <script>
 const DATA = {
- "day": "2026-10-21",
- "cutoff": "17:50",
- "weekday": "星期三",
+ "day": "2026-10-22",
+ "cutoff": "12:53",
+ "weekday": "星期四",
  "today": {
-  "events": 1467,
-  "input": 8929421,
-  "output": 1290568,
-  "cacheRead": 319775422,
+  "events": 78,
+  "input": 1492443,
+  "output": 112732,
+  "cacheRead": 18296574,
   "cacheWrite": 0,
-  "reasoning": 173583,
-  "tokens": 329995411,
-  "cny": 40.71987334219999,
-  "usd": 6.264595898800007
+  "reasoning": 30295,
+  "tokens": 19901749,
+  "cny": 2.7843774000000003,
+  "usd": 0.4283657538461538
  },
  "prev": {
-  "events": 1189,
-  "input": 5622926,
-  "output": 420888,
-  "cacheRead": 198858470,
+  "events": 647,
+  "input": 5304306,
+  "output": 671590,
+  "cacheRead": 154951330,
   "cacheWrite": 0,
-  "reasoning": 351483,
-  "tokens": 204902284,
-  "cny": 2.671946316000001,
-  "usd": 0.411068664
+  "reasoning": 74649,
+  "tokens": 160927226,
+  "cny": 22.917802056000006,
+  "usd": 3.5258157009230766
  },
  "prevFull": {
-  "events": 1513,
-  "input": 6465201,
-  "output": 617416,
-  "cacheRead": 247488287,
+  "events": 1847,
+  "input": 10054157,
+  "output": 1393585,
+  "cacheRead": 408871870,
   "cacheWrite": 0,
-  "reasoning": 425969,
-  "tokens": 254570904,
-  "cny": 7.213916443500002,
-  "usd": 1.1098332989999997
+  "reasoning": 283711,
+  "tokens": 420319612,
+  "cny": 51.19111248985002,
+  "usd": 7.875555767669228
  },
  "hours": [
   {
-   "hour": 10,
-   "n": 43,
-   "tokens": 20189900,
-   "cny": 2.57239693945
-  },
-  {
    "hour": 11,
-   "n": 45,
-   "tokens": 16584109,
-   "cny": 2.7544671862499994
+   "n": 2,
+   "tokens": 2505303,
+   "cny": 0
   },
   {
    "hour": 12,
-   "n": 551,
-   "tokens": 107420310,
-   "cny": 13.881627079450002
+   "n": 64,
+   "tokens": 16949836,
+   "cny": 2.7843774000000003
   },
   {
-   "hour": 13,
-   "n": 290,
-   "tokens": 68543846,
-   "cny": 8.979710561900003
-  },
-  {
-   "hour": 14,
-   "n": 137,
-   "tokens": 54573916,
-   "cny": 4.826053663600001
-  },
-  {
-   "hour": 15,
-   "n": 184,
-   "tokens": 12737543,
-   "cny": 0.65961412595
-  },
-  {
-   "hour": 16,
-   "n": 104,
-   "tokens": 12108349,
-   "cny": 1.2958485669999997
-  },
-  {
-   "hour": 17,
-   "n": 35,
-   "tokens": 7877900,
-   "cny": 0.8439720861000002
-  },
-  {
-   "hour": 8,
-   "n": 44,
-   "tokens": 16025334,
-   "cny": 2.3380613099999996
-  },
-  {
-   "hour": 9,
-   "n": 34,
-   "tokens": 13934204,
-   "cny": 2.5681218225000007
+   "hour": 7,
+   "n": 12,
+   "tokens": 446610,
+   "cny": 0
   }
  ],
  "agents": [
   {
    "agent": "pi",
-   "n": 574,
-   "tokens": 233922250,
-   "cny": 30.1434266302
-  },
-  {
-   "agent": "claude-code",
-   "n": 714,
-   "tokens": 77528766,
-   "cny": 10.576446712
+   "n": 63,
+   "tokens": 16949286,
+   "cny": 2.7843774000000003
   },
   {
    "agent": "opencode",
-   "n": 179,
-   "tokens": 18544395,
+   "n": 15,
+   "tokens": 2952463,
    "cny": 0
   }
  ],
@@ -326,78 +273,50 @@ const DATA = {
   {
    "model": "MiniMax-M3.1-Flash",
    "provider": "minimax-cn",
-   "tokens": 233922250,
-   "cny": 30.1434266302,
-   "n": 574,
-   "noprice": 0
-  },
-  {
-   "model": "deepseek-flash",
-   "provider": "deepseek",
-   "tokens": 77493867,
-   "cny": 10.476555492,
-   "n": 713,
+   "tokens": 16949286,
+   "cny": 2.7843774000000003,
+   "n": 63,
    "noprice": 0
   },
   {
    "model": "deepseek-v4.1-flash-free",
    "provider": "deepseek",
-   "tokens": 18544395,
+   "tokens": 2952463,
    "cny": 0,
-   "n": 179,
-   "noprice": 0
-  },
-  {
-   "model": "deepseek-v4-flash",
-   "provider": "deepseek",
-   "tokens": 34899,
-   "cny": 0.09989121999999999,
-   "n": 1,
+   "n": 15,
    "noprice": 0
   }
  ],
  "dirs": [
   {
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "sess": 5,
-   "tokens": 230128014,
-   "cny": 28.0821239504
-  },
-  {
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker/design/v3",
-   "sess": 1,
-   "tokens": 56909785,
-   "cny": 7.487150034
-  },
-  {
    "cwd": "",
    "sess": 1,
-   "tokens": 24061120,
-   "cny": 3.1958724797999998
-  },
-  {
-   "cwd": "/Users/jiangjiang/Documents/host/blog/design",
-   "sess": 1,
-   "tokens": 7286372,
-   "cny": 0.8510984819999999
+   "tokens": 16938013,
+   "cny": 2.7782122
   },
   {
    "cwd": "/Users/jiangjiang/Documents/host/pi-observer",
    "sess": 2,
-   "tokens": 6094282,
+   "tokens": 2505303,
    "cny": 0
+  },
+  {
+   "cwd": "/Users/jiangjiang/Documents/host",
+   "sess": 1,
+   "tokens": 446610,
+   "cny": 0
+  },
+  {
+   "cwd": "/private/tmp",
+   "sess": 2,
+   "tokens": 11273,
+   "cny": 0.0061652
   },
   {
    "cwd": "/Users/jiangjiang/Documents/host/blog",
    "sess": 1,
-   "tokens": 5300445,
-   "cny": 1.088903088
-  },
-  {
-   "cwd": "/Users/jiangjiang/Documents/host/blog/content",
-   "sess": 1,
-   "tokens": 215393,
-   "cny": 0.014725308
+   "tokens": 550,
+   "cny": 0
   }
  ],
  "colors": {
@@ -431,94 +350,68 @@ const DATA = {
  "sessions": [
   {
    "agent": "pi",
-   "session_id": "01a15942-aac8-717a-b25b-8cb0c3186489",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "n": 301,
-   "tokens": 162814272,
-   "cny": 22.2394062592,
-   "f": 1792543152656,
-   "l": 1792563517209,
-   "title": null,
-   "first": "08:39",
-   "last": "14:18"
-  },
-  {
-   "agent": "pi",
    "session_id": "",
    "cwd": "",
-   "n": 273,
-   "tokens": 71107978,
-   "cny": 7.904020371,
-   "f": 1792562268516,
-   "l": 1792576203409,
+   "n": 61,
+   "tokens": 16938013,
+   "cny": 2.7782122,
+   "f": 1792641757327,
+   "l": 1792644785283,
    "title": null,
-   "first": "13:57",
-   "last": "17:50"
-  },
-  {
-   "agent": "claude-code",
-   "session_id": "9249f317-42f9-4c21-8f3b-4016797f47f6",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "n": 597,
-   "tokens": 64691657,
-   "cny": 8.521828614,
-   "f": 1792554843687,
-   "l": 1792559531626,
-   "title": "可用的前端页面设计技能",
-   "first": "11:54",
-   "last": "13:12"
-  },
-  {
-   "agent": "claude-code",
-   "session_id": "848cfd27-d05a-41f8-ab43-cf70c5150649",
-   "cwd": "/Users/jiangjiang/Documents/host/blog",
-   "n": 116,
-   "tokens": 12802210,
-   "cny": 1.954726878,
-   "f": 1792561427632,
-   "l": 1792562531952,
-   "title": "HTML 格式前端设计稿",
-   "first": "13:43",
-   "last": "14:02"
-  },
-  {
-   "agent": "opencode",
-   "session_id": "ses_ea2dd84c0ffeSqLqsPkB1XN2f7",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "n": 115,
-   "tokens": 12450113,
-   "cny": 0,
-   "f": 1792563903472,
-   "l": 1792571148053,
-   "title": "Git 工作区状态检查",
-   "first": "14:25",
-   "last": "16:25"
+   "first": "12:02",
+   "last": "12:53"
   },
   {
    "agent": "opencode",
    "session_id": "ses_ead7ae905ffe7MOsSorBX91eHv",
    "cwd": "/Users/jiangjiang/Documents/host/pi-observer",
-   "n": 63,
-   "tokens": 6093720,
+   "n": 1,
+   "tokens": 2504741,
    "cny": 0,
-   "f": 1792568388280,
-   "l": 1792574259296,
+   "f": 1792641463241,
+   "l": 1792641463241,
    "title": "pi-data-dashboard 重命名建议",
-   "first": "15:39",
-   "last": "17:17"
+   "first": "11:57",
+   "last": "11:57"
   },
   {
-   "agent": "claude-code",
-   "session_id": "381a1e4c-2cf2-4af3-a2c9-21957e3f7936",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
+   "agent": "opencode",
+   "session_id": "ses_ea1fb77d8ffehtngWEJGZOEJbZ",
+   "cwd": "/Users/jiangjiang/Documents/host",
+   "n": 12,
+   "tokens": 446610,
+   "cny": 0,
+   "f": 1792626906832,
+   "l": 1792626959326,
+   "title": "阅读项目代码结构",
+   "first": "07:55",
+   "last": "07:55"
+  },
+  {
+   "agent": "pi",
+   "session_id": "01a161de-2996-7703-a1e8-ae83071d9804",
+   "cwd": "/private/tmp",
    "n": 1,
-   "tokens": 34899,
-   "cny": 0.09989121999999999,
-   "f": 1792554750876,
-   "l": 1792554750876,
+   "tokens": 5637,
+   "cny": 0.0006114,
+   "f": 1792643313652,
+   "l": 1792643313652,
    "title": null,
-   "first": "11:52",
-   "last": "11:52"
+   "first": "12:28",
+   "last": "12:28"
+  },
+  {
+   "agent": "pi",
+   "session_id": "01a161d4-41be-7691-ad71-651b4a8ca910",
+   "cwd": "/private/tmp",
+   "n": 1,
+   "tokens": 5636,
+   "cny": 0.0055538,
+   "f": 1792642664332,
+   "l": 1792642664332,
+   "title": null,
+   "first": "12:17",
+   "last": "12:17"
   },
   {
    "agent": "opencode",
@@ -527,107 +420,120 @@ const DATA = {
    "n": 1,
    "tokens": 562,
    "cny": 0,
-   "f": 1792563997221,
-   "l": 1792563997221,
+   "f": 1792641462074,
+   "l": 1792641462074,
    "title": "仅答疑，不改代码",
-   "first": "14:26",
-   "last": "14:26"
+   "first": "11:57",
+   "last": "11:57"
+  },
+  {
+   "agent": "opencode",
+   "session_id": "ses_ea1fa8eabffdLoJZsJCg82Yp0P",
+   "cwd": "/Users/jiangjiang/Documents/host/blog",
+   "n": 1,
+   "tokens": 550,
+   "cny": 0,
+   "f": 1792642562310,
+   "l": 1792642562310,
+   "title": "项目代码阅读",
+   "first": "12:16",
+   "last": "12:16"
   }
  ],
  "top": [
   {
-   "ts": 1792561237313,
+   "ts": 1792643617947,
    "agent": "pi",
    "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 654381,
-   "o": 1622,
-   "cr": 187,
-   "cny": 0.64178799685,
-   "time": "13:40"
-  },
-  {
-   "ts": 1792559163255,
-   "agent": "pi",
-   "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 651227,
-   "o": 812,
-   "cr": 508,
-   "cny": 0.6356098723,
-   "time": "13:06"
-  },
-  {
-   "ts": 1792558077238,
-   "agent": "pi",
-   "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 612061,
-   "o": 1878,
-   "cr": 187,
-   "cny": 0.6016854512500001,
-   "time": "12:47"
-  },
-  {
-   "ts": 1792557283201,
-   "agent": "pi",
-   "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 575607,
-   "o": 656,
-   "cr": 228,
-   "cny": 0.5615422059,
-   "time": "12:34"
-  },
-  {
-   "ts": 1792556675121,
-   "agent": "pi",
-   "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 557893,
-   "o": 175,
+   "cwd": "",
+   "i": 412950,
+   "o": 625,
    "cr": 128,
-   "cny": 0.5424620591000001,
-   "time": "12:24"
+   "cny": 0.4154628,
+   "time": "12:33"
   },
   {
-   "ts": 1792553195372,
+   "ts": 1792641757327,
    "agent": "pi",
    "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 516005,
-   "o": 2094,
-   "cr": 188,
-   "cny": 0.5092445969,
-   "time": "11:26"
-  },
-  {
-   "ts": 1792549336947,
-   "agent": "pi",
-   "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 447791,
-   "o": 966,
+   "cwd": "",
+   "i": 405491,
+   "o": 73,
    "cr": 128,
-   "cny": 0.440376105,
-   "time": "10:22"
+   "cny": 0.40579580000000004,
+   "time": "12:02"
   },
   {
-   "ts": 1792545090329,
+   "ts": 1792642653112,
    "agent": "pi",
    "model": "MiniMax-M3.1-Flash",
-   "cwd": "/Users/jiangjiang/Documents/host/ATracker",
-   "i": 390407,
-   "o": 1227,
-   "cr": 222,
-   "cny": 0.38545377,
-   "time": "09:11"
+   "cwd": "",
+   "i": 158197,
+   "o": 315,
+   "cr": 0,
+   "cny": 0.15945700000000002,
+   "time": "12:17"
+  },
+  {
+   "ts": 1792642400215,
+   "agent": "pi",
+   "model": "MiniMax-M3.1-Flash",
+   "cwd": "",
+   "i": 401,
+   "o": 1211,
+   "cr": 411423,
+   "cny": 0.046387300000000006,
+   "time": "12:13"
+  },
+  {
+   "ts": 1792642226198,
+   "agent": "pi",
+   "model": "MiniMax-M3.1-Flash",
+   "cwd": "",
+   "i": 2305,
+   "o": 654,
+   "cr": 407684,
+   "cny": 0.0456894,
+   "time": "12:10"
+  },
+  {
+   "ts": 1792644684587,
+   "agent": "pi",
+   "model": "MiniMax-M3.1-Flash",
+   "cwd": "",
+   "i": 332,
+   "o": 816,
+   "cr": 419087,
+   "cny": 0.0455047,
+   "time": "12:51"
+  },
+  {
+   "ts": 1792644785283,
+   "agent": "pi",
+   "model": "MiniMax-M3.1-Flash",
+   "cwd": "",
+   "i": 207,
+   "o": 673,
+   "cr": 420474,
+   "cny": 0.044946400000000004,
+   "time": "12:53"
+  },
+  {
+   "ts": 1792644146864,
+   "agent": "pi",
+   "model": "MiniMax-M3.1-Flash",
+   "cwd": "",
+   "i": 259,
+   "o": 733,
+   "cr": 416373,
+   "cny": 0.0448283,
+   "time": "12:42"
   }
  ],
  "batches": {
-  "n": 3984,
+  "n": 1975,
   "err": 0,
-  "written": 75879
+  "written": 28312
  },
  "unpriced": 0,
  "cross": {
@@ -656,45 +562,30 @@ const DATA = {
   "models": [
    {
     "id": "MiniMax-M3.1-Flash",
-    "tokens": 233922250
-   },
-   {
-    "id": "deepseek-flash",
-    "tokens": 77493867
+    "tokens": 16949286
    },
    {
     "id": "deepseek-v4.1-flash-free",
-    "tokens": 18544395
-   },
-   {
-    "id": "deepseek-v4-flash",
-    "tokens": 34899
+    "tokens": 2952463
    }
   ],
   "cells": {
-   "claude-code": {
-    "deepseek-flash": 77493867,
-    "deepseek-v4-flash": 34899
-   },
    "opencode": {
-    "deepseek-v4.1-flash-free": 18544395
+    "deepseek-v4.1-flash-free": 2952463
    },
    "pi": {
-    "MiniMax-M3.1-Flash": 233922250
+    "MiniMax-M3.1-Flash": 16949286
    }
   },
   "rowTotal": {
-   "claude-code": 77528766,
-   "opencode": 18544395,
-   "pi": 233922250
+   "opencode": 2952463,
+   "pi": 16949286
   },
   "colTotal": {
-   "deepseek-flash": 77493867,
-   "deepseek-v4-flash": 34899,
-   "deepseek-v4.1-flash-free": 18544395,
-   "MiniMax-M3.1-Flash": 233922250
+   "deepseek-v4.1-flash-free": 2952463,
+   "MiniMax-M3.1-Flash": 16949286
   },
-  "maxCell": 233922250
+  "maxCell": 16949286
  }
 };
 
@@ -735,14 +626,12 @@ function render() {
   el('cny').textContent = money(d.today.cny);
   el('usd').textContent = '$' + d.today.usd.toFixed(2) + ' · 汇率 6.5';
 
-  // 对比只留一条：昨天同一时刻的量，条长以今天总量为满格，右边只放一个百分比。
-  const share = d.today.tokens ? d.prev.tokens / d.today.tokens : 0;
+  // 对比只留一行文字：昨天同一时刻的量和 token 百分比，不画进度条。
   const ratio = d.prev.tokens ? d.today.tokens / d.prev.tokens : 0;
   el('cmpL2').textContent = '昨天同一时刻（截至 ' + d.cutoff + '）';
   el('cmpV2').innerHTML = shortNum(d.prev.tokens) +
     '<span class="sep">/</span><span class="acc">' +
     (ratio >= 1 ? '+' : '') + ((ratio - 1) * 100).toFixed(0) + '%</span>';
-  el('cmpB2').style.width = (share * 100) + '%';
 
   const t = d.today;
   const buckets = el('buckets');

@@ -206,12 +206,9 @@
   .daybar .scope { font-size: 10px; letter-spacing: .06em; color: var(--muted); }
   .cmp { margin-top: 12px; }
   .cmp .row { margin: 7px 0; }
-  .cmp .lab { display: flex; justify-content: space-between; gap: 12px; font-size: 9.5px; color: var(--muted); }
-  .cmp .track { height: 9px; background: var(--wash); margin-top: 3px; }
-  .cmp .track i { display: block; height: 9px; background: var(--t3); }
+  .cmp .lab { display: flex; align-items: baseline; gap: 8px; justify-content: flex-start; font-size: 9.5px; color: var(--muted); }
   .cmp .lab .acc { color: var(--accent); }
   .cmp .lab .sep { color: var(--faint); margin: 0 5px; }
-  .cmpnote { font-size: 8.5px; color: var(--faint); margin-top: 3px; }
   .delta { font-size: 9.5px; color: var(--muted); margin-top: 7px; line-height: 1.7; }
   .delta b { color: var(--accent); font-size: 12px; }
   /* 小时图。柱区固定高，柱子用百分比填，标签行固定 15px，切换日期时图不会跳。 */
