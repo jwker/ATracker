@@ -47,9 +47,6 @@ export function TodayView(props: TodayViewProps) {
   const t = day.today;
   const prev = day.prev;
 
-  // 昨天同一时刻占今天总量的比例，用来给那一条对比条当尺子。
-  const prevShare = t.tokens ? prev.tokens / t.tokens : 0;
-
   const hours = Array.from({ length: 24 }, (_, h) =>
     day.hourly.find(x => x.hour === h) ?? { hour: h, events: 0, tokens: 0, costCny: 0 }
   );
@@ -96,10 +93,6 @@ export function TodayView(props: TodayViewProps) {
                 <span className="acc">{deltaText(t.tokens, prev.tokens)}</span>
               </span>
             </div>
-            <div className="track">
-              <i style={{ width: ((prevShare || 0) * 100).toFixed(1) + '%' }} />
-            </div>
-            <div className="cmpnote">满格是今天的总量</div>
           </div>
         </div>
       </div>
