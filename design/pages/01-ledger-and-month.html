@@ -115,12 +115,13 @@
   .cell.sel { border-color: var(--accent); }
   .cell .d { font-size: 9px; color: var(--muted); }
   .cell .v { font-size: 9.5px; font-variant-numeric: tabular-nums; margin: 1px 0 auto; }
-  .cell .bar { height: 5px; background: var(--wash); margin: 0 -5px; }
-  .cell .bar i { display: block; height: 5px; background: var(--t3); }
-  .legend { display: flex; flex-wrap: wrap; gap: 3px 13px; margin: 8px 0 2px; font-size: 9.5px; }
+  .cell .bar { height: 5px; background: var(--wash); margin: 0 -5px; display: flex; }
+  .cell .bar i { display: block; height: 5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 8px 0 2px; font-size: 9.5px; align-items: baseline; }
   .legend .lg { display: inline-flex; align-items: baseline; gap: 5px; }
   .legend .sw { width: 9px; height: 9px; display: inline-block; transform: translateY(1px); }
   .legend .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend .cap { font-size: 8.5px; color: var(--muted); letter-spacing: .14em; margin-right: 2px; }
 
   /* 交叉表 */
   table.mx { width: 100%; border-collapse: collapse; }
@@ -286,11 +287,11 @@
       <div class="sec-h"><b>目录用量</b><span>点一行查看该目录的会话</span></div>
       <div class="bars">
         <div class="row"><div class="top"><span><span class="dot" style="background:#c9538a"></span>host/Codelet</span><span class="dots"></span><span class="v">31.1% / 10.67 亿</span></div><div class="track"><i style="width:31.1%;background:#c9538a"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#4a7fc9"></span>host/pi-observer</span><span class="dots"></span><span class="v">22.2% / 7.60 亿</span></div><div class="track"><i style="width:22.2%;background:#4a7fc9"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#4aa38a"></span>host/ATracker</span><span class="dots"></span><span class="v">13.1% / 4.48 亿</span></div><div class="track"><i style="width:13.1%;background:#4aa38a"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#c08a3e"></span>host/nut-md</span><span class="dots"></span><span class="v">8.8% / 3.00 亿</span></div><div class="track"><i style="width:8.8%;background:#c08a3e"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#c76a6a"></span>ai-host/pi-chat-box</span><span class="dots"></span><span class="v">5.5% / 1.90 亿</span></div><div class="track"><i style="width:5.5%;background:#c76a6a"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#9a6fc4"></span>(未知目录)</span><span class="dots"></span><span class="v">4.3% / 1.47 亿</span></div><div class="track"><i style="width:4.3%;background:#9a6fc4"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c9503f"></span>host/pi-observer</span><span class="dots"></span><span class="v">22.2% / 7.60 亿</span></div><div class="track"><i style="width:22.2%;background:#c9503f"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#5f7a92"></span>host/ATracker</span><span class="dots"></span><span class="v">13.1% / 4.48 亿</span></div><div class="track"><i style="width:13.1%;background:#5f7a92"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4f9e5c"></span>host/nut-md</span><span class="dots"></span><span class="v">8.8% / 3.00 亿</span></div><div class="track"><i style="width:8.8%;background:#4f9e5c"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#7a8a9e"></span>ai-host/pi-chat-box</span><span class="dots"></span><span class="v">5.5% / 1.90 亿</span></div><div class="track"><i style="width:5.5%;background:#7a8a9e"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4a7fc9"></span>(未知目录)</span><span class="dots"></span><span class="v">4.3% / 1.47 亿</span></div><div class="track"><i style="width:4.3%;background:#4a7fc9"></i></div></div>
       </div>
     </div>
 
@@ -362,53 +363,57 @@
         <button class="ghost">NEXT</button>
         <button class="ghost">本月</button>
         <span class="scope2">点一天选中，再点另一天成区间</span>
-        <span class="tip">灰格 = 没有用量</span>
+        <span class="tip">色块 = 目录；区间外的日子不画色条</span>
       </div>
       <div class="wk">
         <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
       </div>
       <div class="cal">
-        <div class="cell out"></div><div class="cell out"></div><div class="cell out"></div>
-
-        <div class="cell"><span class="d">1</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">2</span><span class="v">6708.7 万</span><span class="bar"><i style="width:13%"></i></span></div>
-        <div class="cell"><span class="d">3</span><span class="v">884.6 万</span><span class="bar"><i style="width:1.7%"></i></span></div>
-        <div class="cell"><span class="d">4</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">5</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">6</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">7</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-
-        <div class="cell"><span class="d">8</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">9</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">10</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">11</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">12</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">13</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-        <div class="cell"><span class="d">14</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
-
-        <div class="cell"><span class="d">15</span><span class="v">7.2 万</span><span class="bar"><i style="width:0.1%"></i></span></div>
-        <div class="cell"><span class="d">16</span><span class="v">85.7 万</span><span class="bar"><i style="width:0.2%"></i></span></div>
-        <div class="cell"><span class="d">17</span><span class="v">4264.2 万</span><span class="bar"><i style="width:8.4%"></i></span></div>
-        <div class="cell"><span class="d">18</span><span class="v">852.7 万</span><span class="bar"><i style="width:1.7%"></i></span></div>
-        <div class="cell inrange sel"><span class="d">19</span><span class="v">2.52 亿</span><span class="bar"><i style="width:50%"></i></span></div>
-        <div class="cell inrange"><span class="d">20</span><span class="v">2.55 亿</span><span class="bar"><i style="width:50.4%"></i></span></div>
-        <div class="cell inrange"><span class="d">21</span><span class="v">4.20 亿</span><span class="bar"><i style="width:83.2%"></i></span></div>
-
-        <div class="cell inrange"><span class="d">22</span><span class="v">1.98 亿</span><span class="bar"><i style="width:39.2%"></i></span></div>
-        <div class="cell inrange sel"><span class="d">23</span><span class="v">2.50 亿</span><span class="bar"><i style="width:49.4%"></i></span></div>
-        <div class="cell"><span class="d">24</span><span class="v">449.2 万</span><span class="bar"><i style="width:0.9%"></i></span></div>
-        <div class="cell"><span class="d">25</span><span class="v">5014.1 万</span><span class="bar"><i style="width:9.9%"></i></span></div>
-        <div class="cell"><span class="d">26</span><span class="v">5908.8 万</span><span class="bar"><i style="width:11.7%"></i></span></div>
-        <div class="cell"><span class="d">27</span><span class="v">8527.6 万</span><span class="bar"><i style="width:16.9%"></i></span></div>
-        <div class="cell"><span class="d">28</span><span class="v">1.26 亿</span><span class="bar"><i style="width:24.9%"></i></span></div>
-
-        <div class="cell"><span class="d">29</span><span class="v">3.51 亿</span><span class="bar"><i style="width:69.5%"></i></span></div>
-        <div class="cell"><span class="d">30</span><span class="v">5.05 亿</span><span class="bar"><i style="width:100%"></i></span></div>
-        <div class="cell"><span class="d">31</span><span class="v">2.22 亿</span><span class="bar"><i style="width:43.9%"></i></span></div>
-        <div class="cell out"></div><div class="cell out"></div><div class="cell out"></div><div class="cell out"></div>
+        <div class="cell out"></div>
+        <div class="cell out"></div>
+        <div class="cell out"></div>
+        <div class="cell"><span class="d">1</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">2</span><span class="v">6708.7 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">3</span><span class="v">884.6 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">4</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">5</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">6</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">7</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">8</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">9</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">10</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">11</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">12</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">13</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">14</span><span class="v">--</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">15</span><span class="v">7.2 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">16</span><span class="v">85.7 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">17</span><span class="v">4264.2 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">18</span><span class="v">852.7 万</span><span class="bar"></span></div>
+        <div class="cell inrange sel"><span class="d">19</span><span class="v">2.52 亿</span><span class="bar"><i style="width:0.48%;background:#6f9f46" title="my-git 0.5%"></i><i style="width:99.51%;background:#c9503f" title="pi-observer 99.5%"></i></span></div>
+        <div class="cell inrange"><span class="d">20</span><span class="v">2.55 亿</span><span class="bar"><i style="width:13.37%;background:#5f7a92" title="ATracker 13.4%"></i><i style="width:79.97%;background:#c9503f" title="pi-observer 80.0%"></i><i style="width:6.66%;background:var(--t4)" title="其他 6.7%"></i></span></div>
+        <div class="cell inrange"><span class="d">21</span><span class="v">4.20 亿</span><span class="bar"><i style="width:79.77%;background:#5f7a92" title="ATracker 79.8%"></i><i style="width:13.54%;background:#6a63cc" title="v3 13.5%"></i><i style="width:4.05%;background:#8a9e3f" title="blog 4.0%"></i><i style="width:0.85%;background:#c9503f" title="pi-observer 0.9%"></i><i style="width:1.79%;background:var(--t4)" title="其他 1.8%"></i></span></div>
+        <div class="cell inrange"><span class="d">22</span><span class="v">1.98 亿</span><span class="bar"><i style="width:71.04%;background:#4a7fc9" title="(未知目录) 71.0%"></i><i style="width:7.35%;background:#5f7a92" title="ATracker 7.3%"></i><i style="width:0.00%;background:#8a9e3f" title="blog 0.0%"></i><i style="width:21.37%;background:#c9503f" title="pi-observer 21.4%"></i></span></div>
+        <div class="cell inrange sel"><span class="d">23</span><span class="v">2.50 亿</span><span class="bar"><i style="width:0.23%;background:#4a7fc9" title="(未知目录) 0.2%"></i><i style="width:15.84%;background:#6f9f46" title="my-git 15.8%"></i><i style="width:83.92%;background:#c9503f" title="pi-observer 83.9%"></i></span></div>
+        <div class="cell"><span class="d">24</span><span class="v">449.2 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">25</span><span class="v">5014.1 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">26</span><span class="v">5908.8 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">27</span><span class="v">8527.6 万</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">28</span><span class="v">1.26 亿</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">29</span><span class="v">3.51 亿</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">30</span><span class="v">5.05 亿</span><span class="bar"></span></div>
+        <div class="cell"><span class="d">31</span><span class="v">2.27 亿</span><span class="bar"></span></div>
+        <div class="cell out"></div>
       </div>
       <div class="legend">
-        <span class="lg"><span class="sw" style="background:var(--t3)"></span>当天用量<span class="n">条形按当月最高一天折算</span></span>
+        <span class="cap">当前范围前 6 名</span>
+        <span class="lg"><span class="sw" style="background:#c9503f"></span>host/pi-observer<span class="n">7.10 亿</span></span>
+        <span class="lg"><span class="sw" style="background:#5f7a92"></span>host/ATracker<span class="n">3.84 亿</span></span>
+        <span class="lg"><span class="sw" style="background:#4a7fc9"></span>(未知目录)<span class="n">1.41 亿</span></span>
+        <span class="lg"><span class="sw" style="background:#6a63cc"></span>design/v3<span class="n">5691.0 万</span></span>
+        <span class="lg"><span class="sw" style="background:#6f9f46"></span>host/my-git<span class="n">4073.5 万</span></span>
+        <span class="lg"><span class="sw" style="background:#8a9e3f"></span>host/blog<span class="n">1700.8 万</span></span>
+        <span class="lg"><span class="sw" style="background:var(--t4)"></span>其他 7 个目录<span class="n">2498.2 万</span></span>
       </div>
     </div>
 
@@ -476,11 +481,12 @@
     <div class="sec">
       <div class="sec-h"><b>目录用量</b><span>点一行查看该目录的会话</span></div>
       <div class="bars">
-        <div class="row"><div class="top"><span><span class="dot" style="background:#4a7fc9"></span>host/pi-observer</span><span class="dots"></span><span class="v">51.6% / 7.10 亿</span></div><div class="track"><i style="width:51.6%;background:#4a7fc9"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#4aa38a"></span>host/ATracker</span><span class="dots"></span><span class="v">27.9% / 3.84 亿</span></div><div class="track"><i style="width:27.9%;background:#4aa38a"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#9a6fc4"></span>(未知目录)</span><span class="dots"></span><span class="v">10.3% / 1.41 亿</span></div><div class="track"><i style="width:10.3%;background:#9a6fc4"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#c08a3e"></span>design/v3</span><span class="dots"></span><span class="v">4.1% / 5691.0 万</span></div><div class="track"><i style="width:4.1%;background:#c08a3e"></i></div></div>
-        <div class="row"><div class="top"><span><span class="dot" style="background:#c76a6a"></span>host/my-git</span><span class="dots"></span><span class="v">3.0% / 4073.5 万</span></div><div class="track"><i style="width:3%;background:#c76a6a"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c9503f"></span>host/pi-observer</span><span class="dots"></span><span class="v">51.6% / 7.10 亿</span></div><div class="track"><i style="width:51.6%;background:#c9503f"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#5f7a92"></span>host/ATracker</span><span class="dots"></span><span class="v">27.9% / 3.84 亿</span></div><div class="track"><i style="width:27.9%;background:#5f7a92"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4a7fc9"></span>(未知目录)</span><span class="dots"></span><span class="v">10.3% / 1.41 亿</span></div><div class="track"><i style="width:10.3%;background:#4a7fc9"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#6a63cc"></span>design/v3</span><span class="dots"></span><span class="v">4.1% / 5691.0 万</span></div><div class="track"><i style="width:4.1%;background:#6a63cc"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#6f9f46"></span>host/my-git</span><span class="dots"></span><span class="v">3.0% / 4073.5 万</span></div><div class="track"><i style="width:3%;background:#6f9f46"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#8a9e3f"></span>host/blog</span><span class="dots"></span><span class="v">1.2% / 1700.8 万</span></div><div class="track"><i style="width:1.2%;background:#8a9e3f"></i></div></div>
       </div>
     </div>
 
