@@ -427,6 +427,10 @@ atracker pricing reload
 
 价格表只有价格，厂商归类在 `packages/core/src/catalog.ts` 里。两者分开的原因是：厂商信息变化比价格慢，而且厂商可以从采集器上报的 `provider` 字段直接得到，不需要查表。
 
+**自报的 provider 原样用，不拿名单去否决。** 同一个模型可以通过不同渠道拿到，渠道才是花销算在哪里的区分：`deepseek-v4.1-flash-free` 在 opencode 里自报 `opencode`，`deepseek-v4.1-flash` 经 opencode 的订阅通道走时自报 `opencode-go`，直连 DeepSeek 才是 `deepseek`。曾经代码里有个「已知厂商」名单，不在名单里的自报值会被模型名推断覆盖，这三家全被归到了 `deepseek`，页面上看不出是哪个渠道花的钱。
+
+`catalog.ts` 里的规则表只在采集器没上报 provider 时兑底（claude-code 的日志就不带厂商），按模型名推一个。推理服务商的订阅计划名（如 `minimax-cn-coding-plan`）会原样显示成厂商名。
+
 ## 4. 4.1 的 token 总量如何快速刷新
 
 ### 4.1 物化聚合表
@@ -644,7 +648,7 @@ export const cursorCollector: Collector = {
 | 东西 | 放在哪 |
 | --- | --- |
 | 价格 | `config/pricing.json` |
-| 厂商归类 | `core/src/catalog.ts` 的规则表，或者采集器上报的 provider |
+| 厂商归类 | 采集器上报的 provider 原样用；没上报才走 `core/src/catalog.ts` 的规则表 |
 | 目录配色 | `core/src/palette.ts` 的色板，按路径哈希映射 |
 | 来源配色 | 同一个文件里另一套色板，按 agent id 映射，和目录色板互不干扰 |
 | 单位档位 | `core/src/units.ts` |
@@ -657,7 +661,7 @@ export const cursorCollector: Collector = {
 | --- | --- | --- |
 | 只是价格变了 | `config/pricing.json` | 不要，跑 `atracker pricing reload` 重算 |
 | 模型名换了个版本 | `config/pricing.json` 加一条 | 不要 |
-| 新模型，推断不出厂商 | `catalog.ts` 加一条规则 | 不要 |
+| 新模型，推断不出厂商 | `catalog.ts` 加一条规则（只影响没自报 provider 的来源） | 不要 |
 | 新 agent 出现在机器上 | 新增一个采集器目录 | 要 |
 
 ### 5.6 加一个 agent 的步骤清单

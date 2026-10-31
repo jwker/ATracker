@@ -102,7 +102,8 @@ export const opencodeCollector: Collector = {
   label: 'opencode',
   // v2：改读 session_v2 / session_message 新表（旧表是迁移前的副本）
   // v3：压缩掉的旧消息按会话汇总补差
-  version: 'v4',
+  // v5：厂商改成信任自报的 provider（不再按模型名覆盖），历史行重扫一遍补上
+  version: 'v5',
   roots: () => [join(homedir(), '.local', 'share', 'opencode', 'opencode.db')],
 
   async *scan(ctx: ScanContext): AsyncGenerator<UsageEvent> {
