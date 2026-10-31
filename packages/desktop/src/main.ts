@@ -4,7 +4,7 @@
 // 跑项目里的 .ts，`node:sqlite` 也在，所以 main 进程里 import ATrackerServer
 // 就能用。窗口只是把这个本地服务当普通网页打开。
 
-import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
@@ -172,12 +172,25 @@ async function openWindow(): Promise<void> {
 
 // 单实例：两个进程同时写一个 SQLite 文件没必要，也容易互相抢写锁。
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  // 拿不到锁说明已经有一个在跑。这里要给出反馈，否则用户只会看到「双击没反应」。
+  // 主实例会在 second-instance 事件里把窗口提到前面。
+  app.whenReady().then(() => {
+    dialog.showMessageBoxSync({
+      type: 'info',
+      message: 'ATracker 已经在运行',
+      detail: '切到已经打开的那个窗口就行。',
+      buttons: ['好']
+    });
+    app.quit();
+  });
 } else {
   app.on('second-instance', () => {
     if (!win) return;
     if (win.isMinimized()) win.restore();
+    win.show();
     win.focus();
+    // macOS 上只调 win.focus() 未必能切到最前，steal 才稳
+    app.focus({ steal: true });
   });
 
   app.whenReady().then(() => {
