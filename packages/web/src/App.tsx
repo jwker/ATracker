@@ -111,18 +111,23 @@ function LoadingScreen() {
   );
 }
 
+/**
+ * 还没有任何数据时的占位。桌面版启动时会自动扫一次，命令行版可能还需要手动跑
+ * `npm run scan`，所以这里给一个「立即扫描」按钮，两种场景都能用。
+ */
 function FirstRun() {
   return (
     <>
       <div className="placeholder" style={{ margin: '18px 0', lineHeight: 2 }}>
-        本机还没有采集到用量。先在项目目录跑一次：
+        本机还没有采集到用量。扫描已经开始，数据到了这一页会自动刷新。
         <br />
-        <b>npm run scan</b>
-        <br />
-        扫完刷新这一页。扫描器只读各 agent 的本地日志，不加钩子、不改 agent 行为。
+        扫描器只读各 agent 的本地日志，不加钩子、不改 agent 行为。
       </div>
       <div className="placeholder">
-        检查各来源是否可读：<b>node packages/cli/src/index.ts doctor</b>
+        <button className="ghost" onClick={() => api.scan()}>重新扫描</button>
+        <div style={{ marginTop: 10 }}>
+          各来源是否可读：<b>node packages/cli/src/index.ts doctor</b>
+        </div>
       </div>
     </>
   );

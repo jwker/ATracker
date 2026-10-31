@@ -109,6 +109,25 @@ data/atracker.db     运行时生成
 
 这几种口径加总出来的数字看着精确到分，实际没有可比性，所以整块去掉了。token 是各 agent 自己记的，采集器只做单位归一，能复核，看板上只留这个。
 
+## 桌面应用
+
+```bash
+npm run desktop    # 直接在 Electron 里跑，开发时用仓库的 data/atracker.db
+npm run dist:mac   # 出 release/ATracker-<版本>-arm64.dmg 和 .zip
+npm run dist:win   # 出 Windows 安装包，需要在 Windows 或 CI 上跑
+```
+
+打包后的应用把数据库放在用户数据目录（macOS 是 `~/Library/Application Support/ATracker/atracker.db`），首次启动会自动扫一遍本机日志，不需要手动跑 `npm run scan`。
+
+外壳只有 `packages/desktop/src/main.ts` 一个文件：主进程里 `import ATrackerServer`，起一个只监听 `127.0.0.1`、端口随机的本地服务，再把窗口指过去。服务端代码没有为桌面版改写，也没有 IPC，所以 `npm run serve` 和桌面版跑的是同一套代码。数据目录、监听地址、端口都由 main 传入。
+
+几个注意点：
+
+- **包是未签名的。** 本机构建没配证书，第一次打开要右键 →「打开」，或者 `xattr -dr com.apple.quarantine /Applications/ATracker.app`。要正经分发就配好 Developer ID 和 `notarytool` 凭据，再跑 `npm run dist:mac`。
+- **Electron 二进制要先下载。** `npm install` 之后如果 `node_modules/electron/dist` 是空的，说明下载被墙了，用镜像补一次：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js`。
+- **打包不联网拉 Electron。** `electron-builder.yml` 里 `electronDist` 指向 `node_modules/electron/dist`，用本地这份。
+- **图标还是 Electron 默认的。** 要换就放 1024px 的 `build/icon.png`（mac 用 512 以上的 icns/png），electron-builder 会自动转。
+
 ## 采集器的版本号
 
 改了采集器的解析逻辑就把 `version` 往上加一位。游标里存的是 `agent:version`，版本对不上时这个来源的文件会自动全部重扫，不用手动清库。
