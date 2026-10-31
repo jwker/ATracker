@@ -1,5 +1,5 @@
 // 总账：全部记录。页面上只有一个作用域，没有日历、没有范围切换。
-// 想看某个月或某个区间去「月度」页，顶部那行说明会指路。
+// 想看某个月或某个区间，去「月度」页。
 
 import type { AggregatePayload, MatrixPayload, TotalPayload } from '../types.ts';
 import type { Unit } from '../state.ts';
@@ -32,7 +32,6 @@ export function LedgerView(props: LedgerViewProps) {
         <span className="v">
           {total.firstDay ? `覆盖 ${total.days} 天 · ${total.firstDay} → ${total.lastDay}` : '还没有记录'}
         </span>
-        <span className="hint">看某个月或某个区间，去「月度」</span>
       </div>
 
       <div className="total-line">

@@ -61,7 +61,6 @@ export function Header(props: HeaderProps) {
           {props.theme === 'light' ? '夜间小票' : '日间小票'}
         </button>
       </div>
-      <div className="tear">TEAR ALONG DOTTED LINE</div>
     </>
   );
 }
