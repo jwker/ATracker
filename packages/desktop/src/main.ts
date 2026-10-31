@@ -5,7 +5,8 @@
 // 就能用。窗口只是把这个本地服务当普通网页打开。
 
 import { app, BrowserWindow, dialog, Menu, screen, shell, type MenuItemConstructorOptions } from 'electron';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
@@ -83,6 +84,48 @@ function saveWindowState(bounds: Electron.Rectangle): void {
   } catch {
     // 写不了就算了，下次用默认值
   }
+}
+
+/** 读某个 .app 的版本号，读不到就给 null。 */
+function bundleVersion(appPath: string): string | null {
+  try {
+    return execFileSync(
+      'plutil',
+      ['-extract', 'CFBundleShortVersionString', 'raw', '-o', '-', join(appPath, 'Contents', 'Info.plist')],
+      { encoding: 'utf8' }
+    ).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * macOS 没有「安装登记」，复制一份 .app 就是第二份，系统层面挡不住。
+ * 能做的是：启动时发现「应用程序」里已经有一份、而自己是从别处跑的，就把情况
+ * 说清楚，让用户知道该留哪一份。不自动替换，避免把用户装的那份悄悄覆盖掉。
+ */
+function warnIfDuplicateInstall(): void {
+  if (!app.isPackaged) return;
+  if (process.env.ATRACKER_NO_DUPLICATE_PROMPT) return;
+  if (app.isInApplicationsFolder()) return;
+
+  const installed = '/Applications/ATracker.app';
+  if (!existsSync(installed)) return;
+
+  const mine = app.getPath('exe').replace(/\/Contents\/MacOS\/ATracker$/, '');
+  const mineVersion = bundleVersion(mine) ?? '未知版本';
+  const installedVersion = bundleVersion(installed) ?? '未知版本';
+  console.log(`发现另一份安装在 ${installed}（${installedVersion}），当前是 ${mine}（${mineVersion}）`);
+
+  dialog.showMessageBox({
+    type: 'info',
+    message: '「应用程序」里已经装了一份 ATracker',
+    detail:
+      `正在运行的是 ${mine}（${mineVersion}）。\n` +
+      `「应用程序」里那份是 ${installedVersion}。\n\n` +
+      '平时用「应用程序」里的那份就行，这份可以直接删掉。',
+    buttons: ['好']
+  });
 }
 
 /**
@@ -210,7 +253,6 @@ async function openWindow(): Promise<void> {
     }
   });
 
-  win.once('ready-to-show', () => win?.show());
   win.on('close', () => {
     if (win) saveWindowState(win.getBounds());
   });
@@ -222,6 +264,10 @@ async function openWindow(): Promise<void> {
     return { action: 'deny' };
   });
 
+  win.once('ready-to-show', () => {
+    win?.show();
+    warnIfDuplicateInstall();
+  });
   win.webContents.on('did-finish-load', () => {
     console.log(`窗口已加载 ${addr.url}`);
   });
