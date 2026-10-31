@@ -71,6 +71,12 @@ export class Repo {
       `UPDATE scan_batch SET finished_at=?, files_total=?, files_scanned=?, events_read=?, events_written=?, errors=?
        WHERE id=?`
     ).run(patch.finishedAt, patch.filesTotal, patch.filesScanned, patch.eventsRead, patch.eventsWritten, patch.errors, id);
+
+    // 批次表只留 30 天、最多 5000 行。日志页只用最近几十条，日详情按天聚合，
+    // 更早的批次已经没人读，但每 2 秒一次的监听扫描会把它撑成几十万行。
+    this.db.prepare(
+      `DELETE FROM scan_batch WHERE started_at < ? OR id < (SELECT MAX(id) - 5000 FROM scan_batch)`
+    ).run(Date.now() - 30 * 86400000);
   }
 
   log(batchId: number, at: number, level: LogLevel, source: string, message: string): void {

@@ -114,8 +114,9 @@ export class ATrackerServer {
   }
 
   private scheduleScan(): void {
+    // 只重置去抖窗口。兜底轮询不能在这里清掉：清了没有地方重新 setInterval，
+    // 5 分钟轮询会在第一次文件变化之后永久失效。
     if (this.scanTimer) clearTimeout(this.scanTimer);
-    if (this.pollTimer) clearInterval(this.pollTimer);
     this.scanTimer = setTimeout(() => { void this.triggerScan('watch'); }, this.opts.debounceMs);
   }
 
