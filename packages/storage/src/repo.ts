@@ -11,10 +11,11 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 export interface StoredEvent {
   eventId: string;
+  device: string;
   agent: string;
   sessionId: string;
   parentSessionId: string | null;
@@ -88,7 +89,26 @@ export class Repo {
       this.rebuildAggregates([]);
     }
 
+    // 3：加设备维度。明细表补 device 列，聚合表主键带上 device 后重建，
+    // 历史行统一归到本机（本机 id 在 open 之后由服务器/CLI 调 markLocalDevice 写入）。
+    if (from < 3) {
+      this.ensureDeviceColumn('usage_event');
+      this.ensureDeviceColumn('session_title');
+      for (const table of ['agg_day_agent', 'agg_day_dir', 'agg_day_model', 'agg_day_agent_model']) {
+        this.db.exec(`DROP TABLE IF EXISTS ${table};`);
+      }
+      this.db.exec(readFileSync(this.schemaPath, 'utf8'));
+      this.rebuildAggregates([]);
+    }
+
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  }
+
+  /** 给老表补 device 列。SQLite 没有 ADD COLUMN IF NOT EXISTS，先查一下。 */
+  private ensureDeviceColumn(table: string): void {
+    const cols = (this.db.prepare(`PRAGMA table_info(${table})`).all() as any[]).map(c => c.name);
+    if (cols.includes('device')) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN device TEXT NOT NULL DEFAULT '';`);
   }
 
   /** 删列。SQLite 没有 IF EXISTS 写法，先查列在不在（新库本来就没有这些列）。 */
@@ -148,6 +168,33 @@ export class Repo {
     return this.db.prepare(sql).all(...args);
   }
 
+  /* ---------- 设备 ---------- */
+
+  /** 记录/更新一台设备。本机每次启动、每次扫描都会调一次，用来刷新 last_seen。 */
+  touchDevice(d: { id: string; name: string; platform: string }, seenAt = Date.now()): void {
+    this.db.prepare(
+      `INSERT INTO device (id, name, platform, created_at, last_seen)
+       VALUES (?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET name=excluded.name, platform=excluded.platform, last_seen=excluded.last_seen`
+    ).run(d.id, d.name, d.platform, seenAt, seenAt);
+  }
+
+  devices(): any[] {
+    return this.db.prepare('SELECT * FROM device ORDER BY last_seen DESC').all() as any[];
+  }
+
+  /**
+   * 把还没有归属的历史行认领给本机：升级前写进去的行 device 是空串。
+   * 只在本机第一次运行时有效，重复调用是幂等的。
+   */
+  claimUnassigned(deviceId: string): number {
+    const events = this.db.prepare("UPDATE usage_event SET device = ? WHERE device = ''").run(deviceId);
+    const sessions = this.db.prepare("UPDATE session_title SET device = ? WHERE device = ''").run(deviceId);
+    const count = Number(events.changes ?? 0) + Number(sessions.changes ?? 0);
+    if (events.changes) this.rebuildAggregates([]);
+    return count;
+  }
+
   /* ---------- 目录配色 ---------- */
 
   dirColors(): Map<string, string> {
@@ -173,11 +220,11 @@ export class Repo {
 
   /* ---------- 会话元信息 ---------- */
 
-  upsertSessions(rows: { agent: string; sessionId: string; title: string | null; cwd: string | null; firstTs: number | null; lastTs: number | null }[]): void {
+  upsertSessions(rows: { device: string; agent: string; sessionId: string; title: string | null; cwd: string | null; firstTs: number | null; lastTs: number | null }[]): void {
     if (!rows.length) return;
     const stmt = this.db.prepare(
-      `INSERT INTO session_title (agent, session_id, title, cwd, first_ts, last_ts, updated_at)
-       VALUES (?,?,?,?,?,?,?)
+      `INSERT INTO session_title (device, agent, session_id, title, cwd, first_ts, last_ts, updated_at)
+       VALUES (?,?,?,?,?,?,?,?)
        ON CONFLICT(agent, session_id) DO UPDATE SET
          title=COALESCE(excluded.title, session_title.title),
          cwd=COALESCE(excluded.cwd, session_title.cwd),
@@ -189,7 +236,7 @@ export class Repo {
     this.db.exec('BEGIN');
     try {
       for (const r of rows) {
-        stmt.run(r.agent, r.sessionId, r.title, r.cwd, r.firstTs, r.lastTs, now);
+        stmt.run(r.device, r.agent, r.sessionId, r.title, r.cwd, r.firstTs, r.lastTs, now);
       }
       this.db.exec('COMMIT');
     } catch (err) {
@@ -237,12 +284,12 @@ export class Repo {
   upsertEvents(events: StoredEvent[]): number {
     const stmt = this.db.prepare(
       `INSERT INTO usage_event
-        (event_id, agent, session_id, parent_session_id, is_child, ts, local_day, local_month, cwd, model, provider,
+        (event_id, device, agent, session_id, parent_session_id, is_child, ts, local_day, local_month, cwd, model, provider,
          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
          thinking_level)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(event_id) DO UPDATE SET
-         session_id=excluded.session_id, parent_session_id=excluded.parent_session_id, is_child=excluded.is_child,
+         device=excluded.device, session_id=excluded.session_id, parent_session_id=excluded.parent_session_id, is_child=excluded.is_child,
          ts=excluded.ts, local_day=excluded.local_day, local_month=excluded.local_month, cwd=excluded.cwd,
          model=excluded.model, provider=excluded.provider,
          input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
@@ -254,7 +301,7 @@ export class Repo {
     try {
       for (const e of events) {
         stmt.run(
-          e.eventId, e.agent, e.sessionId, e.parentSessionId, e.isChild ? 1 : 0, e.ts, e.localDay, e.localMonth,
+          e.eventId, e.device, e.agent, e.sessionId, e.parentSessionId, e.isChild ? 1 : 0, e.ts, e.localDay, e.localMonth,
           e.cwd, e.model, e.provider,
           e.input, e.output, e.cacheRead, e.cacheWrite, e.reasoning, e.thinkingLevel
         );
@@ -287,19 +334,19 @@ export class Repo {
         this.db.prepare('DELETE FROM agg_day_agent_model WHERE day = ?').run(day);
 
         this.db.prepare(
-          `INSERT INTO agg_day_agent (day, agent, ${COLS}) SELECT local_day AS day, agent, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, agent`
+          `INSERT INTO agg_day_agent (day, device, agent, ${COLS}) SELECT local_day AS day, device, agent, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, device, agent`
         ).run(day);
 
         this.db.prepare(
-          `INSERT INTO agg_day_dir (day, dir, ${COLS}) SELECT local_day AS day, cwd, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, cwd`
+          `INSERT INTO agg_day_dir (day, device, dir, ${COLS}) SELECT local_day AS day, device, cwd, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, device, cwd`
         ).run(day);
 
         this.db.prepare(
-          `INSERT INTO agg_day_model (day, model, vendor, ${COLS}) SELECT local_day AS day, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, model, vendor`
+          `INSERT INTO agg_day_model (day, device, model, vendor, ${COLS}) SELECT local_day AS day, device, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, device, model, vendor`
         ).run(day);
 
         this.db.prepare(
-          `INSERT INTO agg_day_agent_model (day, agent, model, vendor, ${COLS}) SELECT local_day AS day, agent, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, agent, model, vendor`
+          `INSERT INTO agg_day_agent_model (day, device, agent, model, vendor, ${COLS}) SELECT local_day AS day, device, agent, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, device, agent, model, vendor`
         ).run(day);
       }
       this.refreshTotal();

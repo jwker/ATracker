@@ -182,6 +182,28 @@ export interface LogsPayload {
   logs: ScanLog[];
 }
 
+/* ---------- 设备 ---------- */
+
+export interface DeviceInfo {
+  id: string;
+  name: string;
+  platform: string;
+}
+
+export interface DeviceRow extends DeviceInfo {
+  created_at: number;
+  last_seen: number | null;
+}
+
+export interface DevicesPayload {
+  /** 本机身份 */
+  local: DeviceInfo;
+  /** 身份文件位置，界面上提示用 */
+  file: string;
+  /** 库里出现过的设备，含本机和同步进来的远端设备 */
+  devices: DeviceRow[];
+}
+
 export interface DoctorSource {
   id: string;
   label: string;

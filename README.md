@@ -147,6 +147,22 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 - **菜单**：应用菜单、文件（重新扫描 ⌘R、打开数据目录）、编辑、视图（重新加载页面 ⇧⌘R、开发者工具）、窗口，都是中文。
 - **重复副本**：macOS 没有安装登记，复制一份 `.app` 就是第二份，系统层面挡不住「装第二次」。能挡的是同时运行：Info.plist 里带 `LSMultipleInstancesProhibited`（第二份会由系统拒绝启动），应用内还有单实例锁兜底。另外，如果从 `/Applications` 以外的地方启动而 `/Applications` 里已经有一份，会弹提示告诉你两份的路径和版本。
 
+## 设备标识
+
+一台机器一个 id，存在 `~/.atracker/device.json`（首次运行自动生成，名字默认取主机名，可以直接改文件里的 `name`）：
+
+```json
+{ "id": "4179855c-…", "name": "jiangjiangdeMacBook-Pro", "platform": "darwin" }
+```
+
+命令行和桌面版共用这一份——两者的数据库不同（`data/atracker.db` 和 `~/Library/Application Support/ATracker/atracker.db`），但设备是同一台，身份不该跟着库走。
+
+库里每个维度都带 `device`：`usage_event.device` 记这一行是哪台机器产生的，四张 `agg_day_*` 的主键都变成 `(day, device, …)`。升级时历史行会被自动认领给本机，不用手动迁移。
+
+`GET /api/devices` 返回本机身份、身份文件路径，以及库里出现过的设备列表。日志页的诊断区会显示本机设备名和 id 前 8 位。
+
+`ATRACKER_DEVICE_FILE` 可以指定身份文件位置（测试用）。多设备同步还没做，见 `doc/PLAN.md`。
+
 ## 采集器的版本号
 
 改了采集器的解析逻辑就把 `version` 往上加一位。游标里存的是 `agent:version`，版本对不上时这个来源的文件会自动全部重扫，不用手动清库。

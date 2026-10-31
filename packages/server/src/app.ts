@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
+import { deviceFilePath, loadDevice, type DeviceInfo } from '../../core/src/device.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
   dayPayload, logPayload, matrixPayload, totalPayload
@@ -34,6 +35,7 @@ interface Client {
 
 export class ATrackerServer {
   private repo: Repo;
+  private device: DeviceInfo;
   private opts: Required<Pick<ServerOptions, 'port' | 'host' | 'watch' | 'debounceMs' | 'pollMs'>>;
   private pollTimer: NodeJS.Timeout | null = null;
   private clients = new Set<Client>();
@@ -46,6 +48,10 @@ export class ATrackerServer {
 
   constructor(opts: ServerOptions) {
     this.repo = new Repo(opts.dbPath);
+    // 本机身份：记进 device 表，顺手把升级前没有归属的历史行认领给本机。
+    this.device = loadDevice();
+    this.repo.touchDevice(this.device);
+    this.repo.claimUnassigned(this.device.id);
     this.opts = {
       // 端口 0 表示让系统分配一个空闲端口，桌面版用它避让已占用的端口。
       port: opts.port ?? 4178,
@@ -130,7 +136,7 @@ export class ATrackerServer {
     this.scanning = true;
     const t0 = Date.now();
     try {
-      const summary = await runScan(this.repo, { trigger });
+      const summary = await runScan(this.repo, { trigger, device: this.device });
       this.broadcast('scan_done', {
         batch: summary.batchId,
         eventsWritten: summary.eventsWritten,
@@ -244,6 +250,13 @@ export class ATrackerServer {
         }));
       }
       if (p === '/api/scan/batches') return json({ batches: this.repo.recentBatches(50) });
+      if (p === '/api/devices') {
+        return json({
+          local: this.device,
+          file: deviceFilePath(),
+          devices: this.repo.devices()
+        });
+      }
       if (p === '/api/doctor') {
         return json({
           sources: COLLECTORS.map(c => {

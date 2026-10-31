@@ -5,9 +5,20 @@ PRAGMA foreign_keys = ON;
 -- 服务和 CLI 可能同时写库。拿不到写锁时等 5 秒再报错，不要一碰就失败。
 PRAGMA busy_timeout = 5000;
 
+-- 设备。一台机器一行，id 来自 ~/.atracker/device.json；
+-- 远端设备（同步进来的）也会出现在这里，用 last_seen 表示最后一次写入时间。
+CREATE TABLE IF NOT EXISTS device (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  platform   TEXT,
+  created_at INTEGER NOT NULL,
+  last_seen  INTEGER
+);
+
 -- 用量明细。只追加，修正靠同一个 event_id 覆盖。
 CREATE TABLE IF NOT EXISTS usage_event (
   event_id         TEXT PRIMARY KEY,
+  device           TEXT NOT NULL,
   agent            TEXT NOT NULL,
   session_id       TEXT NOT NULL,
   parent_session_id TEXT,
@@ -52,6 +63,7 @@ CREATE TABLE IF NOT EXISTS dir_color (
 
 -- 会话元信息。标题各来源都有，字段位置不同。
 CREATE TABLE IF NOT EXISTS session_title (
+  device     TEXT NOT NULL DEFAULT '',
   agent      TEXT NOT NULL,
   session_id TEXT NOT NULL,
   title      TEXT,
@@ -93,28 +105,28 @@ CREATE INDEX IF NOT EXISTS idx_scan_log_at    ON scan_log(at DESC);
 -- 物化聚合。查询这些表，不扫明细。
 -- 模型按「厂商 + 模型名」区分：同名模型在不同厂商下是两条记录。
 CREATE TABLE IF NOT EXISTS agg_day_agent (
-  day TEXT NOT NULL, agent TEXT NOT NULL,
+  day TEXT NOT NULL, device TEXT NOT NULL DEFAULT '', agent TEXT NOT NULL,
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER,
-  PRIMARY KEY (day, agent)
+  PRIMARY KEY (day, device, agent)
 );
 CREATE TABLE IF NOT EXISTS agg_day_dir (
-  day TEXT NOT NULL, dir TEXT NOT NULL,
+  day TEXT NOT NULL, device TEXT NOT NULL DEFAULT '', dir TEXT NOT NULL,
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER,
-  PRIMARY KEY (day, dir)
+  PRIMARY KEY (day, device, dir)
 );
 CREATE TABLE IF NOT EXISTS agg_day_model (
-  day TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
+  day TEXT NOT NULL, device TEXT NOT NULL DEFAULT '', model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER,
-  PRIMARY KEY (day, model, vendor)
+  PRIMARY KEY (day, device, model, vendor)
 );
 CREATE TABLE IF NOT EXISTS agg_day_agent_model (
-  day TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
+  day TEXT NOT NULL, device TEXT NOT NULL DEFAULT '', agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER,
-  PRIMARY KEY (day, agent, model, vendor)
+  PRIMARY KEY (day, device, agent, model, vendor)
 );
 
 -- 累计一行。

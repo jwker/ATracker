@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { DoctorPayload, LogsPayload } from '../types.ts';
+import type { DevicesPayload, DoctorPayload, LogsPayload } from '../types.ts';
 import type { LogFilter } from '../state.ts';
 import { fmtTime, full } from '../format.ts';
 
 interface LogsViewProps {
   logs: LogsPayload;
   doctor: DoctorPayload | null;
+  devices: DevicesPayload | null;
   filter: LogFilter;
   onFilter: (patch: Partial<LogFilter>) => void;
   onClear: () => void;
@@ -173,6 +174,17 @@ export function LogsView(props: LogsViewProps) {
               <b>{x.name}</b> {x.text}
             </span>
           ))}
+        </div>
+        <div className="diag" style={{ marginTop: 6 }}>
+          <span>
+            <b>设备</b> {props.devices?.local.name ?? '—'}（本机）
+          </span>
+          <span>
+            <b>设备 ID</b> {props.devices?.local.id.slice(0, 8) ?? '—'}
+          </span>
+          <span>
+            <b>库里的设备</b> {props.devices?.devices.length ?? 0} 台
+          </span>
         </div>
       </div>
 
