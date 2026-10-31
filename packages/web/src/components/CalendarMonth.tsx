@@ -21,6 +21,8 @@ interface CalendarMonthProps {
   /** 当前范围的目录汇总，用来给色条配色和生成图例 */
   dirs: DirAggregate[];
   total: number;
+  /** 数据还在路上：图例先收起，格子里的数值按空处理 */
+  stale?: boolean;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onThisMonth: () => void;
@@ -28,7 +30,7 @@ interface CalendarMonthProps {
 }
 
 export function CalendarMonth(props: CalendarMonthProps) {
-  const { cal, month, sel, unit, dirs, total } = props;
+  const { cal, month, sel, unit, dirs, total, stale } = props;
   const tok = (n: number) => fmtTok(n, unit);
   const meta = monthMeta(month);
 
@@ -60,7 +62,7 @@ export function CalendarMonth(props: CalendarMonthProps) {
         <span>
           {meta.y} 年 {meta.m} 月 / {meta.dim} 天
         </span>
-        <span className="r">{cal.days.length} 天有用量</span>
+        <span className="r">{stale ? '正在更新…' : `${cal.days.length} 天有用量`}</span>
       </div>
       <div className="cal-tools">
         <button className="ghost" onClick={props.onPrevMonth}>PREV</button>
@@ -70,7 +72,9 @@ export function CalendarMonth(props: CalendarMonthProps) {
         <span className="tip">色块 = 目录；区间外的日子不画色条</span>
       </div>
       <div className="legend">
-        <span className="legend-cap">当前范围前 {TOP_DIRS} 名</span>
+        <span className="legend-cap">
+          {stale ? '正在更新…' : `当前范围前 ${TOP_DIRS} 名`}
+        </span>
         {topDirs.map(d => (
           <span className="lg" key={d.path}>
             <span className="sw" style={{ background: d.color }} />

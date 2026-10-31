@@ -12,12 +12,15 @@ import { ScopeTag } from '../components/ScopeTag.tsx';
 import { fmtPct, fmtTok } from '../format.ts';
 
 interface MonthViewProps {
-  cal: CalendarPayload;
+  /** 换月时可能还是上个月的数据，交给下面按 month 判断 */
+  cal: CalendarPayload | null;
   agg: AggregatePayload;
   matrix: MatrixPayload;
   month: string;
   sel: Selection | null;
   unit: Unit;
+  /** 数据落后于 URL，正文在刷新中。日历先画空格子，避免把上个月的数字挂在新的日期上 */
+  stale: boolean;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onThisMonth: () => void;
@@ -29,7 +32,7 @@ interface MonthViewProps {
 }
 
 export function MonthView(props: MonthViewProps) {
-  const { cal, agg, matrix, month, sel, unit } = props;
+  const { cal, agg, matrix, month, sel, unit, stale } = props;
   const tok = (n: number) => fmtTok(n, unit);
 
   const b = agg.buckets;
@@ -71,7 +74,8 @@ export function MonthView(props: MonthViewProps) {
 
       <div className="sec">
         <CalendarMonth
-          cal={cal}
+          cal={cal && cal.month === month ? cal : { month, days: [], dirs: [] }}
+          stale={stale}
           month={month}
           sel={sel}
           unit={unit}

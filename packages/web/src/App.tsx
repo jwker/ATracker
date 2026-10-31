@@ -102,32 +102,18 @@ function initialTheme(): Theme {
   return 'light';
 }
 
+/** 占位只替换正文，页头和导航一直在，避免整张小票闪一下。 */
 function LoadingScreen() {
   return (
-    <div className="receipt">
-      <div className="rhead">
-        <div className="name">ATRACKER</div>
-        <div className="sub">LOCAL TOKEN RECEIPT</div>
-      </div>
-      <div className="placeholder" style={{ padding: 40 }}>
-        正在读取本机数据…
-      </div>
+    <div className="placeholder" style={{ padding: 40 }}>
+      正在读取本机数据…
     </div>
   );
 }
 
 function FirstRun() {
   return (
-    <div className="receipt">
-      <div className="rhead">
-        <div className="name">ATRACKER</div>
-        <div className="sub">LOCAL TOKEN RECEIPT</div>
-      </div>
-      <div className="rno">
-        <span>NO. 00000000</span>
-        <span>还没有数据</span>
-        <span>TERMINAL 01</span>
-      </div>
+    <>
       <div className="placeholder" style={{ margin: '18px 0', lineHeight: 2 }}>
         本机还没有采集到用量。先在项目目录跑一次：
         <br />
@@ -138,19 +124,14 @@ function FirstRun() {
       <div className="placeholder">
         检查各来源是否可读：<b>node packages/cli/src/index.ts doctor</b>
       </div>
-    </div>
+    </>
   );
 }
 
 function ErrorScreen({ message }: { message: string }) {
   return (
-    <div className="receipt">
-      <div className="rhead">
-        <div className="name">ATRACKER</div>
-      </div>
-      <div className="placeholder" style={{ margin: 20 }}>
-        读取失败：{message}
-      </div>
+    <div className="placeholder" style={{ margin: 20 }}>
+      读取失败：{message}
     </div>
   );
 }
@@ -244,14 +225,28 @@ export function App() {
     else navigate('/', [], { replace: true });
   }, []);
 
+  // 累计总量。只有扫描完成时才会变，不跟着选区或日期重复取。
+  useEffect(() => {
+    let alive = true;
+    api.total()
+      .then(t => {
+        if (!alive) return;
+        setTotal(t);
+        setError(null);
+      })
+      .catch(err => {
+        if (alive) setError((err as Error).message);
+      });
+    return () => { alive = false; };
+  }, [refreshToken]);
+
   // 总账：全期累计、四桶、来源 × 模型。没有日历，也没有范围切换。
   useEffect(() => {
     if (view !== 'home') return;
     let alive = true;
-    Promise.all([api.total(), api.aggregateAll(), api.matrixAll()])
-      .then(([t, a, m]) => {
+    Promise.all([api.aggregateAll(), api.matrixAll()])
+      .then(([a, m]) => {
         if (!alive) return;
-        setTotal(t);
         setAgg(a);
         setMatrix(m);
         setError(null);
@@ -262,20 +257,29 @@ export function App() {
     return () => { alive = false; };
   }, [view, refreshToken]);
 
-  // 月度：当月或选区的日历、汇总、交叉表。
+  // 月度：日历只跟月份走。改选区时不用重新取日历。
   useEffect(() => {
     if (view !== 'month') return;
     let alive = true;
-    Promise.all([
-      api.total(),
-      api.calendar(month),
-      api.aggregate(range.from, range.to),
-      api.matrix(range.from, range.to)
-    ])
-      .then(([t, c, a, m]) => {
+    api.calendar(month)
+      .then(c => {
         if (!alive) return;
-        setTotal(t);
         setCal(c);
+        setError(null);
+      })
+      .catch(err => {
+        if (alive) setError((err as Error).message);
+      });
+    return () => { alive = false; };
+  }, [view, month, refreshToken]);
+
+  // 月度：区间汇总和交叉表跟着选区走。
+  useEffect(() => {
+    if (view !== 'month') return;
+    let alive = true;
+    Promise.all([api.aggregate(range.from, range.to), api.matrix(range.from, range.to)])
+      .then(([a, m]) => {
+        if (!alive) return;
         setAgg(a);
         setMatrix(m);
         setError(null);
@@ -284,7 +288,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, month, range.from, range.to, refreshToken]);
+  }, [view, range.from, range.to, refreshToken]);
 
   // 会话列表。目录不进请求参数：一级菜单要列出所有目录，
   // 选哪个目录是前端的二级菜单状态。
@@ -485,15 +489,23 @@ export function App() {
     navigate('/logs', [], { replace: true });
   }
 
-  if (error) return <ErrorScreen message={error} />;
+  // 数据在换月、换日、改选区时会短暂落后于 URL。这时不清屏，只把正文变淡，
+  // 顶部走一条进度条；只有这个页面第一次加载才显示骨架。
+  let refreshing = false;
 
   let body: ReactNode;
-  if (view === 'home') {
+  if (error) {
+    body = <ErrorScreen message={error} />;
+  } else if (view === 'home') {
     // 全期汇总的起止要和 total 报的对上，避免刚从月度页切过来时用月度数字画一帧。
     const stale = !agg || !matrix || (total !== null && total.firstDay !== null && agg.from !== total.firstDay);
-    if (!total || stale) return <LoadingScreen />;
-    if (total.total === 0) return <FirstRun />;
-    body = (
+    if (!total || !agg || !matrix) {
+      body = <LoadingScreen />;
+    } else if (total.total === 0) {
+      body = <FirstRun />;
+    } else {
+      refreshing = stale;
+      body = (
       <LedgerView
         total={total}
         agg={agg}
@@ -503,12 +515,17 @@ export function App() {
         onOpenCell={(agent, model, vendor) =>
           navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
       />
-    );
+      );
+    }
   } else if (view === 'month') {
-    const stale = !agg || !cal || cal.month !== month || agg.from !== range.from || agg.to !== range.to;
-    if (!total || !matrix || stale) return <LoadingScreen />;
-    if (total.total === 0) return <FirstRun />;
-    body = (
+    const stale = !cal || !agg || !matrix || cal.month !== month || agg.from !== range.from || agg.to !== range.to;
+    if (!agg || !matrix) {
+      body = <LoadingScreen />;
+    } else if (total && total.total === 0) {
+      body = <FirstRun />;
+    } else {
+      refreshing = stale;
+      body = (
       <MonthView
         cal={cal}
         agg={agg}
@@ -516,6 +533,7 @@ export function App() {
         month={month}
         sel={sel}
         unit={unit}
+        stale={refreshing}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
         onThisMonth={thisMonth}
@@ -526,10 +544,14 @@ export function App() {
         onOpenCell={(agent, model, vendor) =>
           navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
       />
-    );
+      );
+    }
   } else if (view === 'today') {
-    if (!day || day.date !== dayDate) return <LoadingScreen />;
-    body = (
+    if (!day) {
+      body = <LoadingScreen />;
+    } else {
+      refreshing = day.date !== dayDate;
+      body = (
       <TodayView
         day={day}
         unit={unit}
@@ -540,10 +562,10 @@ export function App() {
           navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
         onOpenDir={dir => navigate('/conversations', [['dir', dir]])}
       />
-    );
+      );
+    }
   } else if (view === 'conv') {
-    if (!conv) return <LoadingScreen />;
-    body = (
+    body = conv ? (
       <ConversationsView
         conv={conv}
         detail={convDetail}
@@ -558,10 +580,9 @@ export function App() {
         onClear={clearConversation}
         onGoDay={openDayInCalendar}
       />
-    );
+    ) : <LoadingScreen />;
   } else {
-    if (!logs) return <LoadingScreen />;
-    body = (
+    body = logs ? (
       <LogsView
         logs={logs}
         doctor={doctor}
@@ -570,7 +591,7 @@ export function App() {
         onClear={clearLog}
         onRescan={api.scan}
       />
-    );
+    ) : <LoadingScreen />;
   }
 
   return (
@@ -583,7 +604,8 @@ export function App() {
         onUnit={setUnit}
         onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
       />
-      {body}
+      <div className="loadtrack">{refreshing && <i />}</div>
+      <div className={refreshing ? 'body is-refreshing' : 'body'}>{body}</div>
     </div>
   );
 }
