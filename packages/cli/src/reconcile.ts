@@ -2,7 +2,7 @@
 // 不是每个来源都有可靠的汇总，所以逐个来源用不同的基准，能对上的和对不上的都如实报出来。
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import type { Repo } from '../../storage/src/repo.ts';
@@ -109,10 +109,10 @@ function checkClaudeCode(repo: Repo): { matched: number; mismatched: number; act
     } else if (Date.now() - statSync(file).mtimeMs < 2 * 3600_000) {
       // 最近还在写的会话，cost-state 是写完那一刻的快照，对不上是正常的
       active++;
-      detail.push(`    会话 ${file.split('/').pop()?.slice(0, 12)}：进行中，对方 ${theirTotal.toLocaleString()}，我们 ${usageTotal.toLocaleString()}`);
+      detail.push(`    会话 ${basename(file).slice(0, 12)}：进行中，对方 ${theirTotal.toLocaleString()}，我们 ${usageTotal.toLocaleString()}`);
     } else {
       mismatched++;
-      detail.push(`    会话 ${file.split('/').pop()?.slice(0, 12)}：对方 ${theirTotal.toLocaleString()}，我们 ${usageTotal.toLocaleString()}`);
+      detail.push(`    会话 ${basename(file).slice(0, 12)}：对方 ${theirTotal.toLocaleString()}，我们 ${usageTotal.toLocaleString()}`);
     }
   }
   return { matched, mismatched, active, detail };
@@ -139,7 +139,7 @@ function checkPi(repo: Repo): { matched: number; stale: number; detail: string[]
 
   for (const file of walk(root)) {
     const meta = JSON.parse(readFileSync(file, 'utf8'));
-    const uuid = file.split('/').pop()!.replace('.meta.json', '').split('_').pop()!;
+    const uuid = basename(file).replace('.meta.json', '').split('_').pop()!;
     const sid = meta.sessionId ?? uuid;
     const theirs = (meta.tokensIn ?? 0) + (meta.tokensOut ?? 0) +
       (meta.cacheRead ?? 0) + (meta.cacheWrite ?? 0);

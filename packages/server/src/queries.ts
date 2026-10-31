@@ -1,5 +1,5 @@
 // 接口载荷。字段形状对齐 design/v3/_core.js 要的数据，前端移植时不用改结构。
-import { basename, dirname } from 'node:path';
+import { basename, dirname, posix, win32 } from 'node:path';
 import type { Repo } from '../../storage/src/repo.ts';
 import { dirColor } from '../../core/src/palette.ts';
 
@@ -35,11 +35,18 @@ export const AGENTS = [
   { id: 'dsh', label: 'dsh', color: '#9a6fc4' }
 ];
 
-/** 目录名取路径末两段，和 v3 的展示一致。 */
+/**
+ * 目录名取路径末两段，和 v3 的展示一致。
+ * 按字符串选路径解析器，不跟宿主平台：Windows 的反斜杠路径在 mac 上也要取对。
+ */
 export function dirName(path: string): string {
   if (!path) return '(未知目录)';
-  const parts = path.split('/').filter(Boolean);
-  return parts.slice(-2).join('/');
+  const p = path.includes('\\') && !path.includes('/') ? win32 : posix;
+  const last = p.basename(path);
+  if (!last) return path;
+  const parent = p.basename(p.dirname(path));
+  if (!parent || parent === last) return last;
+  return `${parent}/${last}`;
 }
 
 /**

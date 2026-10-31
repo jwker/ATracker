@@ -50,11 +50,18 @@ export interface FileCursor {
 
 export type LogLevel = 'ok' | 'info' | 'warn' | 'err';
 
+export interface RepoOptions {
+  /** schema.sql 的路径，默认取模块同目录。打包成单文件时可以从外部传。 */
+  schemaPath?: string;
+}
+
 export class Repo {
   readonly db: DatabaseSync;
+  private readonly schemaPath: string;
 
-  constructor(path: string) {
+  constructor(path: string, opts: RepoOptions = {}) {
     this.db = new DatabaseSync(path);
+    this.schemaPath = opts.schemaPath ?? join(here, 'schema.sql');
     this.migrate();
   }
 
