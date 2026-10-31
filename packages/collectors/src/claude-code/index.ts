@@ -79,7 +79,6 @@ export const claudeCodeCollector: Collector = {
             cacheWrite,
             reasoning: u.output_tokens_details?.thinking_tokens ?? 0
           },
-          reportedCostUsd: null, // Claude Code 不带成本，按价格表算
           thinkingLevel: null
         };
       }

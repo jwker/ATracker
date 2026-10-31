@@ -7,9 +7,7 @@
 ```bash
 npm install          # 安装 React/Vite 构建依赖；服务端运行时仍零依赖
 npm run scan         # 扫描本机日志，写入 data/atracker.db
-npm run stats        # 看累计用量和成本
-npm run pricing      # 看哪些模型缺价
-node packages/cli/src/index.ts pricing reload   # 改了价格表后重算成本
+npm run stats        # 看累计用量
 node packages/cli/src/index.ts doctor     # 看各来源是否可读
 node packages/cli/src/index.ts reconcile  # 拿各来源自带的汇总数据对账
 npm run serve       # 构建前端并起本地服务，默认端口 4178
@@ -22,7 +20,7 @@ Node 24 以上直接跑服务端 TypeScript，不需要构建步骤。前端是 
 | 文件 | 内容 |
 | --- | --- |
 | `doc/PRD.md` | 需求文档。显示什么、怎么算 |
-| `doc/TECH.md` | 技术设计。采集触发、价格兜底、聚合刷新、代码规则、接口 |
+| `doc/TECH.md` | 技术设计。采集触发、厂商归类、聚合刷新、代码规则、接口 |
 | `doc/PLAN.md` | 规划。各来源核实结果、里程碑、待定项 |
 | `design/v3/` | 界面设计。`02-receipt.html` 是已定的主题 |
 | `design/today/` | 当日详情页设计稿 |
@@ -58,8 +56,6 @@ packages/
   core/src/
     types.ts     UsageEvent 等公共类型
     units.ts     三种数字单位，全站只在这里换算
-    money.ts     人民币与美元，固定汇率 6.5
-    pricing.ts   价格表读取、匹配阶梯、成本计算
     catalog.ts   模型 → 厂商
     palette.ts   目录 → 颜色，颜色跟随实体不跟随排名
     time.ts      时区与日期分桶
@@ -86,7 +82,6 @@ packages/
   cli/src/
     index.ts     命令行
     reconcile.ts 对账
-config/pricing.json   手写成本表，唯一生效的定价来源
 data/atracker.db     运行时生成
 ```
 
@@ -95,12 +90,8 @@ data/atracker.db     运行时生成
 ## 加一个 agent
 
 1. 在 `packages/collectors/src/<id>/index.ts` 写采集器，实现 `Collector` 接口。
-2. 采集器只做一件事：读文件、产出 `UsageEvent`。不碰数据库、不算钱、不改格式。
-3. 注册是自动的：`scanner.ts` 扫描目录收集采集器，不用改列表。
-
-## 加一个模型
-
-改 `config/pricing.json`，然后 `npm run scan` 或者让 `pricing reload` 重算成本。不用重新采集日志。
+2. 采集器只做一件事：读文件、产出 `UsageEvent`。不碰数据库、不改格式。
+3. 在 `scanner.ts` 的 `COLLECTORS` 数组里加一行注册。
 
 ## 现在的状态
 
@@ -108,13 +99,15 @@ data/atracker.db     运行时生成
 - 接口已完成：`atracker serve` 提供只读接口、文件监听自动扫描和 SSE 推送。清单见 `doc/TECH.md` 第 6.4 节。
 - 前端已完成：React 19 + Vite 实现，保留 `design/v3/02-receipt.html`（热敏小票）的样式，总账、今日、会话、日志四个视图都接了真数据。会话页是两级菜单：上面一条目录，下面一条该目录下的会话，选中的目录写进 URL。
 
-## 价格
+## 为什么没有金额
 
-成本表 `config/pricing.json` 是唯一生效的定价来源，手写维护。`cache_write` 填 0 表示厂商不单独收缓存写入费，这部分 token 按输入价计费。
+看板只统计 token，不折算成本。成本算不准不是实现问题，是口径问题：
 
-价格表里带 `currency: CNY` 的条目（比如 MiniMax 全系）以表里的官方人民币价为准，不采用来源自报的美元成本：pi 的模型目录是按 6.694 的汇率从人民币价折出来的，再按 6.5 折回来会差 3% 左右。价格表用美元定价的模型仍然优先用来源自报的值。
+- 订阅制（opencode-go、minimax-cn-coding-plan 这类）不按量计费，单价无从谈起。
+- 同一个模型名在不同渠道下价格不同，`MiniMax-M3.1-Flash` 在 `minimax-cn`、`minimax`、`minimax-cn-coding-plan` 三条渠道下的计费方式完全不一样。
+- 模型和价格都变得快，维护一张价格表注定滞后；阶梯价和波峰波谷又让单价随调用时刻变化。
 
-改完价格表跑 `node packages/cli/src/index.ts pricing reload`，它会按新价重算所有事件成本并重建聚合表，不用重新采集日志。
+这几种口径加总出来的数字看着精确到分，实际没有可比性，所以整块去掉了。token 是各 agent 自己记的，采集器只做单位归一，能复核，看板上只留这个。
 
 ## 采集器的版本号
 

@@ -7,7 +7,6 @@ import { dirColor } from '../../core/src/palette.ts';
 function colorMap(repo: Repo): Map<string, string> {
   return repo.dirColors();
 }
-import { RATE } from '../../core/src/money.ts';
 import { localDay } from '../../core/src/time.ts';
 
 const WEEKDAYS = '日一二三四五六';
@@ -70,7 +69,7 @@ export function totalPayload(repo: Repo) {
   if (!t) {
     return {
       total: 0, buckets: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
-      costCny: 0, costUsd: 0, unpricedTokens: 0, updatedAt: Date.now()
+      updatedAt: Date.now()
     };
   }
   return {
@@ -79,8 +78,6 @@ export function totalPayload(repo: Repo) {
       input: t.input, output: t.output, cacheRead: t.cache_read,
       cacheWrite: t.cache_write, reasoning: t.reasoning
     },
-    costCny: t.cost_cny, costUsd: t.cost_usd,
-    unpricedTokens: t.unpriced_tokens,
     days: (repo.db.prepare('SELECT COUNT(DISTINCT local_day) n FROM usage_event').get() as any).n,
     updatedAt: t.updated_at
   };
@@ -91,7 +88,7 @@ export function calendarPayload(repo: Repo, month: string) {
   const colors = colorMap(repo);
   return {
     month,
-    days: days.map(d => ({ day: d.day, total: d.tokens, costCny: d.cost_cny, byDir: d.byDir ?? {} })),
+    days: days.map(d => ({ day: d.day, total: d.tokens, byDir: d.byDir ?? {} })),
     dirs: legend.map(d => ({
       path: d.dir,
       name: dirName(d.dir),
@@ -116,7 +113,7 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
     cells[row.agent][modelKey(row.vendor, row.model)] = row.tokens;
   }
 
-  const totals: any = bd.totals ?? { tokens: 0, cost_cny: 0, days: 0 };
+  const totals: any = bd.totals ?? { tokens: 0, days: 0 };
   return {
     from, to,
     days: totals.days ?? 0,
@@ -128,16 +125,14 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
       cacheWrite: totals.cache_write ?? 0
     },
     byDir: bd.byDir.map((d: any) => ({
-      path: d.dir, name: dirName(d.dir), tokens: d.tokens, costCny: d.cost_cny,
+      path: d.dir, name: dirName(d.dir), tokens: d.tokens,
       color: colors.get(d.dir) ?? dirColor(d.dir)
     })),
     byModel: bd.byModel.map((m: any) => ({
-      model: m.model, vendor: m.vendor, tokens: m.tokens, costCny: m.cost_cny
+      model: m.model, vendor: m.vendor, tokens: m.tokens
     })),
-    byAgent: byAgent.map((a: any) => ({ agent: a.agent, tokens: a.tokens, costCny: a.cost_cny })),
-    byAgentModel: cells,
-    costCny: totals.cost_cny ?? 0,
-    costUsd: (totals.cost_cny ?? 0) / RATE
+    byAgent: byAgent.map((a: any) => ({ agent: a.agent, tokens: a.tokens })),
+    byAgentModel: cells
   };
 }
 
@@ -204,7 +199,6 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
       events: c.events,
       tokens: c.input + c.output + c.cache_read + c.cache_write,
       input: c.input, output: c.output, cacheRead: c.cache_read, cacheWrite: c.cache_write,
-      costCny: c.cost_cny,
       firstTs: c.first_ts, lastTs: c.last_ts
     };
   });
@@ -234,8 +228,6 @@ export function conversationPayload(repo: Repo, id: string, limit = 200) {
   const meta = titles.get(`${agent}:${sessionId}`);
 
   const buckets = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 };
-  let costCny = 0;
-  let unpriced = 0;
   const byDay: Record<string, number> = {};
 
   for (const e of events) {
@@ -244,12 +236,8 @@ export function conversationPayload(repo: Repo, id: string, limit = 200) {
     buckets.cacheRead += e.cache_read_tokens;
     buckets.cacheWrite += e.cache_write_tokens;
     buckets.reasoning += e.reasoning_tokens;
-    if (e.cost_cny === null) unpriced++;
-    else {
-      costCny += e.cost_cny;
-      const day = e.local_day;
-      byDay[day] = (byDay[day] ?? 0) + e.cost_cny;
-    }
+    const day = e.local_day;
+    byDay[day] = (byDay[day] ?? 0) + (e.input_tokens + e.output_tokens + e.cache_read_tokens + e.cache_write_tokens);
   }
 
   return {
@@ -265,13 +253,11 @@ export function conversationPayload(repo: Repo, id: string, limit = 200) {
       input: e.input_tokens, output: e.output_tokens,
       cacheRead: e.cache_read_tokens, cacheWrite: e.cache_write_tokens,
       reasoning: e.reasoning_tokens,
-      costCny: e.cost_cny, costUsd: e.cost_usd, costSource: e.cost_source,
       isChild: e.is_child === 1
     })),
     stats: {
       buckets,
       total: buckets.input + buckets.output + buckets.cacheRead + buckets.cacheWrite,
-      costCny, costUsd: costCny / RATE, unpriced,
       byDay, dayRows: Object.keys(byDay).sort()
     }
   };
@@ -317,10 +303,7 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
       cacheRead: t.cacheRead,
       cacheWrite: t.cacheWrite,
       reasoning: t.reasoning
-    },
-    costCny: t.costCny,
-    costUsd: t.costCny / RATE,
-    unpriced: t.unpriced
+    }
   });
 
   const bd = repo.breakdown(date, date);
@@ -369,19 +352,18 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
     prev: shape(repo.dayTotals(prevDate, prevCutoff)),
     prevFull: shape(repo.dayTotals(prevDate)),
     hourly: repo.hourly(date).map((h: any) => ({
-      hour: h.hour, events: h.events, tokens: h.tokens, costCny: h.cost_cny
+      hour: h.hour, events: h.events, tokens: h.tokens
     })),
     byAgent: repo.byAgent(date, date).map((a: any) => ({
-      agent: a.agent, tokens: a.tokens, costCny: a.cost_cny
+      agent: a.agent, tokens: a.tokens
     })),
     byModel: bd.byModel.map((m: any) => ({
-      model: m.model, vendor: m.vendor, tokens: m.tokens, costCny: m.cost_cny
+      model: m.model, vendor: m.vendor, tokens: m.tokens
     })),
     byDir: bd.byDir.map((d: any) => ({
       path: d.dir,
       name: dirName(d.dir),
       tokens: d.tokens,
-      costCny: d.cost_cny,
       sessions: sessionsPerDir.get(d.dir) ?? 0,
       color: colors.get(d.dir) ?? dirColor(d.dir)
     })),
@@ -396,7 +378,6 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
       color: colors.get(s.cwd) ?? dirColor(s.cwd),
       events: s.events,
       tokens: s.tokens,
-      costCny: s.cost_cny,
       firstTs: s.first_ts,
       lastTs: s.last_ts
     })),
@@ -408,8 +389,7 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
       vendor: e.provider,
       dir: e.cwd,
       dirName: dirName(e.cwd),
-      tokens: e.tokens,
-      costCny: e.cost_cny
+      tokens: e.tokens
     })),
     batches: repo.dayBatches(date)
   };

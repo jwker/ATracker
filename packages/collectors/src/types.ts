@@ -1,6 +1,5 @@
 // 采集器契约。采集器只做一件事：读文件、产出标准事件。
 import type { UsageEvent } from '../../core/src/types.ts';
-import type { CostResult } from '../../core/src/pricing.ts';
 
 export type LogLevel = 'ok' | 'info' | 'warn' | 'err';
 
@@ -13,8 +12,6 @@ export interface ScanContext {
   zstdLines(path: string): AsyncGenerator<{ line: string }>;
   /** 记一条日志。 */
   log(level: LogLevel, source: string, message: string): void;
-  /** 算这条事件的成本。 */
-  price(ev: UsageEvent): CostResult;
   /** 厂商推断：来源自报优先，否则查表。 */
   vendor(model: string, provider: string | null): string | null;
   /** 上一次扫描的同一个会话的累计值，用来算增量。 */

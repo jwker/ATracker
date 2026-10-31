@@ -10,7 +10,6 @@
 // 所以只要 session_v2 有数据就只读新表，两张都读会重复计算。
 //
 // 口径：tokens.input 不含缓存，cache.read / cache.write 分开报。
-// 记录自带 cost，直接采信，标 reported。
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -24,7 +23,6 @@ interface OpencodeSession {
   title: string | null;
   agent: string | null;
   model: { id?: string; providerID?: string } | null;
-  cost: number;
   timeCreated: number;
   timeUpdated: number;
   /** 会话级汇总的四个桶，用来补压缩掉的旧消息 */
@@ -41,7 +39,7 @@ function useV2(db: DatabaseSync): boolean {
 
 function readSessionsV2(db: DatabaseSync): Map<string, OpencodeSession> {
   const rows = db.prepare(
-    `SELECT id, directory, title, agent, model, cost, time_created, time_updated,
+    `SELECT id, directory, title, agent, model, time_created, time_updated,
             tokens_input, tokens_output, tokens_cache_read, tokens_cache_write
      FROM session_v2`
   ).all() as any[];
@@ -55,7 +53,6 @@ function readSessionsV2(db: DatabaseSync): Map<string, OpencodeSession> {
       title: r.title ?? null,
       agent: r.agent ?? null,
       model,
-      cost: r.cost ?? 0,
       timeCreated: r.time_created ?? 0,
       timeUpdated: r.time_updated ?? 0,
       buckets: {
@@ -71,7 +68,7 @@ function readSessionsV2(db: DatabaseSync): Map<string, OpencodeSession> {
 
 function readSessionsLegacy(db: DatabaseSync): Map<string, OpencodeSession> {
   const rows = db.prepare(
-    `SELECT id, directory, title, agent, model, cost, time_created, time_updated,
+    `SELECT id, directory, title, agent, model, time_created, time_updated,
             tokens_input, tokens_output, tokens_cache_read, tokens_cache_write
      FROM session`
   ).all() as any[];
@@ -83,7 +80,6 @@ function readSessionsLegacy(db: DatabaseSync): Map<string, OpencodeSession> {
       title: r.title ?? null,
       agent: r.agent ?? null,
       model: r.model ? { id: r.model } : null,
-      cost: r.cost ?? 0,
       timeCreated: r.time_created ?? 0,
       timeUpdated: r.time_updated ?? 0,
       buckets: {
@@ -128,9 +124,8 @@ export const opencodeCollector: Collector = {
       ctx.log('info', 'opencode', `存储格式：${v2 ? 'session_v2 / session_message' : 'session / message（旧格式）'}，${sessions.size} 个会话`);
 
       let read = 0;
-      let priced = 0;
       // 按会话累积，最后和会话级汇总对账
-      const perSession = new Map<string, { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number }>();
+      const perSession = new Map<string, { input: number; output: number; cacheRead: number; cacheWrite: number }>();
 
       if (v2) {
         const rows = db.prepare(
@@ -154,12 +149,9 @@ export const opencodeCollector: Collector = {
           if (!input && !output && !cacheRead && !cacheWrite) continue;
 
           const session = sessions.get(row.session_id);
-          const cost = typeof rec.cost === 'number' ? rec.cost : null;
-          if (cost !== null) priced++;
 
-          const acc = perSession.get(row.session_id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+          const acc = perSession.get(row.session_id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
           acc.input += input; acc.output += output; acc.cacheRead += cacheRead; acc.cacheWrite += cacheWrite;
-          acc.cost += cost ?? 0;
           perSession.set(row.session_id, acc);
 
           yield {
@@ -179,7 +171,6 @@ export const opencodeCollector: Collector = {
               cacheWrite,
               reasoning: t.reasoning ?? 0
             },
-            reportedCostUsd: cost,
             thinkingLevel: null
           };
         }
@@ -203,12 +194,9 @@ export const opencodeCollector: Collector = {
           if (!input && !output && !cacheRead && !cacheWrite) continue;
 
           const session = sessions.get(row.session_id);
-          const cost = typeof rec.cost === 'number' ? rec.cost : null;
-          if (cost !== null) priced++;
 
-          const acc = perSession.get(row.session_id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+          const acc = perSession.get(row.session_id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
           acc.input += input; acc.output += output; acc.cacheRead += cacheRead; acc.cacheWrite += cacheWrite;
-          acc.cost += cost ?? 0;
           perSession.set(row.session_id, acc);
 
           yield {
@@ -228,7 +216,6 @@ export const opencodeCollector: Collector = {
               cacheWrite,
               reasoning: t.reasoning ?? 0
             },
-            reportedCostUsd: cost,
             thinkingLevel: null
           };
         }
@@ -247,7 +234,6 @@ export const opencodeCollector: Collector = {
         const dCw = session.buckets.cacheWrite - acc.cacheWrite;
         if (dIn <= 0 && dOut <= 0 && dCr <= 0 && dCw <= 0) continue;
         gaps++;
-        const dCost = Math.max(0, session.cost - acc.cost);
         yield {
           eventId: `opencode:gap:${sid}`,
           agent: 'opencode',
@@ -265,16 +251,13 @@ export const opencodeCollector: Collector = {
             cacheWrite: Math.max(0, dCw),
             reasoning: 0
           },
-          // 差额的成本也按来源的口径：来源说 0 就是 0（免费模型），
-          // null 才是「不知道」，两者不能混
-          reportedCostUsd: dCost,
           thinkingLevel: null
         };
       }
 
       ctx.commitFile(file, 0, true);
       ctx.log('info', 'opencode',
-        `读取 ${read} 条 assistant 消息 · 其中 ${priced} 条自带成本 · 压缩补差 ${gaps} 个会话`);
+        `读取 ${read} 条 assistant 消息 · 压缩补差 ${gaps} 个会话`);
     } finally {
       db.close();
     }

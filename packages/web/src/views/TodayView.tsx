@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import type { DayPayload } from '../types.ts';
 import type { Unit } from '../state.ts';
 import { LeadRow } from '../components/LeadRow.tsx';
-import { fmtPct, fmtTok, modelLabel, money, moneyUsd, hhmm } from '../format.ts';
+import { fmtPct, fmtTok, modelLabel, hhmm } from '../format.ts';
 
 interface TodayViewProps {
   day: DayPayload;
@@ -48,7 +48,7 @@ export function TodayView(props: TodayViewProps) {
   const prev = day.prev;
 
   const hours = Array.from({ length: 24 }, (_, h) =>
-    day.hourly.find(x => x.hour === h) ?? { hour: h, events: 0, tokens: 0, costCny: 0 }
+    day.hourly.find(x => x.hour === h) ?? { hour: h, events: 0, tokens: 0 }
   );
   const maxHour = Math.max(...hours.map(h => h.tokens)) || 1;
   const peak = hours.reduce((a, b) => (b.tokens > a.tokens ? b : a), hours[0]);
@@ -75,11 +75,16 @@ export function TodayView(props: TodayViewProps) {
             </div>
           </div>
           <div className="side">
-            <div className="lab">ESTIMATED COST</div>
-            <div className="money">{money(t.costCny)}</div>
+            <div className="lab">缓存命中率</div>
+            <div className="hero">
+              {fmtPct(
+                t.buckets.cacheRead + t.buckets.input > 0
+                  ? t.buckets.cacheRead / (t.buckets.cacheRead + t.buckets.input)
+                  : 0
+              )}
+            </div>
             <div className="tiny">
-              {moneyUsd(t.costCny)} / 汇率 6.5
-              {t.unpriced ? ` / ${t.unpriced} 条未定价` : ''}
+              命中 {tok(t.buckets.cacheRead)} / 未命中 {tok(t.buckets.input)}
             </div>
           </div>
         </div>
@@ -182,7 +187,7 @@ export function TodayView(props: TodayViewProps) {
             <div
               key={h.hour}
               className={'h' + (h.tokens === peak.tokens && h.tokens > 0 ? ' peak' : '') + (h.events ? '' : ' empty')}
-              title={h.hour + ':00 · ' + tok(h.tokens) + ' · ' + money(h.costCny)}
+              title={h.hour + ':00 · ' + tok(h.tokens) + ' · ' + h.events + ' 次'}
             >
               <div className="plot" style={{ height: CHART_H }}>
                 <div
@@ -297,11 +302,7 @@ export function TodayView(props: TodayViewProps) {
                   {s.dirName} · {hhmm(s.firstTs)} → {hhmm(s.lastTs)}
                 </div>
               </div>
-              <div className="v">
-                {tok(s.tokens)}
-                <br />
-                {money(s.costCny)}
-              </div>
+              <div className="v">{tok(s.tokens)}</div>
             </div>
           ))
         )}
@@ -309,8 +310,8 @@ export function TodayView(props: TodayViewProps) {
 
       <div className="sec">
         <div className="sec-h">
-          <b>最贵的几次调用</b>
-          <span>TOP CALLS</span>
+          <b>最大的几次调用</b>
+          <span>TOP CALLS / 按 token</span>
         </div>
         <table className="daytable">
           <thead>
@@ -318,7 +319,7 @@ export function TodayView(props: TodayViewProps) {
               <th className="l">时间</th>
               <th className="l">模型</th>
               <th>token</th>
-              <th>成本</th>
+              <th>占比</th>
             </tr>
           </thead>
           <tbody>
@@ -330,7 +331,7 @@ export function TodayView(props: TodayViewProps) {
                   <div className="muted">{c.agent} · {c.dirName}</div>
                 </td>
                 <td>{tok(c.tokens)}</td>
-                <td>{c.costCny === null ? '未定价' : money(c.costCny)}</td>
+                <td>{fmtPct(c.tokens / (t.tokens || 1))}</td>
               </tr>
             ))}
           </tbody>
@@ -357,8 +358,8 @@ export function TodayView(props: TodayViewProps) {
               <td>{day.batches.errors ? day.batches.errors + ' 条' : '无'}</td>
             </tr>
             <tr>
-              <td className="l">缺价事件</td>
-              <td>{t.unpriced ? t.unpriced + ' 条' : '无'}</td>
+              <td className="l">子 agent 用量</td>
+              <td>{day.today.events > 0 ? fmtTok(t.buckets.reasoning, unit) + ' 推理 token' : '无'}</td>
             </tr>
           </tbody>
         </table>

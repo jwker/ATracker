@@ -8,7 +8,6 @@
   "scripts": {
     "scan": "node packages/cli/src/index.ts scan",
     "stats": "node packages/cli/src/index.ts stats",
-    "pricing": "node packages/cli/src/index.ts pricing",
     "dev:web": "vite packages/web",
     "build:web": "vite build packages/web",
     "serve": "npm run build:web && node packages/cli/src/index.ts serve",

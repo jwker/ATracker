@@ -14,9 +14,6 @@ export interface TokenBuckets {
   reasoning: number;
 }
 
-/** 成本来源。missing 表示没有可用价格，成本留空，不按 0 计。 */
-export type CostSource = 'reported' | 'priced' | 'estimated' | 'missing';
-
 /** 一条用量事件。 */
 export interface UsageEvent {
   /** 稳定唯一键，去重靠它 */
@@ -37,8 +34,6 @@ export interface UsageEvent {
   /** 厂商键；来源自报不了就填 null，交给 catalog 推断 */
   provider: string | null;
   buckets: TokenBuckets;
-  /** 来源自带的成本（美元）；没有就 null */
-  reportedCostUsd: number | null;
   /** 思考档位，仅 pi 提供 */
   thinkingLevel: string | null;
 }
