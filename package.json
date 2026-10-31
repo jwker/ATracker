@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
     "desktop": "electron .",
     "dist:mac": "npm run build:web && electron-builder --mac",
-    "dist:win": "npm run build:web && electron-builder --win"
+    "dist:win": "npm run build:web && electron-builder --win",
+    "icon": "electron packages/desktop/scripts/render-icon.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

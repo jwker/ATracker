@@ -126,7 +126,8 @@ npm run dist:win   # 出 Windows 安装包，需要在 Windows 或 CI 上跑
 - **包是未签名的。** 本机构建没配证书，第一次打开要右键 →「打开」，或者 `xattr -dr com.apple.quarantine /Applications/ATracker.app`。要正经分发就配好 Developer ID 和 `notarytool` 凭据，再跑 `npm run dist:mac`。
 - **Electron 二进制要先下载。** `npm install` 之后如果 `node_modules/electron/dist` 是空的，说明下载被墙了，用镜像补一次：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js`。
 - **打包不联网拉 Electron。** `electron-builder.yml` 里 `electronDist` 指向 `node_modules/electron/dist`，用本地这份。
-- **图标还是 Electron 默认的。** 要换就放 1024px 的 `build/icon.png`（mac 用 512 以上的 icns/png），electron-builder 会自动转。
+- **图标**：源文件是 `build/icon.svg`，改完跑 `npm run icon` 重新生成 `build/icon.png`（1024px），打包时 electron-builder 自动转成 icns / ico。
+- **菜单**：应用菜单、文件（重新扫描 ⌘R、打开数据目录）、编辑、视图（重新加载页面 ⇧⌘R、开发者工具）、窗口，都是中文。
 
 ## 采集器的版本号
 
