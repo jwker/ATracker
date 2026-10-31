@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 · 四桶板块压缩方案</title>
+<style>
+  :root[data-mode="light"] {
+    --desk: #cfd0cb;
+    --paper: #f6f5f0;
+    --ink: #17181a;
+    --muted: #6c6e69;
+    --faint: #a9aba5;
+    --rule: #c9cbc4;
+    --accent: #bf3b22;
+    --wash: #e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk: #0d0e0f;
+    --paper: #1a1b1d;
+    --ink: #ecebe4;
+    --muted: #a2a39d;
+    --faint: #6f716c;
+    --rule: #3b3c39;
+    --accent: #ff6a4d;
+    --wash: #232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--desk);
+    color: var(--ink);
+    font-family: "Courier New", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    padding: 24px 12px 56px;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- 稿面 ---------- */
+  .sheet {
+    background: var(--paper);
+    max-width: 820px;
+    margin: 0 auto 26px;
+    padding: 22px 34px 26px;
+    box-shadow: 0 14px 40px #0000001f;
+  }
+  .sheet > .t {
+    display: flex; align-items: baseline; gap: 10px;
+    border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 4px;
+  }
+  .sheet > .t b { font-size: 12px; letter-spacing: .16em; }
+  .sheet > .t .tagMB { margin-left: auto; font-size: 9px; color: var(--muted); letter-spacing: .1em; }
+  .sheet > .note { color: var(--muted); font-size: 9.5px; margin: 4px 0 0; }
+  .sheet > .note b { color: var(--ink); font-weight: 400; }
+
+  /* ---------- 小票自身的区块样式（与 receipt.css 对齐） ---------- */
+  .sec { margin-top: 16px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--ink); padding-bottom: 3px; margin-bottom: 9px; }
+  .sec-h b { font-size: 10px; letter-spacing: .18em; font-weight: 700; }
+  .sec-h span { font-size: 9px; color: var(--muted); letter-spacing: .08em; }
+  .sec-h .r { margin-left: auto; font-size: 9px; color: var(--muted); }
+  .sec-h .scope-pill { display: inline-block; font-size: 10px; background: var(--accent); color: var(--paper); padding: 1px 7px; letter-spacing: .02em; }
+
+  .leadrow { display: flex; align-items: baseline; gap: 5px; padding: 2px 0; }
+  .leadrow .nm { white-space: nowrap; }
+  .leadrow .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
+  .leadrow .v { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .leadrow .muted { color: var(--muted); }
+
+  /* ---------- B：四格横排 ---------- */
+  .brow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .brow .c { padding: 1px 8px 0; border-left: 1px dotted var(--rule); }
+  .brow .c:first-child { border-left: 0; padding-left: 0; }
+  .brow .k { font-size: 8.5px; color: var(--muted); letter-spacing: .1em; white-space: nowrap; }
+  .brow .v { font-size: 14px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .brow .s { font-size: 8.5px; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- C：堆叠条 + 图例 ---------- */
+  .stackbar { display: flex; height: 9px; background: var(--wash); margin-bottom: 5px; }
+  .stackbar i { display: block; height: 100%; min-width: 1px; }
+  .stackbar i.s0 { background: var(--t0); }
+  .stackbar i.s1 { background: var(--t2); }
+  .stackbar i.s2 { background: var(--t4); }
+  .stackbar i.s3 { background: var(--t5); }
+  .slegend { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 9px; }
+  .slegend .it { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .slegend .sw { width: 8px; height: 8px; display: inline-block; transform: translateY(1px); }
+  .slegend .sw.s0 { background: var(--t0); }
+  .slegend .sw.s1 { background: var(--t2); }
+  .slegend .sw.s2 { background: var(--t4); }
+  .slegend .sw.s3 { background: var(--t5); }
+  .slegend .n { font-variant-numeric: tabular-nums; }
+  .slegend .p { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .slegend .zero { color: var(--faint); }
+  .slegend .zero .sw { opacity: .35; }
+
+  /* ---------- D：两列两行 ---------- */
+  .bgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 26px; }
+  .bgrid .c { display: flex; align-items: baseline; gap: 6px; padding: 1px 0; }
+  .bgrid .k { font-size: 9px; color: var(--muted); white-space: nowrap; flex: none; }
+  .bgrid .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
+  .bgrid .v { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bgrid .s { font-size: 8.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---------- E：单行比例串 ---------- */
+  .oneline { display: flex; align-items: baseline; gap: 6px; font-size: 9.5px; flex-wrap: wrap; }
+  .oneline .seg { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+  .oneline .k { color: var(--muted); letter-spacing: .06em; }
+  .oneline .v { font-variant-numeric: tabular-nums; }
+  .oneline .sep { color: var(--faint); }
+  .oneline .bar { width: 46px; height: 6px; background: var(--wash); display: inline-block; transform: translateY(-1px); }
+
+  /* ---------- 尺寸标注 ---------- */
+  .measure { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 0; font-size: 8.5px; color: var(--muted); }
+  .measure b { color: var(--accent); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .measure .hline { flex: 1; border-top: 1px dashed var(--rule); transform: translateY(-3px); }
+
+  /* ---------- 顶部工具条 ---------- */
+  .tools { max-width: 820px; margin: 0 auto 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tools .cap { font-size: 9.5px; color: var(--muted); letter-spacing: .08em; }
+  .tools button { border: 1px solid var(--ink); background: transparent; padding: 3px 10px; font-size: 9.5px; letter-spacing: .1em; cursor: pointer; }
+  .tools button.on { background: var(--ink); color: var(--paper); }
+
+  /* ---------- 对比表 ---------- */
+  .cmp { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .cmp th, .cmp td { border-bottom: 1px dotted var(--rule); padding: 5px 4px; font-size: 9.5px; text-align: left; vertical-align: top; }
+  .cmp th { border-bottom: 1px solid var(--ink); color: var(--muted); font-weight: 700; letter-spacing: .06em; }
+  .cmp td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cmp tr.best td { background: var(--wash); }
+  @media (width <= 700px) {
+    body { padding: 14px 6px 40px; }
+    .sheet { padding: 16px 16px 20px; }
+    .brow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 0; }
+    .brow .c:nth-child(3) { border-left: 0; padding-left: 0; }
+    .bgrid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="tools">
+  <span class="cap">明暗</span>
+  <button id="m-light" class="on">日间小票</button>
+  <button id="m-dark">夜间小票</button>
+  <span class="cap" style="margin-left:auto">数据：2026-10-31 真实数据</span>
+</div>
+
+<!-- ============ 现状 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>方案 0 · 现状（基准）</b>
+    <span class="tagMB">四行 leadrow / 实测 121px</span>
+  </div>
+  <p class="note">总账和今日都用同一个组件：标题行 + 四行「标签 ⋯⋯ 数字」。每行约 24px，加标题共占 <b>121px</b>。这个板块处在首屏中段，四行里有三行的数字只在末位不同，扫读成本高。</p>
+
+  <div class="sec">
+    <div class="sec-h">
+      <b>TOKEN 四桶</b>
+      <span class="scope-pill">2026-10-01 → 10-31</span>
+      <span class="r">28.98 亿</span>
+    </div>
+    <div class="leadrow"><span class="nm">输入 / 未命中缓存</span><span class="dots"></span><span class="v">1.16 亿</span></div>
+    <div class="leadrow"><span class="nm">输出 / 含推理</span><span class="dots"></span><span class="v">846.5 万</span></div>
+    <div class="leadrow"><span class="nm">缓存命中</span><span class="dots"></span><span class="v">27.74 亿</span></div>
+    <div class="leadrow"><span class="nm">缓存写入 / 首次写入</span><span class="dots"></span><span class="v">0</span></div>
+  </div>
+</div>
+
+<!-- ============ A 四格横排 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>方案 A · 四格横排</b>
+    <span class="tagMB">一行四列 / 实测 66px</span>
+  </div>
+  <p class="note">把四行压成一行四列：标签在上、数值在下、占比跟在小字里。省掉四根引导线。改动最小，只是把 <b>LeadRow</b> 换成等宽网格；小屏折成两行两列。</p>
+
+  <div class="sec">
+    <div class="sec-h">
+      <b>TOKEN 四桶</b>
+      <span class="scope-pill">2026-10-01 → 10-31</span>
+      <span class="r">28.98 亿</span>
+    </div>
+    <div class="brow">
+      <div class="c"><div class="k">输入 / 未命中</div><div class="v">1.16 亿<span class="s">4.0%</span></div></div>
+      <div class="c"><div class="k">输出 / 含推理</div><div class="v">846.5 万<span class="s">0.3%</span></div></div>
+      <div class="c"><div class="k">缓存命中</div><div class="v">27.74 亿<span class="s">95.7%</span></div></div>
+      <div class="c"><div class="k">缓存写入</div><div class="v">0<span class="s">0%</span></div></div>
+    </div>
+  </div>
+  <div class="measure"><span>高度</span><span class="hline"></span><b>66px</b><span>（省 45%）</span></div>
+</div>
+
+<!-- ============ B 堆叠条 + 图例 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>方案 B · 堆叠条 + 一行图例</b>
+    <span class="tagMB">条 9px + 图例 1 行 / 实测 58px</span>
+  </div>
+  <p class="note">加一条 100% 堆叠条，四桶比例一眼能看出来；图例一行带数值和占比。这里缓存命中占 95.7%，条几乎全是一色，恰好说明「输入/输出」已经可以忽略了。零值桶（缓存写入）在图例里灰掉、条上不占宽度，但仍然出现，不会被误以为漏统计。</p>
+
+  <div class="sec">
+    <div class="sec-h">
+      <b>TOKEN 四桶</b>
+      <span class="scope-pill">2026-10-01 → 10-31</span>
+      <span class="r">28.98 亿</span>
+    </div>
+    <div class="stackbar" title="输入 4.0% / 输出 0.3% / 缓存命中 95.7% / 缓存写入 0%">
+      <i class="s0" style="width:3.99%"></i><i class="s1" style="width:0.29%"></i><i class="s2" style="width:95.72%"></i>
+    </div>
+    <div class="slegend">
+      <span class="it"><i class="sw s0"></i>输入<span class="n">1.16 亿</span><span class="p">4.0%</span></span>
+      <span class="it"><i class="sw s1"></i>输出<span class="n">846.5 万</span><span class="p">0.3%</span></span>
+      <span class="it"><i class="sw s2"></i>缓存命中<span class="n">27.74 亿</span><span class="p">95.7%</span></span>
+      <span class="it zero"><i class="sw s3"></i>缓存写入<span class="n">0</span><span class="p">0%</span></span>
+    </div>
+  </div>
+  <div class="measure"><span>高度</span><span class="hline"></span><b>58px</b><span>（省 52%）</span></div>
+</div>
+
+<!-- ============ C 两列两行 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>方案 C · 两列两行</b>
+    <span class="tagMB">2 × 2 网格 / 实测 70px</span>
+  </div>
+  <p class="note">保留引导线的读法，只是把一列折成两列，宽度换高度。标签必须缩成两字（「输入 / 未命中缓存」这种长度一行放不下），绝对值、占比都保留。一行里放两组，右列的数字要跨过中间的缝才能对上标签。</p>
+
+  <div class="sec">
+    <div class="sec-h">
+      <b>TOKEN 四桶</b>
+      <span class="scope-pill">2026-10-01 → 10-31</span>
+      <span class="r">28.98 亿</span>
+    </div>
+    <div class="bgrid">
+      <div class="c"><span class="k">输入</span><span class="dots"></span><span class="v">1.16 亿</span><span class="s">4.0%</span></div>
+      <div class="c"><span class="k">输出</span><span class="dots"></span><span class="v">846.5 万</span><span class="s">0.3%</span></div>
+      <div class="c"><span class="k">缓存命中</span><span class="dots"></span><span class="v">27.74 亿</span><span class="s">95.7%</span></div>
+      <div class="c"><span class="k">缓存写入</span><span class="dots"></span><span class="v">0</span><span class="s">0%</span></div>
+    </div>
+  </div>
+  <div class="measure"><span>高度</span><span class="hline"></span><b>70px</b><span>（省 42%）</span></div>
+</div>
+
+<!-- ============ D 单行比例串 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>方案 D · 单行比例串</b>
+    <span class="tagMB">一行 16px / 实测 45px</span>
+  </div>
+  <p class="note">最省的一档：四桶写成一行「标签 数值 占比」，用分隔符隔开，不给条形图。适合把四桶降级成「备注级」信息，让日历和交叉表往上提。缺点是数值扫读要横向找，且窄屏会折行。</p>
+
+  <div class="sec">
+    <div class="sec-h">
+      <b>TOKEN 四桶</b>
+      <span class="scope-pill">2026-10-01 → 10-31</span>
+      <span class="r">28.98 亿</span>
+    </div>
+    <div class="oneline">
+      <span class="seg"><span class="k">输入</span><span class="v">1.16 亿</span><span class="k">4.0%</span></span>
+      <span class="sep">/</span>
+      <span class="seg"><span class="k">输出</span><span class="v">846.5 万</span><span class="k">0.3%</span></span>
+      <span class="sep">/</span>
+      <span class="seg"><span class="k">命中</span><span class="v">27.74 亿</span><span class="k">95.7%</span></span>
+      <span class="sep">/</span>
+      <span class="seg"><span class="k">写入</span><span class="v">0</span><span class="k">0%</span></span>
+    </div>
+  </div>
+  <div class="measure"><span>高度</span><span class="hline"></span><b>45px</b><span>（省 63%）</span></div>
+</div>
+
+<!-- ============ 今日页的样子 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>在今日页里长什么样</b>
+    <span class="tagMB">以方案 B 为例 · 当天数据</span>
+  </div>
+  <p class="note">今日页的四桶标题行里多一段「截至时刻 / 思考 token」，所以标题行比总账高。下面这条是 2026-10-31 当天的真实数字，缓存命中 97.4%，条几乎全满，读起来比四行数字更快。</p>
+
+  <div class="sec">
+    <div class="sec-h">
+      <b>TOKEN 四桶</b>
+      <span>当天 / 截至 16:40 / 思考 118,534</span>
+      <span class="r">2.14 亿</span>
+    </div>
+    <div class="stackbar" title="输入 2.4% / 输出 0.2% / 缓存命中 97.4% / 缓存写入 0%">
+      <i class="s0" style="width:2.41%"></i><i class="s1" style="width:0.16%"></i><i class="s2" style="width:97.43%"></i>
+    </div>
+    <div class="slegend">
+      <span class="it"><i class="sw s0"></i>输入<span class="n">514.1 万</span><span class="p">2.4%</span></span>
+      <span class="it"><i class="sw s1"></i>输出<span class="n">35.1 万</span><span class="p">0.2%</span></span>
+      <span class="it"><i class="sw s2"></i>缓存命中<span class="n">2.08 亿</span><span class="p">97.4%</span></span>
+      <span class="it zero"><i class="sw s3"></i>缓存写入<span class="n">0</span><span class="p">0%</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 对比 ============ -->
+<div class="sheet">
+  <div class="t">
+    <b>对比与建议</b>
+    <span class="tagMB">按 820px 小票宽度实测</span>
+  </div>
+  <table class="cmp">
+    <thead>
+      <tr>
+        <th>方案</th>
+        <th>高度</th>
+        <th>一眼能看出比例</th>
+        <th>改动量</th>
+        <th>风险</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>0 现状</td><td class="n">121px</td><td>不能</td><td>—</td><td>—</td>
+      </tr>
+      <tr>
+        <td>A 四格横排</td><td class="n">66px</td><td>不能（只有百分比小字）</td><td>只换四桶那一段</td><td>窄屏折成 2×2 后标签换行</td>
+      </tr>
+      <tr class="best">
+        <td>B 堆叠条 + 图例</td><td class="n">58px</td><td>能，条本身就是比例</td><td>新增一个小组件，四桶段替换</td><td>命中率极高时条几乎单色，需要配色区分</td>
+      </tr>
+      <tr>
+        <td>C 两列两行</td><td class="n">70px</td><td>不能</td><td>只改 CSS 网格</td><td>右列数字离标签远，扫读容易串行</td>
+      </tr>
+      <tr>
+        <td>D 单行比例串</td><td class="n">45px</td><td>不能（要读百分比）</td><td>只换四桶那一段</td><td>窄屏折行；数值要靠横向找</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="note" style="margin-top:12px">
+    <b>建议选 B。</b>省得最多的一档之一，同时是唯一把「比例」直接画出来的方案：这个板块的核心信息就是缓存命中占了 95% 以上，其余三项是零头，四行等宽数字反而掩盖了这件事。A 可以作为 B 的降级版（小屏或极简排布里没有条形图位置时）。
+  </p>
+  <p class="note">
+    <b>落地范围：</b>新增 <b>BucketBar</b> 组件（接收四个桶的数值和总量），替换 <b>HomeView</b> 与 <b>TodayView</b> 里的四行 <b>LeadRow</b>；<b>LeadRow</b> 仍保留，给目录和模型那几个条形区用。四桶配色沿用墨阶 <b>--t1/--t3/--t4/--t5</b>，不引入新色，暗色模式自动跟随。
+  </p>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const light = document.getElementById('m-light');
+  const dark = document.getElementById('m-dark');
+  function setMode(m) {
+    root.dataset.mode = m;
+    light.classList.toggle('on', m === 'light');
+    dark.classList.toggle('on', m === 'dark');
+  }
+  light.onclick = () => setMode('light');
+  dark.onclick = () => setMode('dark');
+</script>
+</body>
+</html>
