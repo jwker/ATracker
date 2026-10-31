@@ -1,6 +1,6 @@
 import type { ConversationDetail, ConversationsPayload } from '../types.ts';
 import type { ConversationFilter, Unit } from '../state.ts';
-import { dayOf, fmtTok, hhmm, modelLabel, money, moneyUsd } from '../format.ts';
+import { dayOf, fmtPct, fmtTok, hhmm, modelLabel } from '../format.ts';
 
 interface ConversationsViewProps {
   conv: ConversationsPayload;
@@ -65,7 +65,6 @@ export function ConversationsView(props: ConversationsViewProps) {
         <span className="bar"><i style={{ width: '100%' }} /></span>
       </button>
       {groups.map(g => {
-        const cost = g.list.reduce((s, x) => s + x.costCny, 0);
         return (
           <button
             key={g.dir.path}
@@ -78,7 +77,7 @@ export function ConversationsView(props: ConversationsViewProps) {
               {g.dir.name}
             </span>
             <span className="mt">
-              {g.list.length} 个会话 / {tok(g.total)} / {money(cost)}
+              {g.list.length} 个会话 / {tok(g.total)}
             </span>
             <span className="bar">
               <i style={{ width: (g.total / maxTotal * 100).toFixed(1) + '%' }} />
@@ -190,21 +189,18 @@ export function ConversationsView(props: ConversationsViewProps) {
 
       <div className="sec bars">
         <div className="sec-h">
-          <b>成本</b>
-          <span>{moneyUsd(st.costCny)} / 汇率 6.5</span>
-          <span className="r">{money(st.costCny)}</span>
+          <b>逐日用量</b>
+          <span>{st.dayRows.length} 天</span>
+          <span className="r">{tok(st.total)}</span>
         </div>
-        {st.unpriced > 0 && (
-          <div style={{ fontSize: 9, color: 'var(--accent)' }}>
-            {st.unpriced} 条用了未配置价格的模型，未计入
-          </div>
-        )}
         {st.dayRows.map(k => (
           <div className="row" key={k}>
             <div className="top">
               <span>{k}</span>
               <span className="dots" />
-              <span className="v">{money(st.byDay[k])}</span>
+              <span className="v">
+                {fmtPct((st.byDay[k] ?? 0) / (st.total || 1))} / {tok(st.byDay[k] ?? 0)}
+              </span>
             </div>
             <div className="track">
               <i
@@ -234,7 +230,7 @@ export function ConversationsView(props: ConversationsViewProps) {
               <th>输入</th>
               <th>输出</th>
               <th>缓存</th>
-              <th>成本</th>
+              <th>合计</th>
               <th className="l">状态</th>
             </tr>
           </thead>
@@ -248,7 +244,7 @@ export function ConversationsView(props: ConversationsViewProps) {
                 <td>{tok(t.input)}</td>
                 <td>{tok(t.output)}</td>
                 <td>{tok(t.cacheRead)}</td>
-                <td>{t.costCny === null ? '--' : money(t.costCny)}</td>
+                <td>{tok(t.input + t.output + t.cacheRead + t.cacheWrite)}</td>
                 <td className="l">成功</td>
               </tr>
             ))}
@@ -263,7 +259,7 @@ export function ConversationsView(props: ConversationsViewProps) {
         </div>
         <div style={{ fontSize: 9, color: 'var(--muted)' }}>
           token 分四桶：未缓存输入、输出（含推理）、缓存命中、缓存写入。日期按本机时区折算自然日。
-          子 agent 的用量计入总量并归属到发起它的那一轮。价格来自 config/pricing.json。
+          子 agent 的用量计入总量并归属到发起它的那一轮。只看 token，不折算金额。
         </div>
       </div>
     </>

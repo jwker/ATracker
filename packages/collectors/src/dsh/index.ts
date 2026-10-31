@@ -88,7 +88,6 @@ export const dshCollector: Collector = {
             cacheWrite,
             reasoning: u.reasoningTokens ?? 0
           },
-          reportedCostUsd: null, // DSH 不带成本，按价格表算
           thinkingLevel: null
         };
       }

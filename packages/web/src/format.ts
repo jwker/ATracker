@@ -1,4 +1,4 @@
-// 显示层格式化。口径与 packages/core/src/units.ts、money.ts、time.ts 保持一致。
+// 显示层格式化。口径与 packages/core/src/units.ts、time.ts 保持一致。
 // 数字换算只在这里做，组件不自己拼单位。
 
 import type { Unit } from './state.ts';
@@ -8,8 +8,6 @@ export const UNITS: { id: Unit; label: string }[] = [
   { id: 'abbr', label: '缩写' },
   { id: 'full', label: '千分位' }
 ];
-
-export const RATE = 6.5;
 
 export function zh(n: number): string {
   const a = Math.abs(n);
@@ -47,20 +45,6 @@ export function fmtPct(ratio: number): string {
  */
 export function modelLabel(model: string, vendor: string | null | undefined): string {
   return vendor ? `${vendor}/${model}` : model;
-}
-
-export function money(cny: number | null | undefined): string {
-  return '¥' + (cny ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
-
-export function moneyUsd(cny: number | null | undefined): string {
-  return '$' + ((cny ?? 0) / RATE).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
 }
 
 export const pad = (n: number): string => String(n).padStart(2, '0');

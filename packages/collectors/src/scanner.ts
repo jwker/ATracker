@@ -9,7 +9,6 @@ import { join } from 'node:path';
 
 import type { Collector, ScanContext, LogLevel } from './types.ts';
 import type { UsageEvent } from '../../core/src/types.ts';
-import type { CostResult, Pricing } from '../../core/src/pricing.ts';
 import { resolveVendor } from '../../core/src/catalog.ts';
 import { assignColors } from '../../core/src/palette.ts';
 import { localDay, localMonth } from '../../core/src/time.ts';
@@ -49,7 +48,6 @@ export interface ScanSummary {
 
 export async function runScan(
   repo: Repo,
-  pricing: Pricing,
   opts: ScanOptions
 ): Promise<ScanSummary> {
   const collectors = COLLECTORS.filter(c => !opts.only || opts.only.includes(c.id));
@@ -99,15 +97,6 @@ export async function runScan(
 
     log(level: LogLevel, source: string, message: string) {
       repo.log(batchId, Date.now(), level, source, message);
-    },
-
-    price(ev: UsageEvent): CostResult {
-      return pricing.cost(ev.ts, ev.agent, ev.model, {
-        input: ev.buckets.input,
-        output: ev.buckets.output,
-        cacheRead: ev.buckets.cacheRead,
-        cacheWrite: ev.buckets.cacheWrite
-      }, ev.reportedCostUsd);
     },
 
     vendor(model, provider) {
@@ -187,7 +176,6 @@ export async function runScan(
     try {
       for await (const ev of collector.scan(ctx)) {
         eventsRead++;
-        const cost = ctx.price(ev);
         const day = localDay(ev.ts);
         affectedDays.add(day);
         collected.push({
@@ -207,9 +195,6 @@ export async function runScan(
           cacheRead: ev.buckets.cacheRead,
           cacheWrite: ev.buckets.cacheWrite,
           reasoning: ev.buckets.reasoning,
-          costCny: cost.cny,
-          costUsd: cost.cny === null ? null : cost.cny / 6.5,
-          costSource: cost.source,
           thinkingLevel: ev.thinkingLevel
         });
       }

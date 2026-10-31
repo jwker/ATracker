@@ -1,5 +1,5 @@
 // 接口载荷类型。字段形状对齐 packages/server/src/queries.ts。
-// 前端只读接口，不自己算成本，金额口径以接口为准。
+// 只包含 token 与归属信息，不含金额。
 
 export interface TokenBuckets {
   input: number;
@@ -12,9 +12,6 @@ export interface TokenBuckets {
 export interface TotalPayload {
   total: number;
   buckets: TokenBuckets;
-  costCny: number;
-  costUsd: number;
-  unpricedTokens: number;
   days: number;
   updatedAt: number;
 }
@@ -22,7 +19,6 @@ export interface TotalPayload {
 export interface CalendarDay {
   day: string;
   total: number;
-  costCny: number;
   byDir: Record<string, number>;
 }
 
@@ -43,7 +39,6 @@ export interface DirAggregate {
   path: string;
   name: string;
   tokens: number;
-  costCny: number;
   color: string;
 }
 
@@ -51,13 +46,11 @@ export interface ModelAggregate {
   model: string;
   vendor: string | null;
   tokens: number;
-  costCny: number;
 }
 
 export interface AgentAggregate {
   agent: string;
   tokens: number;
-  costCny: number;
 }
 
 export interface AggregatePayload {
@@ -70,8 +63,6 @@ export interface AggregatePayload {
   byModel: ModelAggregate[];
   byAgent: AgentAggregate[];
   byAgentModel: Record<string, Record<string, number>>;
-  costCny: number;
-  costUsd: number;
 }
 
 export interface MatrixAgent {
@@ -115,7 +106,6 @@ export interface ConversationSummary {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  costCny: number;
   firstTs: number;
   lastTs: number;
 }
@@ -141,18 +131,12 @@ export interface ConversationEvent {
   cacheRead: number;
   cacheWrite: number;
   reasoning: number;
-  costCny: number | null;
-  costUsd: number | null;
-  costSource: string;
   isChild: boolean;
 }
 
 export interface ConversationStats {
   buckets: TokenBuckets;
   total: number;
-  costCny: number;
-  costUsd: number;
-  unpriced: number;
   byDay: Record<string, number>;
   dayRows: string[];
 }
@@ -212,16 +196,12 @@ export interface DayTotals {
   events: number;
   tokens: number;
   buckets: TokenBuckets;
-  costCny: number;
-  costUsd: number;
-  unpriced: number;
 }
 
 export interface DayHour {
   hour: number;
   events: number;
   tokens: number;
-  costCny: number;
 }
 
 export interface DaySession {
@@ -234,7 +214,6 @@ export interface DaySession {
   color: string;
   events: number;
   tokens: number;
-  costCny: number;
   firstTs: number;
   lastTs: number;
 }
@@ -248,7 +227,6 @@ export interface DayTopCall {
   dir: string;
   dirName: string;
   tokens: number;
-  costCny: number | null;
 }
 
 export interface DayPayload {

@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 export interface StoredEvent {
   eventId: string;
@@ -30,9 +30,6 @@ export interface StoredEvent {
   cacheRead: number;
   cacheWrite: number;
   reasoning: number;
-  costCny: number | null;
-  costUsd: number | null;
-  costSource: string;
   thinkingLevel: string | null;
 }
 
@@ -76,11 +73,29 @@ export class Repo {
     if (from < 1) {
       this.db.exec('DROP TABLE IF EXISTS agg_day_model;');
       this.db.exec('DROP TABLE IF EXISTS agg_day_agent_model;');
-      this.db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
+      this.db.exec(readFileSync(this.schemaPath, 'utf8'));
+      this.rebuildAggregates([]);
+    }
+
+    // 2：去掉成本。明细表删掉三个价格列，聚合表形状变过，全部重建后从明细重算。
+    // token 明细一条不动，金额字段删掉就没了。
+    if (from < 2) {
+      for (const col of ['cost_cny', 'cost_usd', 'cost_source']) this.dropColumn('usage_event', col);
+      for (const table of ['agg_day_agent', 'agg_day_dir', 'agg_day_model', 'agg_day_agent_model', 'agg_total']) {
+        this.db.exec(`DROP TABLE IF EXISTS ${table};`);
+      }
+      this.db.exec(readFileSync(this.schemaPath, 'utf8'));
       this.rebuildAggregates([]);
     }
 
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  }
+
+  /** 删列。SQLite 没有 IF EXISTS 写法，先查列在不在（新库本来就没有这些列）。 */
+  private dropColumn(table: string, column: string): void {
+    const cols = this.db.prepare(`PRAGMA table_info(${table})`).all() as any[];
+    if (!cols.some(c => c.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} DROP COLUMN ${column};`);
   }
 
   close(): void {
@@ -224,16 +239,15 @@ export class Repo {
       `INSERT INTO usage_event
         (event_id, agent, session_id, parent_session_id, is_child, ts, local_day, local_month, cwd, model, provider,
          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-         cost_cny, cost_usd, cost_source, thinking_level)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         thinking_level)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(event_id) DO UPDATE SET
          session_id=excluded.session_id, parent_session_id=excluded.parent_session_id, is_child=excluded.is_child,
          ts=excluded.ts, local_day=excluded.local_day, local_month=excluded.local_month, cwd=excluded.cwd,
          model=excluded.model, provider=excluded.provider,
          input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
          cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens,
-         reasoning_tokens=excluded.reasoning_tokens,
-         cost_cny=excluded.cost_cny, cost_usd=excluded.cost_usd, cost_source=excluded.cost_source`
+         reasoning_tokens=excluded.reasoning_tokens`
     );
     let n = 0;
     this.db.exec('BEGIN');
@@ -242,8 +256,7 @@ export class Repo {
         stmt.run(
           e.eventId, e.agent, e.sessionId, e.parentSessionId, e.isChild ? 1 : 0, e.ts, e.localDay, e.localMonth,
           e.cwd, e.model, e.provider,
-          e.input, e.output, e.cacheRead, e.cacheWrite, e.reasoning,
-          e.costCny, e.costUsd, e.costSource, e.thinkingLevel
+          e.input, e.output, e.cacheRead, e.cacheWrite, e.reasoning, e.thinkingLevel
         );
         n++;
       }
@@ -260,12 +273,11 @@ export class Repo {
   /** 重算指定日期的聚合表。空数组表示全部。 */
   rebuildAggregates(days: string[]): void {
     const scope = days.length ? days : this.db.prepare('SELECT DISTINCT local_day d FROM usage_event').all().map((r: any) => r.d);
-    const COLS = 'input, output, cache_read, cache_write, reasoning, tokens, cost_cny, cost_usd';
+    const COLS = 'input, output, cache_read, cache_write, reasoning, tokens';
     const AGG = `SUM(input_tokens) AS input, SUM(output_tokens) AS output,
                  SUM(cache_read_tokens) AS cache_read, SUM(cache_write_tokens) AS cache_write,
                  SUM(reasoning_tokens) AS reasoning,
-                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens,
-                 SUM(cost_cny) AS cost_cny, SUM(cost_usd) AS cost_usd`;
+                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens`;
     this.db.exec('BEGIN');
     try {
       for (const day of scope) {
@@ -303,28 +315,22 @@ export class Repo {
     const t = this.db.prepare(
       `SELECT COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
               COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
-              COALESCE(SUM(tokens),0) tokens, COALESCE(SUM(cost_cny),0) cost_cny, COALESCE(SUM(cost_usd),0) cost_usd
+              COALESCE(SUM(tokens),0) tokens
        FROM agg_day_agent`
-    ).get() as any;
-
-    const unpriced = this.db.prepare(
-      `SELECT COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) t
-       FROM usage_event WHERE cost_cny IS NULL`
     ).get() as any;
 
     const reasoning = this.db.prepare('SELECT COALESCE(SUM(reasoning_tokens),0) r FROM usage_event').get() as any;
 
     this.db.prepare(
-      `INSERT INTO agg_total (id, input, output, cache_read, cache_write, reasoning, tokens, cost_cny, cost_usd, unpriced_tokens, updated_at)
-       VALUES (1, ?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO agg_total (id, input, output, cache_read, cache_write, reasoning, tokens, updated_at)
+       VALUES (1, ?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          input=excluded.input, output=excluded.output, cache_read=excluded.cache_read,
          cache_write=excluded.cache_write, reasoning=excluded.reasoning, tokens=excluded.tokens,
-         cost_cny=excluded.cost_cny, cost_usd=excluded.cost_usd,
-         unpriced_tokens=excluded.unpriced_tokens, updated_at=excluded.updated_at`
+         updated_at=excluded.updated_at`
     ).run(
       t.input, t.output, t.cache_read, t.cache_write, reasoning.r,
-      t.tokens, t.cost_cny, t.cost_usd, unpriced.t, Date.now()
+      t.tokens, Date.now()
     );
   }
 
@@ -335,7 +341,7 @@ export class Repo {
   /** 某个月每天的用量和按目录的拆分。 */
   calendar(month: string): { days: any[]; legend: any[] } {
     const days = this.db.prepare(
-      `SELECT day, SUM(tokens) tokens, SUM(cost_cny) cost_cny
+      `SELECT day, SUM(tokens) tokens
        FROM agg_day_agent WHERE day LIKE ? GROUP BY day ORDER BY day`
     ).all(month + '%') as any[];
 
@@ -359,7 +365,7 @@ export class Repo {
   /** 区间内的来源 × 模型交叉表。 */
   matrix(from: string, to: string): any {
     const rows = this.db.prepare(
-      `SELECT agent, model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny
+      `SELECT agent, model, vendor, SUM(tokens) tokens
        FROM agg_day_agent_model WHERE day >= ? AND day <= ?
        GROUP BY agent, model, vendor`
     ).all(from, to) as any[];
@@ -369,17 +375,17 @@ export class Repo {
   /** 区间内的按模型和按目录汇总。模型带厂商，同名不同厂商分成两行。 */
   breakdown(from: string, to: string): { byModel: any[]; byDir: any[]; totals: any } {
     const byModel = this.db.prepare(
-      `SELECT model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny,
+      `SELECT model, vendor, SUM(tokens) tokens,
               SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
        FROM agg_day_model WHERE day >= ? AND day <= ? GROUP BY model, vendor ORDER BY tokens DESC`
     ).all(from, to);
     const byDir = this.db.prepare(
-      `SELECT dir, SUM(tokens) tokens, SUM(cost_cny) cost_cny,
+      `SELECT dir, SUM(tokens) tokens,
               SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
        FROM agg_day_dir WHERE day >= ? AND day <= ? GROUP BY dir ORDER BY tokens DESC`
     ).all(from, to);
     const totals = this.db.prepare(
-      `SELECT COALESCE(SUM(tokens),0) tokens, COALESCE(SUM(cost_cny),0) cost_cny,
+      `SELECT COALESCE(SUM(tokens),0) tokens,
               COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
               COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
               COUNT(*) days
@@ -391,7 +397,7 @@ export class Repo {
   /** 区间内的按来源汇总。 */
   byAgent(from: string, to: string): any[] {
     return this.db.prepare(
-      `SELECT agent, SUM(tokens) tokens, SUM(cost_cny) cost_cny
+      `SELECT agent, SUM(tokens) tokens
        FROM agg_day_agent WHERE day >= ? AND day <= ? GROUP BY agent ORDER BY tokens DESC`
     ).all(from, to);
   }
@@ -408,7 +414,7 @@ export class Repo {
     const sql = `SELECT agent, session_id, cwd, model, provider, COUNT(*) events,
                         SUM(input_tokens) input, SUM(output_tokens) output,
                         SUM(cache_read_tokens) cache_read, SUM(cache_write_tokens) cache_write,
-                        SUM(cost_cny) cost_cny, MIN(ts) first_ts, MAX(ts) last_ts
+                        MIN(ts) first_ts, MAX(ts) last_ts
                  FROM usage_event ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
                  GROUP BY agent, session_id ORDER BY last_ts DESC LIMIT ?`;
     args.push(filter.limit ?? 200);
@@ -442,9 +448,7 @@ export class Repo {
               COALESCE(SUM(cache_read_tokens),0) cache_read,
               COALESCE(SUM(cache_write_tokens),0) cache_write,
               COALESCE(SUM(reasoning_tokens),0) reasoning,
-              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) tokens,
-              COALESCE(SUM(cost_cny),0) cost_cny,
-              SUM(cost_cny IS NULL) unpriced
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) tokens
        FROM usage_event WHERE local_day = ?${cutoff === undefined ? '' : ' AND ts <= ?'}`
     ).get(...(cutoff === undefined ? [day] : [day, cutoff])) as any;
     return {
@@ -454,9 +458,7 @@ export class Repo {
       cacheRead: rows.cache_read,
       cacheWrite: rows.cache_write,
       reasoning: rows.reasoning,
-      tokens: rows.tokens,
-      costCny: rows.cost_cny,
-      unpriced: rows.unpriced ?? 0
+      tokens: rows.tokens
     };
   }
 
@@ -465,8 +467,7 @@ export class Repo {
     return this.db.prepare(
       `SELECT CAST(strftime('%H', ts / 1000, 'unixepoch', ${TZ_SQL_OFFSET}) AS INTEGER) hour,
               COUNT(*) events,
-              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) tokens,
-              COALESCE(SUM(cost_cny),0) cost_cny
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens),0) tokens
        FROM usage_event WHERE local_day = ?
        GROUP BY hour ORDER BY hour`
     ).all(day);
@@ -475,7 +476,7 @@ export class Repo {
   /** 某一天的来源 × 模型交叉表。 */
   dayMatrix(day: string): any[] {
     return this.db.prepare(
-      `SELECT agent, model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny
+      `SELECT agent, model, vendor, SUM(tokens) tokens
        FROM agg_day_agent_model WHERE day = ?
        GROUP BY agent, model, vendor`
     ).all(day);
@@ -486,21 +487,19 @@ export class Repo {
     return this.db.prepare(
       `SELECT agent, session_id, MIN(cwd) cwd, COUNT(*) events,
               SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) tokens,
-              COALESCE(SUM(cost_cny),0) cost_cny,
               MIN(ts) first_ts, MAX(ts) last_ts
        FROM usage_event WHERE local_day = ?
        GROUP BY agent, session_id ORDER BY tokens DESC`
     ).all(day);
   }
 
-  /** 某一天最贵的几次调用。没有成本的行排在后面。 */
+  /** 某一天最大的几次调用，按 token 降序。 */
   dayTopCalls(day: string, limit = 8): any[] {
     return this.db.prepare(
       `SELECT ts, agent, model, provider, cwd,
-              input_tokens + output_tokens + cache_read_tokens + cache_write_tokens tokens,
-              cost_cny
+              input_tokens + output_tokens + cache_read_tokens + cache_write_tokens tokens
        FROM usage_event WHERE local_day = ?
-       ORDER BY cost_cny IS NULL, cost_cny DESC LIMIT ?`
+       ORDER BY tokens DESC LIMIT ?`
     ).all(day, limit);
   }
 

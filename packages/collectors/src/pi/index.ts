@@ -2,7 +2,6 @@
 // 数据在 ~/.pi/agent/sessions/<目录slug>/<时间戳>_<会话uuid>.jsonl。
 //
 // 口径：usage.input 不含缓存，cacheRead / cacheWrite 分开报。
-// pi 的记录自带成本（usage.cost.total），直接采信，标 reported。
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -36,7 +35,6 @@ export const piCollector: Collector = {
     const root = this.roots()[0];
     const files = await ctx.files(root, p => p.endsWith('.jsonl'));
     let read = 0;
-    let priced = 0;
     let skipped = 0;
 
     for (const path of files) {
@@ -76,9 +74,6 @@ export const piCollector: Collector = {
         const cacheWrite = u.cacheWrite ?? 0;
         if (!input && !output && !cacheRead && !cacheWrite) continue;
 
-        const cost = typeof u.cost?.total === 'number' ? u.cost.total : null;
-        if (cost !== null) priced++;
-
         yield {
           eventId: `pi:${rec.id ?? `${sessionId}:${read}`}`,
           agent: 'pi',
@@ -97,7 +92,6 @@ export const piCollector: Collector = {
             // pi 的 reasoning 是 output 的子集
             reasoning: u.reasoning ?? 0
           },
-          reportedCostUsd: cost,
           thinkingLevel: msg.thinkingLevel ?? null
         };
       }
@@ -105,7 +99,7 @@ export const piCollector: Collector = {
     }
 
     ctx.log('info', 'pi',
-      `读取 ${files.length} 个 jsonl（跳过未变化 ${skipped} 个）· 解析 ${read} 行 · 其中 ${priced} 条自带成本`);
+      `读取 ${files.length} 个 jsonl（跳过未变化 ${skipped} 个）· 解析 ${read} 行`);
   },
 
   async *sessions(ctx: ScanContext): AsyncGenerator<SessionMeta> {

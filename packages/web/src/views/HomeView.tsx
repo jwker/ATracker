@@ -12,8 +12,6 @@ import {
   fmtPct,
   fmtTok,
   modelLabel,
-  money,
-  moneyUsd,
   monthMeta,
   monthRange,
   pad
@@ -67,12 +65,17 @@ export function HomeView(props: HomeViewProps) {
     { key: 'cacheWrite', label: '缓存写入 / 首次写入', v: agg.buckets.cacheWrite }
   ];
   const models = agg.byModel;
-  const miss = total.unpricedTokens > 0 ? 1 : 0;
 
   // 顶部大字可以切：当前范围，或者全部记录。两个数都在屏幕上，只是强调哪个。
   const showTotal = props.topScope === 'total';
   const headTokens = showTotal ? total.total : agg.total;
-  const headCost = showTotal ? total.costCny : agg.costCny;
+
+  // 缓存命中率：命中量占「输入 + 命中」的比例。两边的数都是日志里读到的，不用推算。
+  const hitOf = (t: { buckets: { input: number; cacheRead: number } }) => {
+    const denom = t.buckets.input + t.buckets.cacheRead;
+    return denom > 0 ? t.buckets.cacheRead / denom : 0;
+  };
+  const hitRate = hitOf(showTotal ? total : agg);
 
   // 图例和日历色条只画当前范围的前 6 名目录，其余合并成“其他”。
   // 排名跟着范围走：没选日期就是当月，选了就是选中的那几天。
@@ -128,18 +131,18 @@ export function HomeView(props: HomeViewProps) {
             <div className="val">{tok(headTokens)}</div>
             <div className="tiny">
               {showTotal ? (
-                <>当前范围 {tok(agg.total)} / {money(agg.costCny)}</>
+                <>当前范围 {tok(agg.total)}</>
               ) : (
-                <>全部记录 {tok(total.total)} / {money(total.costCny)} / 覆盖 {total.days ?? 0} 天</>
+                <>全部记录 {tok(total.total)} / 覆盖 {total.days ?? 0} 天</>
               )}
             </div>
           </div>
           <div className="side">
-            <div className="lab">ESTIMATED COST</div>
-            <div className="money">{money(headCost)}</div>
+            <div className="lab">缓存命中率</div>
+            <div className="hero">{fmtPct(hitRate)}</div>
             <div className="tiny">
-              {moneyUsd(headCost)} / 汇率 6.5
-              {miss ? ` / ${miss} 个模型无价格` : ''}
+              命中 {tok((showTotal ? total : agg).buckets.cacheRead)} / 未命中{' '}
+              {tok((showTotal ? total : agg).buckets.input)}
             </div>
           </div>
         </div>
@@ -355,7 +358,8 @@ export function HomeView(props: HomeViewProps) {
         </div>
         <div style={{ fontSize: 9.5, color: 'var(--muted)' }}>
           四桶合计等于该范围的 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按
-          Asia/Shanghai 折算自然日。价格来自 config/pricing.json，人民币按 6.5 折算。
+          Asia/Shanghai 折算自然日。看板只统计 token，不折算金额：订阅、同名模型不同渠道、
+          波峰波谷价都让单价不唯一，算出来的钱没有可比性。
         </div>
       </div>
     </>

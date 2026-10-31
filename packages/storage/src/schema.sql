@@ -23,9 +23,6 @@ CREATE TABLE IF NOT EXISTS usage_event (
   cache_read_tokens INTEGER NOT NULL DEFAULT 0,
   cache_write_tokens INTEGER NOT NULL DEFAULT 0,
   reasoning_tokens INTEGER NOT NULL DEFAULT 0,
-  cost_cny         REAL,
-  cost_usd         REAL,
-  cost_source      TEXT NOT NULL,
   thinking_level   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_usage_day    ON usage_event(local_day, agent);
@@ -90,30 +87,33 @@ CREATE TABLE IF NOT EXISTS scan_log (
 CREATE INDEX IF NOT EXISTS idx_scan_log_batch ON scan_log(batch_id);
 CREATE INDEX IF NOT EXISTS idx_scan_log_at    ON scan_log(at DESC);
 
+-- 只存 token，不存金额。成本口径（订阅、同名不同价、阶梯价、波峰波谷）
+-- 收敛不出一致的数，算出来也是错的。
+--
 -- 物化聚合。查询这些表，不扫明细。
 -- 模型按「厂商 + 模型名」区分：同名模型在不同厂商下是两条记录。
 CREATE TABLE IF NOT EXISTS agg_day_agent (
   day TEXT NOT NULL, agent TEXT NOT NULL,
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
-  tokens INTEGER, cost_cny REAL, cost_usd REAL,
+  tokens INTEGER,
   PRIMARY KEY (day, agent)
 );
 CREATE TABLE IF NOT EXISTS agg_day_dir (
   day TEXT NOT NULL, dir TEXT NOT NULL,
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
-  tokens INTEGER, cost_cny REAL, cost_usd REAL,
+  tokens INTEGER,
   PRIMARY KEY (day, dir)
 );
 CREATE TABLE IF NOT EXISTS agg_day_model (
   day TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
-  tokens INTEGER, cost_cny REAL, cost_usd REAL,
+  tokens INTEGER,
   PRIMARY KEY (day, model, vendor)
 );
 CREATE TABLE IF NOT EXISTS agg_day_agent_model (
   day TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
-  tokens INTEGER, cost_cny REAL, cost_usd REAL,
+  tokens INTEGER,
   PRIMARY KEY (day, agent, model, vendor)
 );
 
@@ -121,7 +121,6 @@ CREATE TABLE IF NOT EXISTS agg_day_agent_model (
 CREATE TABLE IF NOT EXISTS agg_total (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
-  tokens INTEGER, cost_cny REAL, cost_usd REAL,
-  unpriced_tokens INTEGER NOT NULL DEFAULT 0,
+  tokens INTEGER,
   updated_at INTEGER NOT NULL
 );

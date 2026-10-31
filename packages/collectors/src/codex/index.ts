@@ -109,7 +109,6 @@ export const codexCollector: Collector = {
             cacheWrite,
             reasoning
           },
-          reportedCostUsd: null,
           thinkingLevel: null
         };
       }

@@ -21,7 +21,7 @@ HTTP API（只读 + 一个扫描触发接口）
 四个硬约束贯穿全文：
 
 1. **只读。** 采集器只打开文件读，绝不写 agent 的目录，也绝不调 agent 的接口。
-2. **单一出处。** 单位换算、颜色分配、成本计算、厂商归属，每件事只有一个实现文件，其他地方一律调用它。
+2. **单一出处。** 单位换算、颜色分配、厂商归属，每件事只有一个实现文件，其他地方一律调用它。
 3. **明细不可变。** `usage_event` 只追加不修改，修正靠同一个 `event_id` 覆盖写。
 4. **加东西不改老代码。** 新增一个 agent 只需要新增一个目录和一条注册记录，不碰已有采集器。
 
@@ -164,7 +164,7 @@ export interface UsageEvent {
   cacheRead: number;
   cacheWrite: number;
   reasoning: number;        // 是 output 的子集
-  reportedCostUsd: number | null;   // 来源自带成本，没有就 null
+  thinkingLevel: string | null;     // 思考档位，只有 pi 提供
 }
 
 export interface Collector {
@@ -273,7 +273,7 @@ CREATE TABLE scan_log (
   batch_id INTEGER NOT NULL,
   at       INTEGER NOT NULL,
   level    TEXT NOT NULL,   -- 'ok' | 'info' | 'warn' | 'err'
-  source   TEXT NOT NULL,   -- agent id，或 '系统' / '价格'
+  source   TEXT NOT NULL,   -- agent id，或 '系统'
   message  TEXT NOT NULL
 );
 CREATE INDEX idx_scan_log_batch ON scan_log(batch_id);
@@ -343,95 +343,23 @@ zstd 多帧要用自己写的帧遍历器（Node 的 `zlib.zstdDecompressSync` �
 
 **文件描述符不会耗尽。** 递归 watch 在 macOS 上底层是 FSEvents，一个根目录一个句柄，我们总共监听 5 个根，句柄数是常数级。但如果改成「每个子目录单独 watch」，上万个目录就会打满 fd。重建监听时必须先 close 旧句柄，否则泄漏。
 
-## 3. 价格落后于模型
+## 3. 不做成本折算
 
-### 3.1 成本有四种来源
+看板只统计 token，不折算金额。原来有一套完整的价格体系（价格表、阶梯匹配、多币种、波峰波谷、来源自报成本的优先级），2026-10-31 整块删掉了，原因不是实现不好，是口径收敛不出来：
 
-`usage_event.cost` 可为空，`cost_source` 枚举：
+- **订阅制不按量计费。** `opencode-go`、`minimax-cn-coding-plan` 这类渠道是包月的，把 token 乘一个单价出来的数字没有意义。
+- **同名模型不同渠道不同价。** `MiniMax-M3.1-Flash` 同时在 `minimax-cn`、`minimax`、`minimax-cn-coding-plan` 三条渠道下跑，价格表只能填一个值。
+- **阶梯价和波峰波谷。** 单价随单次请求的输入长度和调用时刻变化，同一条会话里的每次调用都可能不同价。
+- **价格表必然滞后。** 模型每周都在换名字，人工维护的单价一天比一天偏；补不上的部分只能标成估算值，而估算值和确定值混在同一个总额里。
 
-| 值 | 含义 | 界面表现 |
-| --- | --- | --- |
-| `reported` | 来源自己报了成本（pi、opencode、DSH） | 直接用 |
-| `priced` | 按价格表精确算出 | 直接用 |
-| `estimated` | 按兜底规则估算 | 和确定值分开显示 |
-| `missing` | 没有可用价格 | 成本留空，显示「—」 |
+这几种口径加出来的金额看着精确到分，实际没有可比性。token 数相反：它是各 agent 自己记的，采集器只做单位归一，能复核，所以看板上只留 token。
 
-**任何情况下都不用 0 代替未知。** 0 是一个确切的结论（免费），未知不是。
+**厂商（provider）保留。** 它跟钱无关，但解释了"用量来自哪个渠道"：同一个模型在 `opencode`、`opencode-go`、`deepseek` 下的用量分开统计。厂商的取值规则是「采集器自报的 provider 原样用」，只有采集器没上报时才按模型名推断：
 
-**人民币定价的模型一律用价格表。** 价格表里带 `currency: CNY` 的条目（比如 MiniMax 全系）不采用来源自报的成本。原因是来源自报的是美元：pi 的模型目录按 6.694 的汇率从官方人民币价折出来，再乘 6.5 会和表里的口径差 3% 左右，两套汇率混在一个报表里对不上账。价格表用美元定价的模型仍然优先用来源自报的值，因为它和表里的价格同单位。
+- `deepseek-v4.1-flash-free` 在 opencode 里自报 `opencode`，`deepseek-v4.1-flash` 经 opencode 的订阅通道走时自报 `opencode-go`，直连 DeepSeek 才是 `deepseek`。曾经代码里有个「已知厂商」名单，不在名单里的自报值会被模型名推断覆盖，这三家全被归到了 `deepseek`，页面上看不出是哪个渠道的量。
+- `catalog.ts` 的规则表只在没有自报值时兜底（claude-code 的日志就不带厂商），按模型名推一个。
 
-### 3.1.1 多币种
-
-价格表每条可以带 `currency` 字段，不写默认 `USD`，中国厂商填 `CNY`。
-
-引擎内部统一折算成人民币再汇总，美元副单位按固定汇率 6.5 反算：
-
-```
-CNY 条目：金额（元）        → 内部就是元
-USD 条目：金额（美元）× 6.5 → 内部是元
-显示：主单位 = 内部的人民币值，副单位 = 内部值 ÷ 6.5
-```
-
-这样填 `CNY` 的条目在界面上显示的就是官方原值，不用绕一圈再还原。汇率是常量，不做配置项。
-
-### 3.2 匹配阶梯
-
-算一条事件的成本时，按顺序试，命中即停：
-
-| 顺序 | 来源 | 结果 | cost_source |
-| --- | --- | --- | --- |
-| 1 | `models` 里模型名精确匹配 | 精确价 | `priced` |
-| 2 | `byAgent` 里按 agent 加模型名 | 精确价 | `priced` |
-| 3 | `rules` 里的通配规则 | 规则价 | `priced` |
-| 4 | `providers` 里按厂商的默认价 | 厂商价 | `estimated` |
-| 5 | `fallback` 全局兜底价 | 兜底价 | `estimated` |
-| 6 | 都没有 | 无 | `missing` |
-
-规则 4 和 5 出来的价标 `estimated`，因为它们不是这个模型的真实价格。
-
-### 3.3 新模型没有价格时的处理
-
-这是最常见的场景：agent 升级了，模型换了，价格表里还没有。
-
-**采集侧照常收，不因为没价格就丢数据。** token 数是事实，成本是推算，两者分开存。
-
-**界面侧要显式说出来，不能静默。** 4.1 价格模块下面固定有一行：
-
-> 3 个模型未配置价格，未计入 ¥12.40（占已计价的 0.7%）
-
-**给一条命令把缺口列出来：**
-
-```
-$ atracker pricing check
-模型                          用量            缺价影响
-MiniMax-M3.1-Flash           3,412,880       未计入
-glm-5.3-flash                1,204,000       未计入
-gpt-5.6-sol-preview            12,400       未计入
-```
-
-这条命令读的是库里实际出现过的模型和用量，所以补价格的目标很明确。
-
-**补价格不需要重新采集日志。** 价格是从 token 数算出来的，token 数没变，只需要重算成本：
-
-```
-atracker pricing reload
-```
-
-这条命令重新读 `config/pricing.json`，按新价重算所有事件成本，再重建聚合表。规则和扫描时一致：价格表里有人民币定价的模型按表算，其他模型有来源自报成本就用自报的，没有自报就按表算，没有价格就留空。改完价格表跑这一条就行，不用重新采集日志。几百万行的话是秒级。
-
-**从 litellm 拉草稿。** `atracker pricing import` 按 jsDelivr 主分支、jsDelivr 固定 tag、本地快照的顺序取数据，转成每百万 token 的四桶结构，写进 `config/pricing.draft.json`，同时输出和手写 `config/pricing.json` 的差异报告。**任何情况下都不覆盖手写文件。**
-
-草稿里的价格来自 litellm，litellm 记的是各家推理服务商的价格，未必等于你直连厂商的官方价，所以草稿只用来对照，不能直接用。
-
-**兜底价的默认值是关闭。** `config/pricing.json` 里没有 `fallback` 段就等于不兜底，缺价就是缺价。想兜底就自己填，并接受它是估算值。
-
-### 3.4 价格表与厂商
-
-价格表只有价格，厂商归类在 `packages/core/src/catalog.ts` 里。两者分开的原因是：厂商信息变化比价格慢，而且厂商可以从采集器上报的 `provider` 字段直接得到，不需要查表。
-
-**自报的 provider 原样用，不拿名单去否决。** 同一个模型可以通过不同渠道拿到，渠道才是花销算在哪里的区分：`deepseek-v4.1-flash-free` 在 opencode 里自报 `opencode`，`deepseek-v4.1-flash` 经 opencode 的订阅通道走时自报 `opencode-go`，直连 DeepSeek 才是 `deepseek`。曾经代码里有个「已知厂商」名单，不在名单里的自报值会被模型名推断覆盖，这三家全被归到了 `deepseek`，页面上看不出是哪个渠道花的钱。
-
-`catalog.ts` 里的规则表只在采集器没上报 provider 时兑底（claude-code 的日志就不带厂商），按模型名推一个。推理服务商的订阅计划名（如 `minimax-cn-coding-plan`）会原样显示成厂商名。
+**界面上原来的金额位置换成了缓存命中率。** 命中量 ÷（输入 + 命中），两个数都直接来自日志，不需要推算，而且有决策价值：命中率低说明每次都在重读同样的上下文。
 
 ## 4. 4.1 的 token 总量如何快速刷新
 
@@ -486,7 +414,7 @@ CREATE TABLE agg_total (
 
 | 模块 | 数据来源 | 查询 |
 | --- | --- | --- |
-| 4.1 token 总量与价格 | `agg_total` | 一行，O(1) |
+| 4.1 token 总量与缓存命中率 | `agg_total` | 一行，O(1) |
 | 4.2 token 总数四项 | `agg_total` | 一行，O(1) |
 | 4.3 日历每格数字 | `agg_day_dir` 按月分组求和 | 一个月 31 行 |
 | 4.3 日历堆叠条 | `agg_day_dir` 按月 | 同上 |
@@ -549,7 +477,7 @@ CREATE INDEX idx_usage_event_ts ON usage_event(ts);
 ```
 GET /api/events
 data: {"type":"scan_done","batch":42,"affected_days":["2026-10-18"],"duration_ms":63,"warn":1,"err":0}
-data: {"type":"log","batch":42,"level":"warn","source":"价格","message":"1 个模型未配置价格"}
+data: {"type":"log","batch":42,"level":"warn","source":"pi","message":"pi 会话目录不存在，跳过"}
 ```
 
 前端收到后，重新拉受影响的模块。日历只刷新那几格，4.1 和 4.2 刷新数值。
@@ -565,8 +493,6 @@ packages/
   core/src/
     types.ts        # UsageEvent 等公共类型
     units.ts        # 三种单位的换算，只有这一个实现
-    money.ts        # 人民币与美元的换算
-    pricing.ts      # 价格表读取、匹配阶梯、成本计算
     catalog.ts      # 模型 → 厂商
     palette.ts      # 目录 → 颜色
     time.ts         # 时区与日期分桶
@@ -576,7 +502,6 @@ packages/
     pi/index.ts
     opencode/index.ts
     dsh/index.ts
-    registry.ts     # 扫描目录自动注册，不手写列表
   storage/src/
     schema.sql      # 建表
     migrations/     # 001_xxx.sql、002_xxx.sql ...
@@ -585,7 +510,6 @@ packages/
     routes.ts
     events.ts       # SSE
 packages/web/src/   # React 前端
-config/pricing.json # 手写价格表
 data/atracker.db    # 运行时生成，不进版本库
 ```
 
@@ -630,41 +554,37 @@ export const cursorCollector: Collector = {
 };
 ```
 
-注册是自动的：`registry.ts` 扫描 `collectors/src/*/index.ts` 目录，把导出的采集器收进表。**新增一个 agent 不需要改 registry**，也就不会出现「加了一个忘了注册」的情况。
+注册是手写的：`scanner.ts` 顶部的 `COLLECTORS` 数组列出所有采集器。**新增一个 agent 就是在数组里加一行**。不扫目录动态 import，是因为打包成 asar 或单文件后「源码目录结构 + `.ts` 后缀」不一定成立。
 
 ### 5.3 单一职责的边界
 
 | 层 | 允许做 | 禁止做 |
 | --- | --- | --- |
-| 采集器 | 读文件、解析 JSON、映射成 UsageEvent | 算钱、换算单位、分配颜色、写数据库 |
-| 归一化层（core） | 单位换算、厂商归属、配色、成本计算 | 读文件 |
+| 采集器 | 读文件、解析 JSON、映射成 UsageEvent | 换算单位、分配颜色、写数据库 |
+| 归一化层（core） | 单位换算、厂商归属、配色 | 读文件 |
 | 存储层 | 建表、写入、维护聚合 | 判断业务规则（比如谁是谁的父会话） |
-| 前端 | 展示、交互 | 自己算成本或单位 |
+| 前端 | 展示、交互 | 自己算单位 |
 
 **一条硬规则：采集器返回的 token 四个桶必须已经是最终口径。** 比如 codex 的 `input_tokens` 含缓存这件事，在 codex 采集器里就减掉，不要留到下游再处理。下游再处理就意味着每个下游都要记得处理这件事。
 
 ### 5.4 配置与代码分离
 
-代码里不出现具体模型名、不出现具体目录名、不出现价格数字。
+代码里不出现具体模型名、不出现具体目录名。
 
 | 东西 | 放在哪 |
 | --- | --- |
-| 价格 | `config/pricing.json` |
 | 厂商归类 | 采集器上报的 provider 原样用；没上报才走 `core/src/catalog.ts` 的规则表 |
 | 目录配色 | `core/src/palette.ts` 的色板，按路径哈希映射 |
 | 来源配色 | 同一个文件里另一套色板，按 agent id 映射，和目录色板互不干扰 |
 | 单位档位 | `core/src/units.ts` |
-| 汇率 | `core/src/money.ts` |
-| 图例上限、波谷时段这类阈值 | 有名字的常量，加注释 |
+| 图例上限这类阈值 | 有名字的常量，加注释 |
 
 ### 5.5 加一个模型要改什么
 
 | 情况 | 改哪里 | 要不要重新采集 |
 | --- | --- | --- |
-| 只是价格变了 | `config/pricing.json` | 不要，跑 `atracker pricing reload` 重算 |
-| 模型名换了个版本 | `config/pricing.json` 加一条 | 不要 |
-| 新模型，推断不出厂商 | `catalog.ts` 加一条规则（只影响没自报 provider 的来源） | 不要 |
-| 新 agent 出现在机器上 | 新增一个采集器目录 | 要 |
+| 新模型，来源没自报厂商 | `catalog.ts` 加一条规则 | 不要 |
+| 来源换了字段名或格式 | 对应采集器的解析逻辑，版本号加一位 | 要，版本变了会重扫该来源 |
 
 ### 5.6 加一个 agent 的步骤清单
 
@@ -682,7 +602,6 @@ export const cursorCollector: Collector = {
 | --- | --- |
 | 采集器 | fixture 输入 → 期望的 UsageEvent 列表。要覆盖：字段缺失、文件被截断、模型中途切换 |
 | 单位换算 | 三种单位的边界值（0、999、1 万、1 亿、10 亿） |
-| 成本计算 | 匹配阶梯的每一级、缺价、波峰波谷、缺价模型不计入总额 |
 | 聚合维护 | 增量重算后，聚合表和明细对得上 |
 | 对账 | 和 agent 自带的汇总交叉校验 |
 
@@ -691,7 +610,7 @@ export const cursorCollector: Collector = {
 | agent | 自带汇总 | 位置 |
 | --- | --- | --- |
 | codex | 每个会话的 `tokens_used` | `~/.codex/state_5.sqlite` 的 `threads` 表 |
-| Claude Code | 每个会话的 `modelUsage` 和 `totalCostUSD` | 会话文件里的 `cost-state` 事件 |
+| Claude Code | 每个会话的 `modelUsage` | 会话文件里的 `cost-state` 事件 |
 | pi | 每个会话的 `tokensIn/tokensOut/cacheRead` | `~/.pi/agent/sessions/*/*.meta.json` |
 | opencode | 每个会话的 `tokens_input` 等汇总列 | `opencode.db` 的 `session` 表 |
 | DSH | 每个会话的 `tokenUsage.totals` | `~/.dsh/storages/session_projcache` |
@@ -699,7 +618,7 @@ export const cursorCollector: Collector = {
 ### 5.8 代码规则清单
 
 1. 一个采集器只做一件事：读文件、产出事件。不碰数据库，不算钱，不改格式。
-2. 所有数字格式化走 `core/units.ts`，所有金额走 `core/money.ts`，所有成本走 `core/pricing.ts`。禁止在别处写 `toFixed` 拼单位。
+2. 所有数字格式化走 `core/units.ts`。禁止在别处写 `toFixed` 拼单位。
 3. `usage_event` 只追加。修正数据用同一个 `event_id` 覆盖，不要 UPDATE 别的字段。
 4. 新增字段必须可空并给默认值，迁移只往前加，不改历史迁移文件。
 5. 魔法数字要有名字和注释（折扣、阈值、上限、条数）。
@@ -764,7 +683,7 @@ localStorage.setItem('atracker-mode', mode);
 
 | 接口 | 作用 |
 | --- | --- |
-| `GET /api/total` | 累计总量：四桶、token 数、成本、未计价量 |
+| `GET /api/total` | 累计总量：四桶、token 数、覆盖天数 |
 | `GET /api/calendar?month=YYYY-MM` | 某月每天的总量和按目录的拆分，加上目录图例 |
 | `GET /api/aggregate?from=&to=` | 区间内的四桶、按来源、按模型、按目录 |
 | `GET /api/matrix?from=&to=` | 来源 × 模型交叉表 |
@@ -777,7 +696,7 @@ localStorage.setItem('atracker-mode', mode);
 | `POST /api/scan` | 触发一次手动扫描，立刻返回，扫描在后台跑 |
 | `GET /api/events` | SSE。推 `scan_done`（批次号、写了多少条、哪些天变了）和 `log` |
 
-所有聚合查询都走物化表，不扫明细（见 4.2）。接口返回的字段名要和 `packages/core/src/types.ts` 一致，前端不自己算成本。
+所有聚合查询都走物化表，不扫明细（见 4.2）。接口返回的字段名要和 `packages/core/src/types.ts` 一致，前端不自己拼单位。
 
 ### 6.5 变量清单
 
@@ -829,7 +748,7 @@ localStorage.setItem('atracker-mode', mode);
 
 **主题和明暗的分工。** CSS 用 `[data-mode="light"]` 和 `[data-mode="dark"]` 两段变量表示明暗，用 `data-theme` 表示风格（现在是 `receipt`）。加新风格就是再加一段 `[data-theme="<id>"]` 的变量，不动组件。
 
-**取数层。** `src/api.ts` 只负责请求接口；`src/format.ts` 负责单位和货币换算。视图组件不自己拼单位、不自己算成本。
+**取数层。** `src/api.ts` 只负责请求接口；`src/format.ts` 负责单位换算。视图组件不自己拼单位。
 
 **路由：每个视图一个 hash 路径，状态全在 URL 里。** 四个页面各自占一段地址，互不共享状态：
 
@@ -857,6 +776,6 @@ localStorage.setItem('atracker-mode', mode);
 | T1 | 存储层：建表、迁移、`file_cursor`、`usage_event` 写入 | `atracker scan --source codex` 能落库 |
 | T2 | 采集器：一个一个来，每个配 fixture 测试 | 五个源都能采集 |
 | T3 | 聚合层：增量重算、`agg_*` 维护 | `atracker stats` 能秒出总量 |
-| T4 | 成本：`core/pricing.ts`、匹配阶梯、`pricing check`、`pricing reload` | 成本能算，缺口能列出来 |
+| T4 | ~~成本~~ | 2026-10-31 撤销，看板只统计 token，见第 3 节 |
 | T5 | 服务层：API、SSE、扫描触发 | 前端能实时刷新 |
 | T6 | 前端：按 `design/v3/02-receipt.html` 实现，主题层按 TECH 第 6 节的结构搭 | 完整界面 |

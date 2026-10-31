@@ -8,7 +8,6 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { Repo } from '../../storage/src/repo.ts';
-import { Pricing } from '../../core/src/pricing.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
@@ -17,7 +16,6 @@ import {
 
 export interface ServerOptions {
   dbPath: string;
-  pricingPath: string;
   /** 前端静态目录，默认 packages/web/dist（Vite 构建产物） */
   webDir?: string;
   port?: number;
@@ -36,7 +34,6 @@ interface Client {
 
 export class ATrackerServer {
   private repo: Repo;
-  private pricing: Pricing;
   private opts: Required<Pick<ServerOptions, 'port' | 'host' | 'watch' | 'debounceMs' | 'pollMs'>>;
   private pollTimer: NodeJS.Timeout | null = null;
   private clients = new Set<Client>();
@@ -49,7 +46,6 @@ export class ATrackerServer {
 
   constructor(opts: ServerOptions) {
     this.repo = new Repo(opts.dbPath);
-    this.pricing = Pricing.load(opts.pricingPath);
     this.opts = {
       // 端口 0 表示让系统分配一个空闲端口，桌面版用它避让已占用的端口。
       port: opts.port ?? 4178,
@@ -134,7 +130,7 @@ export class ATrackerServer {
     this.scanning = true;
     const t0 = Date.now();
     try {
-      const summary = await runScan(this.repo, this.pricing, { trigger });
+      const summary = await runScan(this.repo, { trigger });
       this.broadcast('scan_done', {
         batch: summary.batchId,
         eventsWritten: summary.eventsWritten,
