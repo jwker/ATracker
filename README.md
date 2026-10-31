@@ -112,10 +112,25 @@ data/atracker.db     运行时生成
 ## 桌面应用
 
 ```bash
-npm run desktop    # 直接在 Electron 里跑，开发时用仓库的 data/atracker.db
-npm run dist:mac   # 出 release/ATracker-<版本>-arm64.dmg 和 .zip
-npm run dist:win   # 出 Windows 安装包，需要在 Windows 或 CI 上跑
+npm run desktop            # 开发：直接在 Electron 里跑，用仓库的 data/atracker.db
+npm run pack:mac           # 只出 .app（不签名、不打包成 dmg），最快，用来验证
+npm run dist:mac:unsigned  # 出未签名的 release/ATracker-<版本>-arm64.dmg 和 .zip
+npm run dist:mac           # 正式包：用钥匙串里的 Developer ID 签名，再打 dmg
+npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上跑
 ```
+
+打包前会自动 `npm run build:web`，不用手动构建前端。产物都在 `release/`：
+
+| 文件 | 说明 |
+| --- | --- |
+| `release/ATracker-0.1.0-arm64.dmg` | 安装包，双击拖进「应用程序」 |
+| `release/ATracker-0.1.0-arm64.zip` | 同一份 .app 的压缩包，给不走 dmg 的分发渠道 |
+| `release/mac-arm64/ATracker.app` | 解包后的 .app，验证时直接双击这个 |
+
+默认按当前机器架构打包（Apple Silicon 上是 arm64）。要 x64 或 universal 就在命令后面加
+`--x64` / `--universal`，这时需要能下载对应架构的 Electron。
+
+**换版本号**：`npm version patch`（或 minor / major），dmg 文件名会跟着变。
 
 打包后的应用把数据库放在用户数据目录（macOS 是 `~/Library/Application Support/ATracker/atracker.db`），首次启动会自动扫一遍本机日志，不需要手动跑 `npm run scan`。
 

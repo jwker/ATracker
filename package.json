@@ -21,7 +21,9 @@
     "desktop": "electron .",
     "dist:mac": "npm run build:web && electron-builder --mac",
     "dist:win": "npm run build:web && electron-builder --win",
-    "icon": "electron packages/desktop/scripts/render-icon.mjs"
+    "icon": "electron packages/desktop/scripts/render-icon.mjs",
+    "dist:mac:unsigned": "npm run build:web && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
+    "pack:mac": "npm run build:web && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
