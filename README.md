@@ -145,6 +145,7 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 - **打包不联网拉 Electron。** `electron-builder.yml` 里 `electronDist` 指向 `node_modules/electron/dist`，用本地这份。
 - **图标**：源文件是 `build/icon.svg`，改完跑 `npm run icon` 重新生成 `build/icon.png`（1024px），打包时 electron-builder 自动转成 icns / ico。
 - **菜单**：应用菜单、文件（重新扫描 ⌘R、打开数据目录）、编辑、视图（重新加载页面 ⇧⌘R、开发者工具）、窗口，都是中文。
+- **重复副本**：macOS 没有安装登记，复制一份 `.app` 就是第二份，系统层面挡不住「装第二次」。能挡的是同时运行：Info.plist 里带 `LSMultipleInstancesProhibited`（第二份会由系统拒绝启动），应用内还有单实例锁兜底。另外，如果从 `/Applications` 以外的地方启动而 `/Applications` 里已经有一份，会弹提示告诉你两份的路径和版本。
 
 ## 采集器的版本号
 

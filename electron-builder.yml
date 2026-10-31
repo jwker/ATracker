@@ -25,6 +25,9 @@ files:
 
 mac:
   category: public.app-category.developer-tools
+  extendInfo:
+    # 同一个 App 的第二份副本不允许同时运行，由系统拦，比应用内加锁更早生效
+    LSMultipleInstancesProhibited: true
   target:
     - dmg
     - zip
