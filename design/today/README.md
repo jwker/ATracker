@@ -39,7 +39,7 @@ node design/today/build.mjs 2026-10-20  # 指定某一天
 
 ## 落地时需要的东西
 
-这个页面已经做进 React 应用了，页头多了一个「今日」标签，路由是 `?view=today`，用 `date` 参数打开某一天。
+这个页面已经做进 React 应用了，页头多了一个「今日」标签，路由是 `#/today`，`#/today/YYYY-MM-DD` 打开某一天。
 
 服务端新增 `GET /api/day?date=YYYY-MM-DD`，一次返回这一页需要的全部数据：四桶、小时分布、来源 × 模型、当天会话、最贵几次调用、采集状态。仓库层新增 `dayTotals`、`hourly`、`dayMatrix`、`daySessions`、`dayTopCalls`、`dayBatches` 六个查询。
 

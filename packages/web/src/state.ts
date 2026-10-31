@@ -21,17 +21,3 @@ export interface LogFilter {
   src: string;
   q: string;
 }
-
-export const EMPTY_CONV_FILTER: ConversationFilter = {
-  dir: null,
-  agent: null,
-  model: null,
-  vendor: null
-};
-
-export const EMPTY_LOG_FILTER: LogFilter = {
-  batch: null,
-  lvl: 'all',
-  src: 'all',
-  q: ''
-};

@@ -821,7 +821,8 @@ localStorage.setItem('atracker-mode', mode);
 | --- | --- |
 | `packages/web/index.html` | Vite 入口 |
 | `packages/web/src/main.tsx` | 挂载 React 根节点 |
-| `packages/web/src/App.tsx` | 页面状态、取数、URL 参数、SSE 刷新 |
+| `packages/web/src/App.tsx` | 页面状态、取数、导航、SSE 刷新 |
+| `packages/web/src/router.ts` | hash 路由：解析、构建、订阅 |
 | `packages/web/src/views/` | 总账、今日、会话、日志四个视图 |
 | `packages/web/src/components/` | 页头等公共组件 |
 | `packages/web/src/receipt.css` | 主题变量和组件样式。第一套是「热敏小票」（`design/v3/02-receipt.html`） |
@@ -829,6 +830,20 @@ localStorage.setItem('atracker-mode', mode);
 **主题和明暗的分工。** CSS 用 `[data-mode="light"]` 和 `[data-mode="dark"]` 两段变量表示明暗，用 `data-theme` 表示风格（现在是 `receipt`）。加新风格就是再加一段 `[data-theme="<id>"]` 的变量，不动组件。
 
 **取数层。** `src/api.ts` 只负责请求接口；`src/format.ts` 负责单位和货币换算。视图组件不自己拼单位、不自己算成本。
+
+**路由：每个视图一个 hash 路径，状态全在 URL 里。** 四个页面各自占一段地址，互不共享状态：
+
+| 路由 | 页面 | 参数 |
+| --- | --- | --- |
+| `#/` | 总账 | `month=YYYY-MM`、`from`、`to`（日历选区）、`scope=total` |
+| `#/today` | 今日（今天） | 无 |
+| `#/today/YYYY-MM-DD` | 今日（指定日期） | 无 |
+| `#/conversations` | 会话 | `dir`、`agent`、`model`、`vendor`、`q`、`id` |
+| `#/logs` | 日志 | `batch`、`level`、`source`、`q` |
+
+不带参数就是该页的默认状态：总账是本月无选区，今日是今天，会话和日志无筛选。顶部四个导航按钮总是跳到各自默认状态，所以不会出现「在总账选了某天，再去今日看到那天」这种串页；浏览器后退能回到刚才的状态。
+
+用 hash 而不是 pathname 有两个原因：服务端只做静态文件托管，没有 history 回退规则；打包成桌面版后可能直接用 `file://` 打开页面，hash 路由在两种情况下都能工作。同一页内改筛选条件用 `replaceState`，不往历史里堆记录；跨页用 `pushState`，后退能回上一页。旧链接（`?view=conv&dir=…`）在启动时自动转成新路由。
 
 **轮询改推送。** `App.tsx` 用 `EventSource('/api/events')` 订阅，扫描完成后服务端推 `scan_done`，前端重新取数重画。
 
