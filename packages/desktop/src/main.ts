@@ -4,7 +4,8 @@
 // 跑项目里的 .ts，`node:sqlite` 也在，所以 main 进程里 import ATrackerServer
 // 就能用。窗口只是把这个本地服务当普通网页打开。
 
-import { app, BrowserWindow, dialog, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, Menu, screen, shell, type MenuItemConstructorOptions } from 'electron';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
@@ -27,6 +28,61 @@ function databasePath(): string {
   if (fromEnv) return fromEnv;
   if (!app.isPackaged) return join(ROOT, 'data', 'atracker.db');
   return join(app.getPath('userData'), 'atracker.db');
+}
+
+interface WindowState {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+}
+
+/** 窗口大小记在 userData 里，用户拖过就沿用；没拖过用按屏幕算出来的默认值。 */
+function windowStatePath(): string {
+  return join(app.getPath('userData'), 'window-state.json');
+}
+
+/**
+ * 默认窗口尺寸。小票本身是 820px 宽的纸，两边要留出桌面才好看，
+ * 所以按屏幕宽度的 80% 取，并夹在 1000–1400 之间；高度同理。
+ */
+function defaultWindowState(): WindowState {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  return {
+    width: Math.min(1400, Math.max(1000, Math.round(width * 0.8))),
+    height: Math.min(1200, Math.round(height * 0.92))
+  };
+}
+
+/** 读上次的尺寸。位置只在还落在某块屏幕里时才用，否则只留尺寸让系统居中。 */
+function loadWindowState(): WindowState {
+  let saved: WindowState | null = null;
+  try {
+    const raw = JSON.parse(readFileSync(windowStatePath(), 'utf8')) as Partial<WindowState>;
+    if (typeof raw.width === 'number' && typeof raw.height === 'number') {
+      saved = { width: raw.width, height: raw.height, x: raw.x, y: raw.y };
+    }
+  } catch {
+    // 首次启动或者文件坏了，用默认值
+  }
+  if (!saved) return defaultWindowState();
+
+  const onScreen = saved.x !== undefined && saved.y !== undefined && screen.getAllDisplays().some(d => {
+    const a = d.workArea;
+    return (
+      saved!.x! + 120 > a.x && saved!.x! < a.x + a.width - 120 &&
+      saved!.y! + 60 > a.y && saved!.y! < a.y + a.height - 60
+    );
+  });
+  return onScreen ? saved : { width: saved.width, height: saved.height };
+}
+
+function saveWindowState(bounds: Electron.Rectangle): void {
+  try {
+    writeFileSync(windowStatePath(), JSON.stringify(bounds));
+  } catch {
+    // 写不了就算了，下次用默认值
+  }
 }
 
 /**
@@ -138,10 +194,10 @@ async function openWindow(): Promise<void> {
   // 首屏就触发一次扫描，装上就有数据，不用等 5 分钟轮询。
   void instance.triggerScan('manual');
 
+  const windowState = loadWindowState();
   win = new BrowserWindow({
-    width: 960,
-    height: 1100,
-    minWidth: 720,
+    ...windowState,
+    minWidth: 760,
     minHeight: 560,
     title: 'ATracker',
     backgroundColor: '#cfd0cb',
@@ -155,6 +211,9 @@ async function openWindow(): Promise<void> {
   });
 
   win.once('ready-to-show', () => win?.show());
+  win.on('close', () => {
+    if (win) saveWindowState(win.getBounds());
+  });
   win.on('closed', () => { win = null; });
 
   // 页面里的外链交给系统浏览器，不在应用窗口里开新窗口。
@@ -167,7 +226,7 @@ async function openWindow(): Promise<void> {
     console.log(`窗口已加载 ${addr.url}`);
   });
   await win.loadURL(addr.url);
-  console.log(`ATracker 已启动：${addr.url} · 数据库 ${databasePath()}`);
+  console.log(`ATracker 已启动：${addr.url} · 数据库 ${databasePath()} · 窗口 ${windowState.width}x${windowState.height}`);
 }
 
 // 单实例：两个进程同时写一个 SQLite 文件没必要，也容易互相抢写锁。
