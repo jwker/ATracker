@@ -19,10 +19,10 @@
     "serve:no-build": "node packages/cli/src/index.ts serve",
     "typecheck": "tsc --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
     "desktop": "electron .",
-    "dist:mac": "npm run build:web && electron-builder --mac",
+    "dist:mac": "npm run build:web && electron-builder --mac && rm -rf release/mac-arm64",
     "dist:win": "npm run build:web && electron-builder --win",
     "icon": "electron packages/desktop/scripts/render-icon.mjs",
-    "dist:mac:unsigned": "npm run build:web && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
+    "dist:mac:unsigned": "npm run build:web && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac && rm -rf release/mac-arm64",
     "pack:mac": "npm run build:web && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir"
   },
   "devDependencies": {
