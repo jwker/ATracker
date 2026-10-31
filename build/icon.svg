@@ -1,49 +1,18 @@
-<!-- 应用图标：小票 + 柱状图。深色圆角底 + 米色小票，最后一条柱子用强调红。 -->
+<!-- 应用图标：一张小票，三行内容。深色圆角底 + 米色小票（下缘撕纸锯齿），
+     两行灰色的「文字」加一行加粗的红色「合计」。按 macOS 惯例内容缩到画布
+     的 80%，四周留透明边距。源文件改完跑 `npm run icon` 重新生成 PNG。 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <g transform="translate(102.4 102.4) scale(0.8)">
-  <rect width="1024" height="1024" rx="232" fill="#17181a"/>
+    <rect width="1024" height="1024" rx="232" fill="#17181a"/>
 
-  <!-- 小票纸：上方圆角，下方撕纸锯齿 -->
-  <path fill="#f6f5f0" d="
-    M 232 224
-    A 32 32 0 0 1 264 192
-    L 760 192
-    A 32 32 0 0 1 792 224
-    L 792 764
-    L 756 800 L 720 764 L 684 800 L 648 764 L 612 800 L 576 764 L 540 800
-    L 504 764 L 468 800 L 432 764 L 396 800 L 360 764 L 324 800 L 288 764
-    L 232 764 Z"/>
+    <!-- 小票：上方圆角，下方撕纸锯齿 -->
+    <path fill="#f6f5f0" d="M 252 268 A 36 36 0 0 1 288 232 L 736 232 A 36 36 0 0 1 772 268
+      L 772 700 L 728 748 L 684 700 L 640 748 L 596 700 L 552 748 L 508 700 L 464 748
+      L 420 700 L 376 748 L 332 700 L 288 748 L 252 700 Z"/>
 
-  <!-- 条形码 -->
-  <g fill="#17181a">
-    <rect x="296" y="280" width="14" height="88"/>
-    <rect x="322" y="280" width="8" height="88"/>
-    <rect x="344" y="280" width="18" height="88"/>
-    <rect x="376" y="280" width="8" height="88"/>
-    <rect x="396" y="280" width="12" height="88"/>
-    <rect x="422" y="280" width="20" height="88"/>
-    <rect x="456" y="280" width="8" height="88"/>
-    <rect x="478" y="280" width="14" height="88"/>
-    <rect x="506" y="280" width="8" height="88"/>
-    <rect x="528" y="280" width="18" height="88"/>
-    <rect x="560" y="280" width="10" height="88"/>
-    <rect x="584" y="280" width="8" height="88"/>
-    <rect x="606" y="280" width="22" height="88"/>
-    <rect x="642" y="280" width="8" height="88"/>
-    <rect x="664" y="280" width="14" height="88"/>
-    <rect x="692" y="280" width="8" height="88"/>
-    <rect x="712" y="280" width="16" height="88"/>
-  </g>
-
-  <!-- 虚线分隔 -->
-  <line x1="296" y1="404" x2="728" y2="404" stroke="#a9aba5" stroke-width="8" stroke-dasharray="20 16"/>
-
-  <!-- 四根柱子：最后最高的一根用强调色 -->
-  <g>
-    <rect x="300" y="596" width="76" height="128" fill="#17181a"/>
-    <rect x="412" y="536" width="76" height="188" fill="#17181a"/>
-    <rect x="524" y="472" width="76" height="252" fill="#17181a"/>
-    <rect x="636" y="468" width="92" height="256" fill="#bf3b22"/>
-  </g>
+    <!-- 两行文字 + 一行合计 -->
+    <rect x="332" y="360" width="360" height="44" rx="22" fill="#17181a"/>
+    <rect x="332" y="452" width="240" height="44" rx="22" fill="#a9aba5"/>
+    <rect x="332" y="544" width="360" height="76" rx="38" fill="#bf3b22"/>
   </g>
 </svg>
