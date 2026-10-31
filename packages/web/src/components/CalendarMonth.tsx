@@ -37,7 +37,10 @@ export function CalendarMonth(props: CalendarMonthProps) {
   const topDirs = dirs.slice(0, TOP_DIRS);
   const otherCount = Math.max(0, dirs.length - topDirs.length);
   const otherTokens = total - topDirs.reduce((s, d) => s + d.tokens, 0);
-  const range = sel ?? { a: '', b: '' };
+  // 没选日期时，整月就是范围。以前这里退化成空串，导致默认状态下所有格子都不画色条。
+  const monthStart = `${meta.y}-${pad(meta.m)}-01`;
+  const monthEnd = `${meta.y}-${pad(meta.m)}-${pad(meta.dim)}`;
+  const range = sel ?? { a: monthStart, b: monthEnd };
 
   const daysByKey = new Map(cal.days.map(d => [d.day, d]));
 
