@@ -17,14 +17,14 @@ Node 24 以上直接跑服务端 TypeScript，不需要构建步骤。前端是 
 
 ## 文档
 
-| 文件 | 内容 |
-| --- | --- |
-| `doc/PRD.md` | 需求文档。显示什么、怎么算 |
-| `doc/TECH.md` | 技术设计。采集触发、厂商归类、聚合刷新、代码规则、接口 |
-| `doc/PLAN.md` | 规划。各来源核实结果、里程碑、待定项 |
-| `design/v3/` | 界面设计。`02-receipt.html` 是已定的主题 |
-| `design/today/` | 当日详情页设计稿 |
-| `design/wireframe/` | 功能线框原型 |
+| 文件                  | 内容                                                   |
+| --------------------- | ------------------------------------------------------ |
+| `doc/PRD.md`        | 需求文档。显示什么、怎么算                             |
+| `doc/TECH.md`       | 技术设计。采集触发、厂商归类、聚合刷新、代码规则、接口 |
+| `doc/PLAN.md`       | 规划。各来源核实结果、里程碑、待定项                   |
+| `design/v3/`        | 界面设计。`02-receipt.html` 是已定的主题             |
+| `design/today/`     | 当日详情页设计稿                                       |
+| `design/wireframe/` | 功能线框原型                                           |
 
 ## 日常使用
 
@@ -121,11 +121,11 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 
 打包前会自动 `npm run build:web`，不用手动构建前端。产物都在 `release/`：
 
-| 文件 | 说明 |
-| --- | --- |
-| `release/ATracker-0.1.0-arm64.dmg` | 安装包，双击拖进「应用程序」 |
+| 文件                                 | 说明                                        |
+| ------------------------------------ | ------------------------------------------- |
+| `release/ATracker-0.1.0-arm64.dmg` | 安装包，双击拖进「应用程序」                |
 | `release/ATracker-0.1.0-arm64.zip` | 同一份 .app 的压缩包，给不走 dmg 的分发渠道 |
-| `release/mac-arm64/ATracker.app` | 解包后的 .app，验证时直接双击这个 |
+| `release/mac-arm64/ATracker.app`   | 解包后的 .app，验证时直接双击这个           |
 
 默认按当前机器架构打包（Apple Silicon 上是 arm64）。要 x64 或 universal 就在命令后面加
 `--x64` / `--universal`，这时需要能下载对应架构的 Electron。
