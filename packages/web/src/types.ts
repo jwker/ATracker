@@ -13,6 +13,9 @@ export interface TotalPayload {
   total: number;
   buckets: TokenBuckets;
   days: number;
+  /** 库里最早的一天，总账页的「覆盖 N 天」用它 */
+  firstDay: string | null;
+  lastDay: string | null;
   updatedAt: number;
 }
 

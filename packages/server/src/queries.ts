@@ -64,6 +64,16 @@ function ranges(from?: string | null, to?: string | null): { from: string; to: s
   return { from: from || defFrom, to: to || defTo };
 }
 
+/**
+ * 区间参数。`all` 表示全期：总账页用它，不用前端先查最早一天再回填。
+ * 没有 all 也没有 from/to 时落到最近 30 天。
+ */
+function rangeArgs(repo: Repo, from: string | null | undefined, to: string | null | undefined, all: boolean) {
+  if (!all) return ranges(from, to);
+  const { first, last } = repo.dayBounds();
+  return { from: first ?? '0000-01-01', to: last ?? ranges().to };
+}
+
 export function totalPayload(repo: Repo) {
   const t = repo.total();
   if (!t) {
@@ -79,6 +89,8 @@ export function totalPayload(repo: Repo) {
       cacheWrite: t.cache_write, reasoning: t.reasoning
     },
     days: (repo.db.prepare('SELECT COUNT(DISTINCT local_day) n FROM usage_event').get() as any).n,
+    firstDay: repo.dayBounds().first,
+    lastDay: repo.dayBounds().last,
     updatedAt: t.updated_at
   };
 }
@@ -98,8 +110,8 @@ export function calendarPayload(repo: Repo, month: string) {
   };
 }
 
-export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string | null) {
-  const { from, to } = ranges(fromQ, toQ);
+export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false) {
+  const { from, to } = rangeArgs(repo, fromQ, toQ, all);
   const bd = repo.breakdown(from, to);
   const byAgent = repo.byAgent(from, to);
 
@@ -136,8 +148,8 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
   };
 }
 
-export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | null) {
-  const { from, to } = ranges(fromQ, toQ);
+export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false) {
+  const { from, to } = rangeArgs(repo, fromQ, toQ, all);
   const cells: Record<string, Record<string, number>> = {};
   for (const a of AGENTS) cells[a.id] = {};
 

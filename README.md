@@ -75,7 +75,7 @@ packages/
     src/
       main.tsx   挂载
       App.tsx    页面状态、取数、路由参数
-      views/     总账 / 今日 / 会话 / 日志四个视图
+      views/     总账 / 月度 / 今日 / 会话 / 日志五个视图
       components/ 页头等公共组件
       receipt.css 主题变量与组件样式（热敏小票）
     dist/        构建产物，服务端直接托管
@@ -97,7 +97,7 @@ data/atracker.db     运行时生成
 
 - 五个采集器都已实现并对账通过：codex 和 opencode 与来源自带的汇总精确一致，Claude Code、pi、DeepSeek Harness 在双方都覆盖的会话上全部一致。
 - 接口已完成：`atracker serve` 提供只读接口、文件监听自动扫描和 SSE 推送。清单见 `doc/TECH.md` 第 6.4 节。
-- 前端已完成：React 19 + Vite 实现，保留 `design/v3/02-receipt.html`（热敏小票）的样式，总账、今日、会话、日志四个视图都接了真数据。会话页是两级菜单：上面一条目录，下面一条该目录下的会话，选中的目录写进 URL。
+- 前端已完成：React 19 + Vite 实现，保留 `design/v3/02-receipt.html`（热敏小票）的样式，总账、月度、今日、会话、日志五个视图都接了真数据。总账看全期，月度看一个月或一个选区（日历在这一页）。会话页是两级菜单：上面一条目录，下面一条该目录下的会话，选中的目录写进 URL。
 
 ## 为什么没有金额
 

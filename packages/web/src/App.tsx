@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { api } from './api.ts';
 import { Header } from './components/Header.tsx';
-import { HomeView } from './views/HomeView.tsx';
+import { LedgerView } from './views/LedgerView.tsx';
+import { MonthView } from './views/MonthView.tsx';
 import { TodayView } from './views/TodayView.tsx';
 import { ConversationsView } from './views/ConversationsView.tsx';
 import { LogsView } from './views/LogsView.tsx';
@@ -29,6 +30,7 @@ import type {
 } from './types.ts';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_RE = /^\d{4}-\d{2}$/;
 
 function todayDate(): string {
   return dayOf(Date.now());
@@ -41,6 +43,7 @@ function currentMonth(): string {
 /** 路径 → 顶部导航的视图 id。 */
 function viewOf(path: string): View {
   if (path === '/today' || path.startsWith('/today/')) return 'today';
+  if (path === '/month' || path.startsWith('/month/')) return 'month';
   if (path === '/conversations') return 'conv';
   if (path === '/logs') return 'log';
   return 'home';
@@ -159,13 +162,16 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [unit, setUnit] = useState<Unit>(initialUnit);
 
-  // 总账的状态全在 URL 里。没有 month 就用本月，没有 from/to 就是整月。
-  const month = route.params.get('month') ?? currentMonth();
+  // 月度页：月份在路径里（#/month/2026-09 或 ?month=），选区在查询参数里。
+  const monthMatch = route.path.match(/^\/month\/([^/]+)$/);
+  const monthParam = monthMatch && MONTH_RE.test(monthMatch[1]) ? monthMatch[1] : route.params.get('month');
+  const month = monthParam && MONTH_RE.test(monthParam) ? monthParam : currentMonth();
   const from = route.params.get('from');
   const to = route.params.get('to');
   const sel: Selection | null = from ? { a: from, b: to ?? from } : null;
-  const topScope: 'range' | 'total' = route.params.get('scope') === 'total' ? 'total' : 'range';
-  const homeRange = sel ? { from: sel.a, to: sel.b } : monthRange(month);
+  // 月度页的查询区间：有选区用选区，没有就是整月。
+  const monthRangeOf = monthRange(month);
+  const range = sel ? { from: sel.a, to: sel.b } : monthRangeOf;
 
   // 今日的日期在路径里。#/today 永远指今天。
   const dayMatch = route.path.match(/^\/today\/(.+)$/);
@@ -212,15 +218,21 @@ export function App() {
     }
   }, [theme]);
 
-  // 旧版 URL（?view=conv&dir=…）转成 hash 路由，免得存过的链接失效。
-  // 只跑一次：转换后地址栏里就没有 view 了，但模块加载时快照的 search 还在。
+  // 旧版 URL 转成新路由，免得存过的链接失效。只跑一次。
   useEffect(() => {
     if (legacyRedirected) return;
     legacyRedirected = true;
     const q = new URLSearchParams(location.search);
     const v = q.get('view');
+    const legacyFrom = q.get('from');
+    const legacyTo = q.get('to') ?? legacyFrom;
+    if (legacyFrom && DAY_RE.test(legacyFrom) && (!v || v === 'home')) {
+      navigate('/month/' + legacyFrom.slice(0, 7), [['from', legacyFrom], ['to', legacyTo]], { replace: true });
+      return;
+    }
     if (!v) return;
     if (v === 'today') navigate('/today/' + (q.get('date') ?? todayDate()), [], { replace: true });
+    else if (v === 'month') navigate('/month', [], { replace: true });
     else if (v === 'conv') {
       navigate('/conversations', [
         ['dir', q.get('dir')],
@@ -229,27 +241,36 @@ export function App() {
         ['vendor', q.get('vendor')]
       ], { replace: true });
     } else if (v === 'log') navigate('/logs', [], { replace: true });
-    else {
-      const legacyFrom = q.get('from');
-      if (legacyFrom && DAY_RE.test(legacyFrom)) {
-        navigate('/', [
-          ['month', legacyFrom.slice(0, 7)],
-          ['from', legacyFrom],
-          ['to', legacyFrom]
-        ], { replace: true });
-      } else navigate('/', [], { replace: true });
-    }
+    else navigate('/', [], { replace: true });
   }, []);
 
-  // 总账：累计、日历、区间聚合、来源 × 模型
+  // 总账：全期累计、四桶、来源 × 模型。没有日历，也没有范围切换。
   useEffect(() => {
     if (view !== 'home') return;
+    let alive = true;
+    Promise.all([api.total(), api.aggregateAll(), api.matrixAll()])
+      .then(([t, a, m]) => {
+        if (!alive) return;
+        setTotal(t);
+        setAgg(a);
+        setMatrix(m);
+        setError(null);
+      })
+      .catch(err => {
+        if (alive) setError((err as Error).message);
+      });
+    return () => { alive = false; };
+  }, [view, refreshToken]);
+
+  // 月度：当月或选区的日历、汇总、交叉表。
+  useEffect(() => {
+    if (view !== 'month') return;
     let alive = true;
     Promise.all([
       api.total(),
       api.calendar(month),
-      api.aggregate(homeRange.from, homeRange.to),
-      api.matrix(homeRange.from, homeRange.to)
+      api.aggregate(range.from, range.to),
+      api.matrix(range.from, range.to)
     ])
       .then(([t, c, a, m]) => {
         if (!alive) return;
@@ -263,7 +284,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, month, homeRange.from, homeRange.to, refreshToken]);
+  }, [view, month, range.from, range.to, refreshToken]);
 
   // 会话列表。目录不进请求参数：一级菜单要列出所有目录，
   // 选哪个目录是前端的二级菜单状态。
@@ -368,27 +389,23 @@ export function App() {
 
   /* ---------- 导航 ---------- */
 
-  /** 点顶部导航。每个按钮都回到自己的默认状态，不继承别的视图的选中项。 */
+  /** 点顶部导航。每个按钮都回到自己的默认状态。 */
   function handleNav(next: View) {
     if (next === 'home') navigate('/');
+    else if (next === 'month') navigate('/month');
     else if (next === 'today') navigate('/today');
     else if (next === 'conv') navigate('/conversations');
     else navigate('/logs');
   }
 
-  /* ---------- 总账 ---------- */
+  /* ---------- 月度 ---------- */
 
-  /** 改总账的 URL。同一页里改条件用 replace，避免后退要点很多次。 */
-  function goHome(next: { month?: string; sel?: Selection | null; scope?: 'range' | 'total' }): void {
+  /** 改月度的 URL。同一页里改条件用 replace，避免后退要点很多次。 */
+  function goMonth(next: { month?: string; sel?: Selection | null }): void {
     const m = next.month ?? month;
     const s = next.sel === undefined ? sel : next.sel;
-    const scope = next.scope ?? topScope;
-    navigate('/', [
-      ['month', m === currentMonth() ? null : m],
-      ['from', s?.a],
-      ['to', s?.b],
-      ['scope', scope === 'total' ? 'total' : null]
-    ], { replace: true });
+    const path = m === currentMonth() ? '/month' : `/month/${m}`;
+    navigate(path, [['from', s?.a], ['to', s?.b]], { replace: true });
   }
 
   function selectDay(dayKey: string) {
@@ -398,23 +415,23 @@ export function App() {
       if (dayKey === sel.a) next = null;
       else next = dayKey < sel.a ? { a: dayKey, b: sel.b } : { a: sel.a, b: dayKey };
     } else next = { a: dayKey, b: dayKey };
-    goHome({ sel: next });
+    goMonth({ sel: next });
   }
 
   function prevMonth() {
-    goHome({ month: shiftMonth(month, -1), sel: null });
+    goMonth({ month: shiftMonth(month, -1), sel: null });
   }
 
   function nextMonth() {
-    goHome({ month: shiftMonth(month, 1), sel: null });
+    goMonth({ month: shiftMonth(month, 1), sel: null });
   }
 
-  function backToCurrentMonth() {
-    goHome({ month: currentMonth(), sel: null });
+  function thisMonth() {
+    goMonth({ month: currentMonth(), sel: null });
   }
 
   function clearSelection() {
-    goHome({ sel: null });
+    goMonth({ sel: null });
   }
 
   /* ---------- 今日 ---------- */
@@ -453,9 +470,9 @@ export function App() {
     navigate('/conversations', [], { replace: true });
   }
 
-  /** 「在日历中查看这天」：回到总账，选中这天。 */
+  /** 「在日历中查看这天」：回到月度页并选中这天。 */
   function openDayInCalendar(date: string) {
-    navigate('/', [['month', date.slice(0, 7)], ['from', date], ['to', date]]);
+    navigate(`/month/${date.slice(0, 7)}`, [['from', date], ['to', date]]);
   }
 
   /* ---------- 日志 ---------- */
@@ -472,12 +489,27 @@ export function App() {
 
   let body: ReactNode;
   if (view === 'home') {
-    const stale = !agg || !cal || agg.from !== homeRange.from || agg.to !== homeRange.to || cal.month !== month;
+    // 全期汇总的起止要和 total 报的对上，避免刚从月度页切过来时用月度数字画一帧。
+    const stale = !agg || !matrix || (total !== null && total.firstDay !== null && agg.from !== total.firstDay);
+    if (!total || stale) return <LoadingScreen />;
+    if (total.total === 0) return <FirstRun />;
+    body = (
+      <LedgerView
+        total={total}
+        agg={agg}
+        matrix={matrix}
+        unit={unit}
+        onOpenDir={dir => navigate('/conversations', [['dir', dir]])}
+        onOpenCell={(agent, model, vendor) =>
+          navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
+      />
+    );
+  } else if (view === 'month') {
+    const stale = !agg || !cal || cal.month !== month || agg.from !== range.from || agg.to !== range.to;
     if (!total || !matrix || stale) return <LoadingScreen />;
     if (total.total === 0) return <FirstRun />;
     body = (
-      <HomeView
-        total={total}
+      <MonthView
         cal={cal}
         agg={agg}
         matrix={matrix}
@@ -486,11 +518,10 @@ export function App() {
         unit={unit}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
-        onToday={backToCurrentMonth}
+        onThisMonth={thisMonth}
         onSelectDay={selectDay}
         onClearSelection={clearSelection}
-        topScope={topScope}
-        onTopScope={scope => goHome({ scope })}
+        onOpenDay={gotoDay}
         onOpenDir={dir => navigate('/conversations', [['dir', dir]])}
         onOpenCell={(agent, model, vendor) =>
           navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}

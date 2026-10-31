@@ -1,4 +1,4 @@
-export type View = 'home' | 'today' | 'conv' | 'log';
+export type View = 'home' | 'month' | 'today' | 'conv' | 'log';
 export type Unit = 'zh' | 'abbr' | 'full';
 export type Theme = 'light' | 'dark';
 

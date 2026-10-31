@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 
 import type { DayPayload } from '../types.ts';
 import type { Unit } from '../state.ts';
-import { LeadRow } from '../components/LeadRow.tsx';
+import { BucketStrip } from '../components/BucketStrip.tsx';
 import { fmtPct, fmtTok, modelLabel, hhmm } from '../format.ts';
 
 interface TodayViewProps {
@@ -17,13 +17,6 @@ interface TodayViewProps {
 
 /** 小时图里柱子区的高度。标签占 15px，柱子按百分比填满剩下的部分。 */
 const CHART_H = 96;
-
-const BUCKETS: { key: 'input' | 'output' | 'cacheRead' | 'cacheWrite'; label: string }[] = [
-  { key: 'input', label: '输入 / 未命中缓存' },
-  { key: 'output', label: '输出 / 含推理' },
-  { key: 'cacheRead', label: '缓存命中' },
-  { key: 'cacheWrite', label: '缓存写入 / 首次写入' }
-];
 
 function heatStyle(v: number, max: number): CSSProperties {
   if (!v) return { background: 'transparent' };
@@ -110,17 +103,7 @@ export function TodayView(props: TodayViewProps) {
           </span>
           <span className="r">{tok(t.tokens)}</span>
         </div>
-        {BUCKETS.map((b, i) => (
-          <LeadRow
-            key={b.key}
-            label={
-              b.key === 'cacheRead'
-                ? b.label + ' / ' + fmtPct(t.tokens ? t.buckets.cacheRead / t.tokens : 0)
-                : b.label
-            }
-            value={tok(t.buckets[b.key])}
-          />
-        ))}
+        <BucketStrip buckets={t.buckets} total={t.tokens} unit={unit} />
       </div>
 
       <div className="sec">

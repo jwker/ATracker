@@ -29,7 +29,10 @@ export const api = {
   total: () => request<TotalPayload>('/api/total'),
   calendar: (month: string) => request<CalendarPayload>('/api/calendar', { month }),
   aggregate: (from: string, to: string) => request<AggregatePayload>('/api/aggregate', { from, to }),
+  /** 全期汇总。总账页用，服务端按库里的最早/最晚一天取区间。 */
+  aggregateAll: () => request<AggregatePayload>('/api/aggregate', { all: 1 }),
   matrix: (from: string, to: string) => request<MatrixPayload>('/api/matrix', { from, to }),
+  matrixAll: () => request<MatrixPayload>('/api/matrix', { all: 1 }),
   day: (date: string) => request<DayPayload>('/api/day', { date }),
   conversations: (filter: {
     dir?: string | null;
