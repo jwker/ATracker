@@ -134,6 +134,8 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 
 打包后的应用把数据库放在用户数据目录（macOS 是 `~/Library/Application Support/ATracker/atracker.db`），首次启动会自动扫一遍本机日志，不需要手动跑 `npm run scan`。
 
+**窗口尺寸**：默认取屏幕工作区宽度的 80%（夹在 1000–1400 之间）和高度 92%（上限 1200），这块屏幕上就是 1210×820，小票两侧各留 195px 桌面。拖过之后尺寸和位置记在 `~/Library/Application Support/ATracker/window-state.json`，下次沿用；删掉这个文件就回到默认值。位置只在还落在某块屏幕里时才恢复，换了显示器不会跑到屏幕外。
+
 外壳只有 `packages/desktop/src/main.ts` 一个文件：主进程里 `import ATrackerServer`，起一个只监听 `127.0.0.1`、端口随机的本地服务，再把窗口指过去。服务端代码没有为桌面版改写，也没有 IPC，所以 `npm run serve` 和桌面版跑的是同一套代码。数据目录、监听地址、端口都由 main 传入。
 
 几个注意点：
