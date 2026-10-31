@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 · 总账 / 月度 两页拆分</title>
+<style>
+  :root[data-mode="light"] {
+    --desk: #cfd0cb; --paper: #f6f5f0; --ink: #17181a; --muted: #6c6e69; --faint: #a9aba5;
+    --rule: #c9cbc4; --accent: #bf3b22; --wash: #e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  :root[data-mode="dark"] {
+    --desk: #0d0e0f; --paper: #1a1b1d; --ink: #ecebe4; --muted: #a2a39d; --faint: #6f716c;
+    --rule: #3b3c39; --accent: #ff6a4d; --wash: #232426;
+    --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--desk); color: var(--ink);
+    font-family: "Courier New", "SF Mono", Menlo, monospace;
+    font-size: 12px; line-height: 1.55; padding: 24px 12px 56px;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- 稿面 ---------- */
+  .sheet { max-width: 900px; margin: 0 auto 30px; }
+  .cap { display: flex; align-items: baseline; gap: 10px; color: var(--desk); font-size: 10px; letter-spacing: .12em; padding: 0 2px 6px; }
+  .cap b { font-size: 11px; letter-spacing: .16em; }
+  .cap .r { margin-left: auto; opacity: .78; }
+  .why { color: var(--desk); font-size: 9.5px; line-height: 1.75; opacity: .82; margin: 0 2px 9px; max-width: 840px; }
+  .why b { opacity: 1; font-weight: 700; }
+  .why code { font-size: 9px; background: #0000001f; padding: 0 3px; }
+
+  /* ---------- 小票 ---------- */
+  .receipt {
+    max-width: 820px; margin: 0 auto; background: var(--paper);
+    padding: 22px 34px 26px; position: relative; box-shadow: 0 14px 40px #0000001f;
+  }
+  .receipt::before, .receipt::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 10px;
+    background:
+      linear-gradient(135deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x,
+      linear-gradient(45deg, var(--desk) 5px, transparent 0) 0 0 / 10px 10px repeat-x;
+    background-color: var(--paper);
+  }
+  .receipt::before { top: -10px; }
+  .receipt::after { bottom: -10px; transform: rotate(180deg); }
+
+  .rhead { text-align: center; border-bottom: 2px solid var(--ink); padding-bottom: 10px; }
+  .rhead .name { font-size: 24px; font-weight: 700; letter-spacing: .34em; }
+  .rhead .sub { font-size: 9px; color: var(--muted); letter-spacing: .28em; margin-top: 2px; }
+  .barcode { height: 24px; max-width: 260px; margin: 8px auto 4px;
+    background: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 4px, var(--ink) 4px 5px, transparent 5px 9px, var(--ink) 9px 12px, transparent 12px 14px, var(--ink) 14px 15px, transparent 15px 19px); }
+  .rno { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted);
+    border-top: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); padding: 4px 0; margin-top: 6px; }
+  .navrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 11px 0 2px; }
+  .tab { border: 1px solid var(--ink); background: transparent; padding: 4px 9px; font-size: 10px; letter-spacing: .12em; }
+  .tab[aria-current="true"] { background: var(--ink); color: var(--paper); }
+  .sp { flex: 1; }
+  .unit { display: flex; border: 1px solid var(--rule); margin-left: 4px; }
+  .unit span { border-left: 1px solid var(--rule); padding: 3px 7px; font-size: 9px; color: var(--muted); letter-spacing: .08em; }
+  .unit span:first-child { border-left: 0; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .ghost { border: 1px dashed var(--rule); background: transparent; color: var(--muted); padding: 3px 8px; font-size: 9px; letter-spacing: .1em; }
+  .tear { text-align: center; font-size: 8.5px; color: var(--faint); letter-spacing: .3em; margin: 12px 0 10px; }
+
+  /* 范围：总账是静态一行，月度是可选标签 */
+  .fixed-scope { display: flex; align-items: baseline; gap: 8px; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; margin-bottom: 9px; }
+  .fixed-scope .chip { border: 1px solid var(--ink); font-size: 9px; padding: 0 6px; letter-spacing: .1em; }
+  .fixed-scope .v { font-size: 10px; letter-spacing: .04em; }
+  .fixed-scope .hint { margin-left: auto; font-size: 9px; color: var(--faint); }
+
+  .scope-row { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; margin-bottom: 9px; }
+  .scope-row .lead { font-size: 9px; color: var(--muted); letter-spacing: .18em; }
+  .scope { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .scope-pill { display: inline-block; background: var(--accent); color: var(--paper); font-size: 10px; padding: 1px 7px; letter-spacing: .02em; }
+  .scope-pill .arrow { opacity: .7; margin: 0 4px; }
+  .scope-badge { display: inline-block; border: 1px solid var(--rule); color: var(--muted); font-size: 8.5px; padding: 0 4px; }
+  .scope-x { background: none; border: 0; padding: 0; font-size: 9px; color: var(--muted); text-decoration: underline; }
+  .scope-row .go { margin-left: auto; font-size: 9px; color: var(--muted); text-decoration: underline; letter-spacing: .04em; }
+
+  .total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+  .total-line .lab { font-size: 9.5px; letter-spacing: .18em; color: var(--muted); }
+  .total-line .val { font-size: 44px; font-weight: 700; letter-spacing: -.04em; line-height: 1.05; }
+  .total-line .tiny { font-size: 9px; color: var(--muted); letter-spacing: .04em; }
+  .total-line .side { text-align: right; }
+  .total-line .hero { font-size: 28px; color: var(--accent); letter-spacing: -.03em; }
+
+  .sec { margin-top: 15px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--ink); padding-bottom: 3px; margin-bottom: 8px; }
+  .sec-h b { font-size: 10px; letter-spacing: .18em; }
+  .sec-h span { font-size: 9px; color: var(--muted); letter-spacing: .08em; }
+  .sec-h .r { margin-left: auto; font-size: 9px; color: var(--muted); }
+
+  /* 四桶：方案 A 四格横排 */
+  .brow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .brow .c { padding: 1px 8px 0; border-left: 1px dotted var(--rule); }
+  .brow .c:first-child { border-left: 0; padding-left: 0; }
+  .brow .k { font-size: 8.5px; color: var(--muted); letter-spacing: .1em; white-space: nowrap; }
+  .brow .v { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .brow .s { font-size: 8.5px; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+  /* 月历 */
+  .cal-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .cal-tools .scope2 { font-size: 10px; letter-spacing: .06em; }
+  .cal-tools .tip { margin-left: auto; font-size: 9px; color: var(--faint); }
+  .wk, .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .wk div { text-align: center; font-size: 8.5px; color: var(--muted); letter-spacing: .18em; padding-bottom: 2px; }
+  .wk div:nth-child(6), .wk div:nth-child(7) { color: var(--accent); }
+  .cell { border: 1px solid var(--rule); min-height: 56px; padding: 4px 5px 0; display: flex; flex-direction: column; text-align: left; background: transparent; }
+  .cell.out { border-color: transparent; }
+  .cell.inrange { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .cell.inrange .d { color: var(--accent); }
+  .cell.sel { border-color: var(--accent); }
+  .cell .d { font-size: 9px; color: var(--muted); }
+  .cell .v { font-size: 9.5px; font-variant-numeric: tabular-nums; margin: 1px 0 auto; }
+  .cell .bar { height: 5px; background: var(--wash); margin: 0 -5px; }
+  .cell .bar i { display: block; height: 5px; background: var(--t3); }
+  .legend { display: flex; flex-wrap: wrap; gap: 3px 13px; margin: 8px 0 2px; font-size: 9.5px; }
+  .legend .lg { display: inline-flex; align-items: baseline; gap: 5px; }
+  .legend .sw { width: 9px; height: 9px; display: inline-block; transform: translateY(1px); }
+  .legend .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* 交叉表 */
+  table.mx { width: 100%; border-collapse: collapse; }
+  table.mx th, table.mx td { border: 1px solid var(--rule); padding: 4px 5px; font-size: 9px; text-align: right; font-variant-numeric: tabular-nums; }
+  table.mx th { color: var(--muted); border-bottom-color: var(--ink); font-weight: 700; }
+  table.mx th.l, table.mx td.l { text-align: left; }
+  table.mx td.c { cursor: pointer; }
+  .heat { }
+
+  /* 条形区 */
+  .bars .row { margin: 6px 0 8px; }
+  .bars .top { display: flex; align-items: baseline; gap: 5px; font-size: 9.5px; }
+  .bars .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
+  .bars .v { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bars .track { height: 7px; background: var(--wash); margin-top: 2px; }
+  .bars .track i { display: block; height: 7px; background: var(--ink); }
+  .bars .dot { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+  .note { font-size: 9px; color: var(--muted); line-height: 1.75; }
+
+  /* 对比/清单 */
+  table.cmp { width: 100%; border-collapse: collapse; }
+  table.cmp th, table.cmp td { border-bottom: 1px dotted var(--rule); padding: 5px 4px; font-size: 9.5px; text-align: left; vertical-align: top; }
+  table.cmp th { border-bottom: 1px solid var(--ink); color: var(--muted); letter-spacing: .06em; }
+  table.cmp td code { background: #0000001f; padding: 0 3px; font-size: 9px; }
+  .tools { max-width: 900px; margin: 0 auto 20px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--desk); }
+  .tools .lab { font-size: 9.5px; letter-spacing: .08em; opacity: .8; }
+  .tools button { border: 1px solid var(--desk); background: transparent; color: var(--desk); padding: 3px 10px; font-size: 9.5px; letter-spacing: .1em; }
+  .tools button.on { background: var(--desk); color: var(--paper); }
+  @media (width <= 700px) {
+    body { padding: 14px 6px 40px; }
+    .receipt { padding: 16px 16px 20px; }
+    .total-line .val { font-size: 32px; }
+    .brow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 0; }
+    .brow .c:nth-child(3) { border-left: 0; padding-left: 0; }
+    table.mx { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="tools">
+  <span class="lab">明暗</span>
+  <button id="m-light" class="on">日间小票</button>
+  <button id="m-dark">夜间小票</button>
+  <span class="lab" style="margin-left:auto">真实数据 · 2026-10-31 19:20</span>
+</div>
+
+<!-- ==================================================================== -->
+<!-- 一、总账                                                              -->
+<!-- ==================================================================== -->
+<div class="sheet">
+  <div class="cap"><b>一、总账 · 全部记录（#/）</b><span class="r">首页 / 只有一个作用域：全期</span></div>
+  <p class="why">没有日历、没有范围切换。顶部一行静态说明「全期 · 覆盖 42 天 · 2026-06-11 起」，把时间上下文交代清楚就够。下面的总量、四桶、交叉表、模型、目录全部是全期口径，页面里不存在第二个作用域，也就没有切换逻辑要理解。</p>
+  <div class="receipt">
+    <div class="rhead"><div class="name">ATRACKER</div><div class="sub">LOCAL TOKEN RECEIPT</div><div class="barcode"></div></div>
+    <div class="rno"><span>NO. 20261031</span><span>2026-10-31 19:20</span><span>TERMINAL 01</span></div>
+    <div class="navrow">
+      <button class="tab" aria-current="true">总账</button>
+      <button class="tab">月度</button>
+      <button class="tab">今日</button>
+      <button class="tab">会话</button>
+      <button class="tab">日志</button>
+      <span class="sp"></span>
+      <div class="unit"><span>中文</span><span>缩写</span><span>千分位</span></div>
+      <button class="ghost">夜间小票</button>
+    </div>
+    <div class="tear">TEAR ALONG DOTTED LINE</div>
+
+    <div class="fixed-scope">
+      <span class="chip">全期</span>
+      <span class="v">覆盖 42 天 · 2026-06-11 → 今天</span>
+      <span class="hint">看某个月或某个区间，去「月度」</span>
+    </div>
+
+    <div class="total-line">
+      <div>
+        <div class="lab">TOKEN 总量</div>
+        <div class="val">34.27 亿</div>
+        <div class="tiny">全期累计 / 四桶合计</div>
+      </div>
+      <div class="side">
+        <div class="lab" style="text-align:right">缓存命中率</div>
+        <div class="hero">96.4%</div>
+        <div class="tiny">命中 32.95 亿 / 未命中 1.22 亿</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>TOKEN 四桶</b><span class="r">34.27 亿</span></div>
+      <div class="brow">
+        <div class="c"><div class="k">输入 / 未命中</div><div class="v">1.22 亿<span class="s">3.6%</span></div></div>
+        <div class="c"><div class="k">输出 / 含推理</div><div class="v">1031.6 万<span class="s">0.3%</span></div></div>
+        <div class="c"><div class="k">缓存命中</div><div class="v">32.95 亿<span class="s">96.1%</span></div></div>
+        <div class="c"><div class="k">缓存写入</div><div class="v">2.5 万<span class="s">0.0%</span></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>来源 × 模型</b><span>格内深浅表示量级</span><span class="r">点格下钻到会话</span></div>
+      <table class="mx">
+        <thead>
+          <tr>
+            <th class="l">模型</th><th>pi</th><th>opencode</th><th>dsh</th><th>claude-code</th><th>codex</th><th>合计</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="l">minimax-cn/MiniMax-M3.1-Flash</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t1) 100%, transparent);color:var(--paper)">13.05 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>-</td><td>13.05 亿</td>
+          </tr>
+          <tr>
+            <td class="l">deepseek/deepseek-v4-flash</td>
+            <td>-</td><td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t2) 100%, transparent);color:var(--paper)">4.06 亿</td>
+            <td>6.99 万</td><td>-</td><td>4.06 亿</td>
+          </tr>
+          <tr>
+            <td class="l">opencode/deepseek-v4.1-flash-free</td>
+            <td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t2) 100%, transparent);color:var(--paper)">4.01 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>4.01 亿</td>
+          </tr>
+          <tr>
+            <td class="l">opencode-go/deepseek-v4.1-flash</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t2) 100%, transparent);color:var(--paper)">3.98 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>-</td><td>3.98 亿</td>
+          </tr>
+          <tr>
+            <td class="l">deepseek/deepseek-flash</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t3) 100%, transparent);color:var(--paper)">1.79 亿</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t5) 100%, transparent)">5933.3 万</td>
+            <td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t4) 100%, transparent)">7749.4 万</td>
+            <td>-</td><td>3.16 亿</td>
+          </tr>
+          <tr>
+            <td class="l">minimax-cn-coding-plan/MiniMax-M3.1-Flash</td>
+            <td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t4) 100%, transparent)">2.09 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>2.09 亿</td>
+          </tr>
+          <tr>
+            <td class="l">合计</td><td>19.13 亿</td><td>6.79 亿</td><td>5.19 亿</td><td>3.15 亿</td><td>2.2 万</td><td>34.27 亿</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>模型用量</b><span>按 token 降序</span></div>
+      <div class="bars">
+        <div class="row"><div class="top"><span>minimax-cn/MiniMax-M3.1-Flash</span><span class="dots"></span><span class="v">38.1% / 13.05 亿</span></div><div class="track"><i style="width:38.1%"></i></div></div>
+        <div class="row"><div class="top"><span>deepseek/deepseek-v4-flash</span><span class="dots"></span><span class="v">11.8% / 4.06 亿</span></div><div class="track"><i style="width:11.8%"></i></div></div>
+        <div class="row"><div class="top"><span>opencode/deepseek-v4.1-flash-free</span><span class="dots"></span><span class="v">11.7% / 4.01 亿</span></div><div class="track"><i style="width:11.7%"></i></div></div>
+        <div class="row"><div class="top"><span>opencode-go/deepseek-v4.1-flash</span><span class="dots"></span><span class="v">11.6% / 3.98 亿</span></div><div class="track"><i style="width:11.6%"></i></div></div>
+        <div class="row"><div class="top"><span>deepseek/deepseek-flash</span><span class="dots"></span><span class="v">9.2% / 3.16 亿</span></div><div class="track"><i style="width:9.2%"></i></div></div>
+        <div class="row"><div class="top"><span>minimax-cn-coding-plan/MiniMax-M3.1-Flash</span><span class="dots"></span><span class="v">6.1% / 2.09 亿</span></div><div class="track"><i style="width:6.1%"></i></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>目录用量</b><span>点一行查看该目录的会话</span></div>
+      <div class="bars">
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c9538a"></span>host/Codelet</span><span class="dots"></span><span class="v">31.1% / 10.67 亿</span></div><div class="track"><i style="width:31.1%;background:#c9538a"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4a7fc9"></span>host/pi-observer</span><span class="dots"></span><span class="v">22.2% / 7.60 亿</span></div><div class="track"><i style="width:22.2%;background:#4a7fc9"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4aa38a"></span>host/ATracker</span><span class="dots"></span><span class="v">13.1% / 4.48 亿</span></div><div class="track"><i style="width:13.1%;background:#4aa38a"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c08a3e"></span>host/nut-md</span><span class="dots"></span><span class="v">8.8% / 3.00 亿</span></div><div class="track"><i style="width:8.8%;background:#c08a3e"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c76a6a"></span>ai-host/pi-chat-box</span><span class="dots"></span><span class="v">5.5% / 1.90 亿</span></div><div class="track"><i style="width:5.5%;background:#c76a6a"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#9a6fc4"></span>(未知目录)</span><span class="dots"></span><span class="v">4.3% / 1.47 亿</span></div><div class="track"><i style="width:4.3%;background:#9a6fc4"></i></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>NOTE</b><span>口径</span></div>
+      <div class="note">四桶合计等于全期 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。看板只统计 token，不折算金额。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- 二、月度                                                              -->
+<!-- ==================================================================== -->
+<div class="sheet">
+  <div class="cap"><b>二、月度 · 一个月或一个选区（#/month）</b><span class="r">日历在这里 / 状态：选中 10-19 → 10-23</span></div>
+  <p class="why">范围标签在总量之上（沿用上一稿的落位方案），月历紧跟在四桶之后。翻月用 PREV / NEXT / 本月，点一天选中、再点一天成区间、再点同一天取消。除范围标签外，这一页的其余结构与总账完全相同——四桶、交叉表、模型、目录都是同一套组件，只是喂进去的区间不同。</p>
+  <div class="receipt">
+    <div class="rhead"><div class="name">ATRACKER</div><div class="sub">LOCAL TOKEN RECEIPT</div><div class="barcode"></div></div>
+    <div class="rno"><span>NO. 20261031</span><span>2026-10-31 19:20</span><span>TERMINAL 01</span></div>
+    <div class="navrow">
+      <button class="tab">总账</button>
+      <button class="tab" aria-current="true">月度</button>
+      <button class="tab">今日</button>
+      <button class="tab">会话</button>
+      <button class="tab">日志</button>
+      <span class="sp"></span>
+      <div class="unit"><span>中文</span><span>缩写</span><span>千分位</span></div>
+      <button class="ghost">夜间小票</button>
+    </div>
+    <div class="tear">TEAR ALONG DOTTED LINE</div>
+
+    <div class="scope-row">
+      <span class="lead">范围</span>
+      <span class="scope">
+        <span class="scope-pill">2026-10-19<span class="arrow">→</span>2026-10-23</span>
+        <span class="scope-badge">5 天</span>
+        <button class="scope-x">清除</button>
+      </span>
+      <span class="go">查看这 5 天的明细 →</span>
+    </div>
+
+    <div class="total-line">
+      <div>
+        <div class="lab">TOKEN 总量</div>
+        <div class="val">13.75 亿</div>
+        <div class="tiny">选中区间 / 覆盖 5 天</div>
+      </div>
+      <div class="side">
+        <div class="lab" style="text-align:right">缓存命中率</div>
+        <div class="hero">97.4%</div>
+        <div class="tiny">命中 13.35 亿 / 未命中 3577.6 万</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>TOKEN 四桶</b><span class="r">13.75 亿</span></div>
+      <div class="brow">
+        <div class="c"><div class="k">输入 / 未命中</div><div class="v">3577.6 万<span class="s">2.6%</span></div></div>
+        <div class="c"><div class="k">输出 / 含推理</div><div class="v">367.0 万<span class="s">0.3%</span></div></div>
+        <div class="c"><div class="k">缓存命中</div><div class="v">13.35 亿<span class="s">97.1%</span></div></div>
+        <div class="c"><div class="k">缓存写入</div><div class="v">0<span class="s">0.0%</span></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>月历</b><span>2026 年 10 月 / 31 天</span><span class="r">一个月里 19 天有用量</span></div>
+      <div class="cal-tools">
+        <button class="ghost">PREV</button>
+        <button class="ghost">NEXT</button>
+        <button class="ghost">本月</button>
+        <span class="scope2">点一天选中，再点另一天成区间</span>
+        <span class="tip">灰格 = 没有用量</span>
+      </div>
+      <div class="wk">
+        <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+      </div>
+      <div class="cal">
+        <div class="cell out"></div><div class="cell out"></div><div class="cell out"></div>
+
+        <div class="cell"><span class="d">1</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">2</span><span class="v">6708.7 万</span><span class="bar"><i style="width:13%"></i></span></div>
+        <div class="cell"><span class="d">3</span><span class="v">884.6 万</span><span class="bar"><i style="width:1.7%"></i></span></div>
+        <div class="cell"><span class="d">4</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">5</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">6</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">7</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+
+        <div class="cell"><span class="d">8</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">9</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">10</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">11</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">12</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">13</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+        <div class="cell"><span class="d">14</span><span class="v">--</span><span class="bar"><i style="width:0"></i></span></div>
+
+        <div class="cell"><span class="d">15</span><span class="v">7.2 万</span><span class="bar"><i style="width:0.1%"></i></span></div>
+        <div class="cell"><span class="d">16</span><span class="v">85.7 万</span><span class="bar"><i style="width:0.2%"></i></span></div>
+        <div class="cell"><span class="d">17</span><span class="v">4264.2 万</span><span class="bar"><i style="width:8.4%"></i></span></div>
+        <div class="cell"><span class="d">18</span><span class="v">852.7 万</span><span class="bar"><i style="width:1.7%"></i></span></div>
+        <div class="cell inrange sel"><span class="d">19</span><span class="v">2.52 亿</span><span class="bar"><i style="width:50%"></i></span></div>
+        <div class="cell inrange"><span class="d">20</span><span class="v">2.55 亿</span><span class="bar"><i style="width:50.4%"></i></span></div>
+        <div class="cell inrange"><span class="d">21</span><span class="v">4.20 亿</span><span class="bar"><i style="width:83.2%"></i></span></div>
+
+        <div class="cell inrange"><span class="d">22</span><span class="v">1.98 亿</span><span class="bar"><i style="width:39.2%"></i></span></div>
+        <div class="cell inrange sel"><span class="d">23</span><span class="v">2.50 亿</span><span class="bar"><i style="width:49.4%"></i></span></div>
+        <div class="cell"><span class="d">24</span><span class="v">449.2 万</span><span class="bar"><i style="width:0.9%"></i></span></div>
+        <div class="cell"><span class="d">25</span><span class="v">5014.1 万</span><span class="bar"><i style="width:9.9%"></i></span></div>
+        <div class="cell"><span class="d">26</span><span class="v">5908.8 万</span><span class="bar"><i style="width:11.7%"></i></span></div>
+        <div class="cell"><span class="d">27</span><span class="v">8527.6 万</span><span class="bar"><i style="width:16.9%"></i></span></div>
+        <div class="cell"><span class="d">28</span><span class="v">1.26 亿</span><span class="bar"><i style="width:24.9%"></i></span></div>
+
+        <div class="cell"><span class="d">29</span><span class="v">3.51 亿</span><span class="bar"><i style="width:69.5%"></i></span></div>
+        <div class="cell"><span class="d">30</span><span class="v">5.05 亿</span><span class="bar"><i style="width:100%"></i></span></div>
+        <div class="cell"><span class="d">31</span><span class="v">2.22 亿</span><span class="bar"><i style="width:43.9%"></i></span></div>
+        <div class="cell out"></div><div class="cell out"></div><div class="cell out"></div><div class="cell out"></div>
+      </div>
+      <div class="legend">
+        <span class="lg"><span class="sw" style="background:var(--t3)"></span>当天用量<span class="n">条形按当月最高一天折算</span></span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>来源 × 模型</b><span>格内深浅表示量级</span><span class="r">点格下钻到会话</span></div>
+      <table class="mx">
+        <thead>
+          <tr><th class="l">模型</th><th>pi</th><th>opencode</th><th>dsh</th><th>claude-code</th><th>codex</th><th>合计</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="l">minimax-cn/MiniMax-M3.1-Flash</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t1) 100%, transparent);color:var(--paper)">7.79 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>-</td><td>7.79 亿</td>
+          </tr>
+          <tr>
+            <td class="l">opencode/deepseek-v4.1-flash-free</td>
+            <td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t2) 100%, transparent);color:var(--paper)">2.32 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>2.32 亿</td>
+          </tr>
+          <tr>
+            <td class="l">deepseek/deepseek-flash</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t4) 100%, transparent)">8278.1 万</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t4) 100%, transparent)">5068.3 万</td>
+            <td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t4) 100%, transparent)">7749.4 万</td>
+            <td>-</td><td>2.11 亿</td>
+          </tr>
+          <tr>
+            <td class="l">minimax-cn-coding-plan/MiniMax-M3.1-Flash</td>
+            <td>-</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t3) 100%, transparent);color:var(--paper)">1.24 亿</td>
+            <td>-</td><td>-</td><td>-</td><td>1.24 亿</td>
+          </tr>
+          <tr>
+            <td class="l">minimax-cn/MiniMax-M3</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t5) 100%, transparent)">2745.0 万</td>
+            <td>-</td><td>-</td><td>-</td><td>-</td><td>2745.0 万</td>
+          </tr>
+          <tr>
+            <td class="l">alibaba/Qwen/Qwen3-8B</td>
+            <td class="c" style="background:color-mix(in srgb, var(--t5) 100%, transparent)">100.4 万</td>
+            <td>-</td><td>-</td><td>-</td><td>-</td><td>100.4 万</td>
+          </tr>
+          <tr>
+            <td class="l">合计</td><td>8.90 亿</td><td>4.07 亿</td><td>-</td><td>7752.9 万</td><td>-</td><td>13.75 亿</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>模型用量</b><span>按 token 降序</span></div>
+      <div class="bars">
+        <div class="row"><div class="top"><span>minimax-cn/MiniMax-M3.1-Flash</span><span class="dots"></span><span class="v">56.6% / 7.79 亿</span></div><div class="track"><i style="width:56.6%"></i></div></div>
+        <div class="row"><div class="top"><span>opencode/deepseek-v4.1-flash-free</span><span class="dots"></span><span class="v">16.9% / 2.32 亿</span></div><div class="track"><i style="width:16.9%"></i></div></div>
+        <div class="row"><div class="top"><span>deepseek/deepseek-flash</span><span class="dots"></span><span class="v">15.3% / 2.11 亿</span></div><div class="track"><i style="width:15.3%"></i></div></div>
+        <div class="row"><div class="top"><span>minimax-cn-coding-plan/MiniMax-M3.1-Flash</span><span class="dots"></span><span class="v">9.0% / 1.24 亿</span></div><div class="track"><i style="width:9%"></i></div></div>
+        <div class="row"><div class="top"><span>minimax-cn/MiniMax-M3</span><span class="dots"></span><span class="v">2.0% / 2745.0 万</span></div><div class="track"><i style="width:2%"></i></div></div>
+        <div class="row"><div class="top"><span>alibaba/Qwen/Qwen3-8B</span><span class="dots"></span><span class="v">0.1% / 100.4 万</span></div><div class="track"><i style="width:0.1%"></i></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>目录用量</b><span>点一行查看该目录的会话</span></div>
+      <div class="bars">
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4a7fc9"></span>host/pi-observer</span><span class="dots"></span><span class="v">51.6% / 7.10 亿</span></div><div class="track"><i style="width:51.6%;background:#4a7fc9"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#4aa38a"></span>host/ATracker</span><span class="dots"></span><span class="v">27.9% / 3.84 亿</span></div><div class="track"><i style="width:27.9%;background:#4aa38a"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#9a6fc4"></span>(未知目录)</span><span class="dots"></span><span class="v">10.3% / 1.41 亿</span></div><div class="track"><i style="width:10.3%;background:#9a6fc4"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c08a3e"></span>design/v3</span><span class="dots"></span><span class="v">4.1% / 5691.0 万</span></div><div class="track"><i style="width:4.1%;background:#c08a3e"></i></div></div>
+        <div class="row"><div class="top"><span><span class="dot" style="background:#c76a6a"></span>host/my-git</span><span class="dots"></span><span class="v">3.0% / 4073.5 万</span></div><div class="track"><i style="width:3%;background:#c76a6a"></i></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>NOTE</b><span>口径</span></div>
+      <div class="note">四桶合计等于选中区间的 token 总量。子 agent 用量归入发起轮次，不重复计数。日期按 Asia/Shanghai 折算自然日。看板只统计 token，不折算金额。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- 三、月度的另外几种状态                                                 -->
+<!-- ==================================================================== -->
+<div class="sheet">
+  <div class="cap"><b>三、月度页的四个范围状态</b><span class="r">标签内容与右侧入口都要跟着变</span></div>
+  <p class="why">范围标签是这一页唯一的「当前在看什么」的说明，四种状态都要给出准确的文案。单天选中时右侧出现「查看这天的明细 →」，这是拆分后新增的、从月度走到今日的唯一入口。</p>
+  <div class="receipt">
+    <div class="rhead"><div class="name">ATRACKER</div><div class="sub">SCOPE STATES</div></div>
+
+    <div class="scope-row" style="margin-top:14px">
+      <span class="lead">范围</span>
+      <span class="scope"><span class="scope-pill">2026 年 10 月</span><span class="scope-badge">31 天</span></span>
+    </div>
+    <div class="note" style="margin-bottom:14px">状态 1 · 默认整月：没有选区，标签写月份，没有「清除」，右侧没有「查看明细」。</div>
+
+    <div class="scope-row">
+      <span class="lead">范围</span>
+      <span class="scope"><span class="scope-pill">2026-10-19<span class="arrow">→</span>2026-10-23</span><span class="scope-badge">5 天</span><button class="scope-x">清除</button></span>
+      <span class="go">查看这 5 天的明细 →</span>
+    </div>
+    <div class="note" style="margin-bottom:14px">状态 2 · 区间：出现「清除」和「查看这 N 天的明细」。</div>
+
+    <div class="scope-row">
+      <span class="lead">范围</span>
+      <span class="scope"><span class="scope-pill">2026-10-30</span><span class="scope-badge">1 天</span><button class="scope-x">清除</button></span>
+      <span class="go">查看这天的明细 →</span>
+    </div>
+    <div class="note" style="margin-bottom:14px">状态 3 · 单天：右侧入口改成指向今日页（<code>#/today/2026-10-30</code>）。</div>
+
+    <div class="scope-row" style="margin-bottom:2px">
+      <span class="lead">范围</span>
+      <span class="scope"><span class="scope-pill">2026-09-20<span class="arrow">→</span>2026-10-10</span><span class="scope-badge">21 天</span><button class="scope-x">清除</button></span>
+      <span class="go">查看这 21 天的明细 →</span>
+    </div>
+    <div class="note">状态 4 · 跨月区间：翻月时月历跟着走，但选区保留跨月的起止日期，标签写完整年份避免歧义。</div>
+  </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- 四、跳转关系                                                          -->
+<!-- ==================================================================== -->
+<div class="sheet">
+  <div class="cap"><b>四、页面之间的跳转</b><span class="r">谁跳到谁、带什么参数</span></div>
+  <div class="receipt">
+    <table class="cmp">
+      <thead>
+        <tr><th>从</th><th>动作</th><th>到</th><th>参数</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>顶部导航</td><td>点五个 tab</td><td>各自默认状态</td><td>总账 <code>#/</code>、月度 <code>#/month</code>、今日 <code>#/today</code>、会话、日志</td></tr>
+        <tr><td>总账</td><td>点目录行</td><td>会话</td><td><code>?dir=</code></td></tr>
+        <tr><td>总账</td><td>点交叉表格子</td><td>会话</td><td><code>?agent=&amp;model=&amp;vendor=</code></td></tr>
+        <tr><td>月度</td><td>点日历一天 / 两天</td><td>留在月度，改选区</td><td><code>?month=&amp;from=&amp;to=</code>（replaceState）</td></tr>
+        <tr><td>月度</td><td>单天选中后点「查看这天的明细」</td><td>今日</td><td><code>#/today/2026-10-30</code></td></tr>
+        <tr><td>月度</td><td>点目录行 / 交叉表格子</td><td>会话</td><td>同上</td></tr>
+        <tr><td>会话详情</td><td>「在日历中查看这天」</td><td>月度</td><td><code>#/month/2026-10?from=…&amp;to=…</code></td></tr>
+        <tr><td>今日</td><td>点交叉表格子 / 目录</td><td>会话</td><td>同上</td></tr>
+        <tr><td>旧链接</td><td>打开 <code>#/?from=…</code></td><td>月度</td><td>启动时重定向到 <code>#/month?from=…</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- 五、与现状的差异                                                      -->
+<!-- ==================================================================== -->
+<div class="sheet">
+  <div class="cap"><b>五、与现状的差异</b><span class="r">我替你定的四件事 + 一个顺带发现的 bug</span></div>
+  <div class="receipt">
+    <table class="cmp">
+      <thead><tr><th>项</th><th>现在</th><th>拆分后</th></tr></thead>
+      <tbody>
+        <tr><td>页面数</td><td>4 个</td><td>5 个，导航名用「月度」（不叫「当月」，因为能翻到别的月份）</td></tr>
+        <tr><td>总账页的作用域</td><td>「当前范围 / 全部记录」切换器只管一个数字，其余跟着日历选区走</td><td>全期，没有切换器；顶部一行静态说明「覆盖 42 天 · 2026-06-11 起」</td></tr>
+        <tr><td>月历</td><td>在总账页</td><td>在月度页，紧跟四桶之后</td></tr>
+        <tr><td>范围标签</td><td>四桶标题行里一个，月历标题右侧再来一个</td><td>只在月度页顶部一处（沿用上一稿的落位方案）</td></tr>
+        <tr><td>单天选区</td><td>只能选中，看不到当天明细</td><td>出现「查看这天的明细 →」跳到今日页</td></tr>
+        <tr><td>四桶排版</td><td>四行 leadrow，121px</td><td>四格横排，66px，两个页面都用（上次定的方案 A）</td></tr>
+      </tbody>
+    </table>
+
+    <p class="why" style="color:var(--muted);opacity:1;margin-top:12px">
+      <b>顺带发现的 bug：</b>「覆盖 N 天」现在读的是 <code>aggregatePayload.days</code>，而它是 <code>COUNT(*)</code> 统计 <code>agg_day_agent</code> 的行数，也就是「天 × 来源」的条数。实测全期覆盖 <b>42</b> 天，接口返回 <b>57</b>（因为多个来源在同一天各占一行）。改成 <code>COUNT(DISTINCT day)</code> 即可，这次拆分正好把这一行做成静态说明，一起修掉。
+    </p>
+    <p class="why" style="color:var(--muted);opacity:1">
+      <b>实现顺序建议：</b>① 修 days 的统计；② 路由加 <code>#/month</code>、导航加一项；③ 把 HomeView 拆成共用块（四桶 / 交叉表 / 模型 / 目录）+ 两个页面壳；④ 总账去掉 topScope 切换器、加静态说明行；⑤ 月度接月历和范围标签，单天入口接今日；⑥ 旧链接重定向；⑦ 文档同步（PRD 第 4 章、TECH 第 7 节路由表）。
+    </p>
+  </div>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const light = document.getElementById('m-light');
+  const dark = document.getElementById('m-dark');
+  function setMode(m) {
+    root.dataset.mode = m;
+    light.classList.toggle('on', m === 'light');
+    dark.classList.toggle('on', m === 'dark');
+  }
+  light.onclick = () => setMode('light');
+  dark.onclick = () => setMode('dark');
+</script>
+</body>
+</html>
