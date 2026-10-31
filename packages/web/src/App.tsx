@@ -6,20 +6,15 @@ import { HomeView } from './views/HomeView.tsx';
 import { TodayView } from './views/TodayView.tsx';
 import { ConversationsView } from './views/ConversationsView.tsx';
 import { LogsView } from './views/LogsView.tsx';
-import {
-  dayOf,
-  monthRange,
-  shiftMonth
-} from './format.ts';
-import {
-  EMPTY_CONV_FILTER,
-  EMPTY_LOG_FILTER,
-  type ConversationFilter,
-  type LogFilter,
-  type Selection,
-  type Theme,
-  type Unit,
-  type View
+import { dayOf, monthRange, shiftMonth } from './format.ts';
+import { navigate, useRoute, type Params } from './router.ts';
+import type {
+  ConversationFilter,
+  LogFilter,
+  Selection,
+  Theme,
+  Unit,
+  View
 } from './state.ts';
 import type {
   AggregatePayload,
@@ -33,27 +28,44 @@ import type {
   TotalPayload
 } from './types.ts';
 
-interface NavOptions {
-  clearConv?: boolean;
-  dir?: string;
-  agent?: string;
-  model?: string | null;
-  vendor?: string | null;
-  day?: string;
-  date?: string;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function todayDate(): string {
+  return dayOf(Date.now());
 }
 
-const params = new URLSearchParams(location.search);
-
-function initialView(): View {
-  const v = params.get('view');
-  return v === 'today' || v === 'conv' || v === 'log' ? v : 'home';
+function currentMonth(): string {
+  return todayDate().slice(0, 7);
 }
 
-/** 当日详情页看哪一天。默认今天，可以用 date 参数打开某一天。 */
-function initialDayDate(): string {
-  const d = params.get('date');
-  return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : dayOf(Date.now());
+/** 路径 → 顶部导航的视图 id。 */
+function viewOf(path: string): View {
+  if (path === '/today' || path.startsWith('/today/')) return 'today';
+  if (path === '/conversations') return 'conv';
+  if (path === '/logs') return 'log';
+  return 'home';
+}
+
+/** 会话页的参数。 */
+function convParams(f: ConversationFilter, q: string, id: string | null): Params {
+  return [
+    ['dir', f.dir],
+    ['agent', f.agent],
+    ['model', f.model],
+    ['vendor', f.vendor],
+    ['q', q],
+    ['id', id]
+  ];
+}
+
+/** 日志页的参数。和默认值相同的项不写进 URL。 */
+function logParams(f: LogFilter): Params {
+  return [
+    ['batch', f.batch === null ? null : String(f.batch)],
+    ['level', f.lvl === 'all' ? null : f.lvl],
+    ['source', f.src === 'all' ? null : f.src],
+    ['q', f.q || null]
+  ];
 }
 
 /** 日期加减一天。 */
@@ -65,13 +77,18 @@ function shiftDay(date: string, delta: number): string {
   return `${nd.getUTCFullYear()}-${p(nd.getUTCMonth() + 1)}-${p(nd.getUTCDate())}`;
 }
 
+const searchParams = new URLSearchParams(location.search);
+
+/** 旧版 URL 只转换一次。模块级标记，StrictMode 下重复执行也不会重定向。 */
+let legacyRedirected = false;
+
 function initialUnit(): Unit {
-  const u = params.get('unit');
+  const u = searchParams.get('unit');
   return u === 'abbr' || u === 'full' ? u : 'zh';
 }
 
 function initialTheme(): Theme {
-  const fromUrl = params.get('theme');
+  const fromUrl = searchParams.get('theme');
   if (fromUrl === 'dark' || fromUrl === 'light') return fromUrl;
   try {
     const saved = localStorage.getItem('atracker-mode');
@@ -80,26 +97,6 @@ function initialTheme(): Theme {
     // localStorage 不可用时退回默认值
   }
   return 'light';
-}
-
-function initialMonth(): string {
-  const from = params.get('from');
-  if (from && /^\d{4}-\d{2}/.test(from)) return from.slice(0, 7);
-  return new Date().toISOString().slice(0, 7);
-}
-
-function initialSelection(): Selection | null {
-  const from = params.get('from');
-  return from ? { a: from, b: from } : null;
-}
-
-function initialConvFilter(): ConversationFilter {
-  return {
-    dir: params.get('dir'),
-    agent: params.get('agent'),
-    model: params.get('model'),
-    vendor: params.get('vendor')
-  };
 }
 
 function LoadingScreen() {
@@ -156,17 +153,42 @@ function ErrorScreen({ message }: { message: string }) {
 }
 
 export function App() {
-  const [view, setView] = useState<View>(initialView);
+  const route = useRoute();
+  const view = viewOf(route.path);
+
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [unit, setUnit] = useState<Unit>(initialUnit);
-  const [month, setMonth] = useState<string>(initialMonth);
-  const [dayDate, setDayDate] = useState<string>(initialDayDate);
-  const [sel, setSel] = useState<Selection | null>(initialSelection);
-  const [topScope, setTopScope] = useState<'range' | 'total'>('range');
-  const [convFilter, setConvFilter] = useState<ConversationFilter>(initialConvFilter);
-  const [convQ, setConvQ] = useState('');
-  const [convId, setConvId] = useState<string | null>(null);
-  const [logFilter, setLogFilter] = useState<LogFilter>(EMPTY_LOG_FILTER);
+
+  // 总账的状态全在 URL 里。没有 month 就用本月，没有 from/to 就是整月。
+  const month = route.params.get('month') ?? currentMonth();
+  const from = route.params.get('from');
+  const to = route.params.get('to');
+  const sel: Selection | null = from ? { a: from, b: to ?? from } : null;
+  const topScope: 'range' | 'total' = route.params.get('scope') === 'total' ? 'total' : 'range';
+  const homeRange = sel ? { from: sel.a, to: sel.b } : monthRange(month);
+
+  // 今日的日期在路径里。#/today 永远指今天。
+  const dayMatch = route.path.match(/^\/today\/(.+)$/);
+  const dayDate = dayMatch && DAY_RE.test(dayMatch[1]) ? dayMatch[1] : todayDate();
+
+  // 会话页的状态。
+  const convFilter: ConversationFilter = {
+    dir: route.params.get('dir'),
+    agent: route.params.get('agent'),
+    model: route.params.get('model'),
+    vendor: route.params.get('vendor')
+  };
+  const convQ = route.params.get('q') ?? '';
+  const convId = route.params.get('id');
+
+  // 日志页的状态。
+  const batchParam = route.params.get('batch');
+  const logFilter: LogFilter = {
+    batch: batchParam ? Number(batchParam) : null,
+    lvl: route.params.get('level') ?? 'all',
+    src: route.params.get('source') ?? 'all',
+    q: route.params.get('q') ?? ''
+  };
 
   const [total, setTotal] = useState<TotalPayload | null>(null);
   const [cal, setCal] = useState<CalendarPayload | null>(null);
@@ -190,16 +212,44 @@ export function App() {
     }
   }, [theme]);
 
+  // 旧版 URL（?view=conv&dir=…）转成 hash 路由，免得存过的链接失效。
+  // 只跑一次：转换后地址栏里就没有 view 了，但模块加载时快照的 search 还在。
+  useEffect(() => {
+    if (legacyRedirected) return;
+    legacyRedirected = true;
+    const q = new URLSearchParams(location.search);
+    const v = q.get('view');
+    if (!v) return;
+    if (v === 'today') navigate('/today/' + (q.get('date') ?? todayDate()), [], { replace: true });
+    else if (v === 'conv') {
+      navigate('/conversations', [
+        ['dir', q.get('dir')],
+        ['agent', q.get('agent')],
+        ['model', q.get('model')],
+        ['vendor', q.get('vendor')]
+      ], { replace: true });
+    } else if (v === 'log') navigate('/logs', [], { replace: true });
+    else {
+      const legacyFrom = q.get('from');
+      if (legacyFrom && DAY_RE.test(legacyFrom)) {
+        navigate('/', [
+          ['month', legacyFrom.slice(0, 7)],
+          ['from', legacyFrom],
+          ['to', legacyFrom]
+        ], { replace: true });
+      } else navigate('/', [], { replace: true });
+    }
+  }, []);
+
   // 总账：累计、日历、区间聚合、来源 × 模型
   useEffect(() => {
     if (view !== 'home') return;
     let alive = true;
-    const range = sel ? { from: sel.a, to: sel.b } : monthRange(month);
     Promise.all([
       api.total(),
       api.calendar(month),
-      api.aggregate(range.from, range.to),
-      api.matrix(range.from, range.to)
+      api.aggregate(homeRange.from, homeRange.to),
+      api.matrix(homeRange.from, homeRange.to)
     ])
       .then(([t, c, a, m]) => {
         if (!alive) return;
@@ -213,7 +263,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, month, sel, refreshToken]);
+  }, [view, month, homeRange.from, homeRange.to, refreshToken]);
 
   // 会话列表。目录不进请求参数：一级菜单要列出所有目录，
   // 选哪个目录是前端的二级菜单状态。
@@ -237,20 +287,22 @@ export function App() {
     return () => { alive = false; };
   }, [view, convFilter.agent, convFilter.model, convFilter.vendor, convQ, refreshToken]);
 
-  // 选中的会话必须落在当前这一组里。目录换了就换成新组里的第一个；
-  // 选中的目录在这批结果里不存在，就退回全部目录。
+  // 选中的目录和会话必须在这一批结果里，不在就改成默认值写回 URL。
   useEffect(() => {
     if (view !== 'conv' || !conv) return;
     const groups = conv.groups;
     if (convFilter.dir && !groups.some(g => g.dir.path === convFilter.dir)) {
-      setConvFilter(prev => ({ ...prev, dir: null }));
+      navigate('/conversations', convParams({ ...convFilter, dir: null }, convQ, convId), { replace: true });
       return;
     }
     const list = convFilter.dir
       ? (groups.find(g => g.dir.path === convFilter.dir)?.list ?? [])
       : groups.flatMap(g => g.list);
-    setConvId(prev => (list.some(c => c.id === prev) ? prev : (list[0]?.id ?? null)));
-  }, [view, conv, convFilter.dir]);
+    if (list.length === 0) return;
+    if (!list.some(c => c.id === convId)) {
+      navigate('/conversations', convParams(convFilter, convQ, list[0].id), { replace: true });
+    }
+  }, [view, conv, convFilter.dir, convFilter.agent, convFilter.model, convFilter.vendor, convQ, convId]);
 
   // 单个会话详情
   useEffect(() => {
@@ -276,12 +328,7 @@ export function App() {
     if (view !== 'log') return;
     let alive = true;
     Promise.all([
-      api.logs({
-        batch: logFilter.batch,
-        level: logFilter.lvl,
-        source: logFilter.src,
-        q: logFilter.q
-      }),
+      api.logs({ batch: logFilter.batch, level: logFilter.lvl, source: logFilter.src, q: logFilter.q }),
       api.doctor()
     ])
       .then(([l, d]) => {
@@ -294,7 +341,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, logFilter, refreshToken]);
+  }, [view, logFilter.batch, logFilter.lvl, logFilter.src, logFilter.q, refreshToken]);
 
   // 当日详情
   useEffect(() => {
@@ -319,139 +366,114 @@ export function App() {
     return () => es.close();
   }, []);
 
-  function navigate(next: View, opts: NavOptions = {}) {
-    let nextFilter = convFilter;
-    let nextSel = sel;
-    let nextDate = dayDate;
+  /* ---------- 导航 ---------- */
 
-    setView(next);
-
-    if (opts.date) {
-      nextDate = opts.date;
-      setDayDate(nextDate);
-    }
-
-    if (opts.clearConv) {
-      nextFilter = EMPTY_CONV_FILTER;
-      setConvFilter(nextFilter);
-      setConvQ('');
-      setConvId(null);
-    } else if (opts.dir) {
-      nextFilter = { dir: opts.dir, agent: null, model: null, vendor: null };
-      setConvFilter(nextFilter);
-      setConvQ('');
-      setConvId(null);
-    } else if (opts.agent) {
-      nextFilter = {
-        dir: null,
-        agent: opts.agent,
-        model: opts.model ?? null,
-        vendor: opts.vendor ?? null
-      };
-      setConvFilter(nextFilter);
-      setConvQ('');
-      setConvId(null);
-    }
-
-    if (opts.day) {
-      nextSel = { a: opts.day, b: opts.day };
-      setSel(nextSel);
-      setMonth(dayOf(new Date(opts.day + 'T00:00:00').getTime()).slice(0, 7));
-    }
-
-    const url = new URL(location.href);
-    url.searchParams.set('view', next);
-    for (const key of ['dir', 'agent', 'model', 'vendor', 'from', 'date']) url.searchParams.delete(key);
-    if (next === 'conv') {
-      if (nextFilter.dir) url.searchParams.set('dir', nextFilter.dir);
-      if (nextFilter.agent) url.searchParams.set('agent', nextFilter.agent);
-      if (nextFilter.model) url.searchParams.set('model', nextFilter.model);
-      if (nextFilter.vendor) url.searchParams.set('vendor', nextFilter.vendor);
-    }
-    if (next === 'today') url.searchParams.set('date', nextDate);
-    if (nextSel) url.searchParams.set('from', nextSel.a);
-    history.replaceState({}, '', url);
-  }
-
+  /** 点顶部导航。每个按钮都回到自己的默认状态，不继承别的视图的选中项。 */
   function handleNav(next: View) {
-    if (next === 'conv') navigate('conv', { clearConv: true });
-    else if (next === 'today') navigate('today', { date: dayDate });
-    else navigate(next);
+    if (next === 'home') navigate('/');
+    else if (next === 'today') navigate('/today');
+    else if (next === 'conv') navigate('/conversations');
+    else navigate('/logs');
   }
 
-  function selectDay(day: string) {
-    setSel(prev => {
-      if (!prev) return { a: day, b: day };
-      if (prev.a === prev.b) {
-        if (day === prev.a) return null;
-        return { a: day < prev.a ? day : prev.a, b: day > prev.b ? day : prev.b };
-      }
-      return { a: day, b: day };
-    });
+  /* ---------- 总账 ---------- */
+
+  /** 改总账的 URL。同一页里改条件用 replace，避免后退要点很多次。 */
+  function goHome(next: { month?: string; sel?: Selection | null; scope?: 'range' | 'total' }): void {
+    const m = next.month ?? month;
+    const s = next.sel === undefined ? sel : next.sel;
+    const scope = next.scope ?? topScope;
+    navigate('/', [
+      ['month', m === currentMonth() ? null : m],
+      ['from', s?.a],
+      ['to', s?.b],
+      ['scope', scope === 'total' ? 'total' : null]
+    ], { replace: true });
+  }
+
+  function selectDay(dayKey: string) {
+    let next: Selection | null;
+    if (sel === null) next = { a: dayKey, b: dayKey };
+    else if (sel.a === sel.b) {
+      if (dayKey === sel.a) next = null;
+      else next = dayKey < sel.a ? { a: dayKey, b: sel.b } : { a: sel.a, b: dayKey };
+    } else next = { a: dayKey, b: dayKey };
+    goHome({ sel: next });
   }
 
   function prevMonth() {
-    setMonth(m => shiftMonth(m, -1));
-    setSel(null);
+    goHome({ month: shiftMonth(month, -1), sel: null });
   }
 
   function nextMonth() {
-    setMonth(m => shiftMonth(m, 1));
-    setSel(null);
+    goHome({ month: shiftMonth(month, 1), sel: null });
   }
 
-  function today() {
-    setSel(null);
-    setMonth(dayOf(Date.now()).slice(0, 7));
+  function backToCurrentMonth() {
+    goHome({ month: currentMonth(), sel: null });
   }
 
-  function clearConversation() {
-    navigate('conv', { clearConv: true });
-  }
-
-  /** 清掉日历上的选区，回到整月。 */
   function clearSelection() {
-    setSel(null);
-    const url = new URL(location.href);
-    url.searchParams.delete('from');
-    history.replaceState({}, '', url);
+    goHome({ sel: null });
   }
 
-  /** 一级菜单选目录。只改二级菜单看哪一组，别的筛选不动。 */
-  function selectDir(path: string | null) {
-    setConvFilter(prev => ({ ...prev, dir: path }));
-    const url = new URL(location.href);
-    url.searchParams.set('view', 'conv');
-    if (path) url.searchParams.set('dir', path);
-    else url.searchParams.delete('dir');
-    history.replaceState({}, '', url);
-  }
-
-  function clearLog() {
-    setLogFilter(EMPTY_LOG_FILTER);
-  }
+  /* ---------- 今日 ---------- */
 
   function gotoDay(date: string) {
-    navigate('today', { date });
+    navigate('/today/' + date);
   }
 
   function prevDay() {
-    gotoDay(shiftDay(dayDate, -1));
+    navigate('/today/' + shiftDay(dayDate, -1));
   }
 
   function nextDay() {
-    gotoDay(shiftDay(dayDate, 1));
+    navigate('/today/' + shiftDay(dayDate, 1));
   }
 
   function backToToday() {
-    gotoDay(dayOf(Date.now()));
+    navigate('/today');
+  }
+
+  /* ---------- 会话 ---------- */
+
+  function selectDir(path: string | null) {
+    navigate('/conversations', convParams({ ...convFilter, dir: path }, convQ, convId), { replace: true });
+  }
+
+  function selectConversation(id: string) {
+    navigate('/conversations', convParams(convFilter, convQ, id), { replace: true });
+  }
+
+  function searchConversations(q: string) {
+    navigate('/conversations', convParams(convFilter, q, convId), { replace: true });
+  }
+
+  function clearConversation() {
+    navigate('/conversations', [], { replace: true });
+  }
+
+  /** 「在日历中查看这天」：回到总账，选中这天。 */
+  function openDayInCalendar(date: string) {
+    navigate('/', [['month', date.slice(0, 7)], ['from', date], ['to', date]]);
+  }
+
+  /* ---------- 日志 ---------- */
+
+  function filterLogs(patch: Partial<LogFilter>) {
+    navigate('/logs', logParams({ ...logFilter, ...patch }), { replace: true });
+  }
+
+  function clearLog() {
+    navigate('/logs', [], { replace: true });
   }
 
   if (error) return <ErrorScreen message={error} />;
 
   let body: ReactNode;
   if (view === 'home') {
-    if (!total || !cal || !agg || !matrix) return <LoadingScreen />;
+    const stale = !agg || !cal || agg.from !== homeRange.from || agg.to !== homeRange.to || cal.month !== month;
+    if (!total || !matrix || stale) return <LoadingScreen />;
     if (total.total === 0) return <FirstRun />;
     body = (
       <HomeView
@@ -464,17 +486,18 @@ export function App() {
         unit={unit}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
-        onToday={today}
+        onToday={backToCurrentMonth}
         onSelectDay={selectDay}
         onClearSelection={clearSelection}
         topScope={topScope}
-        onTopScope={setTopScope}
-        onOpenDir={dir => navigate('conv', { dir })}
-        onOpenCell={(agent, model, vendor) => navigate('conv', { agent, model, vendor })}
+        onTopScope={scope => goHome({ scope })}
+        onOpenDir={dir => navigate('/conversations', [['dir', dir]])}
+        onOpenCell={(agent, model, vendor) =>
+          navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
       />
     );
   } else if (view === 'today') {
-    if (!day) return <LoadingScreen />;
+    if (!day || day.date !== dayDate) return <LoadingScreen />;
     body = (
       <TodayView
         day={day}
@@ -482,8 +505,9 @@ export function App() {
         onPrevDay={prevDay}
         onNextDay={nextDay}
         onToday={backToToday}
-        onOpenCell={(agent, model, vendor) => navigate('conv', { agent, model, vendor })}
-        onOpenDir={dir => navigate('conv', { dir })}
+        onOpenCell={(agent, model, vendor) =>
+          navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
+        onOpenDir={dir => navigate('/conversations', [['dir', dir]])}
       />
     );
   } else if (view === 'conv') {
@@ -498,10 +522,10 @@ export function App() {
         unit={unit}
         dirPath={convFilter.dir}
         onSelectDir={selectDir}
-        onSelect={setConvId}
-        onSearch={setConvQ}
+        onSelect={selectConversation}
+        onSearch={searchConversations}
         onClear={clearConversation}
-        onGoDay={day => navigate('home', { day })}
+        onGoDay={openDayInCalendar}
       />
     );
   } else {
@@ -511,7 +535,7 @@ export function App() {
         logs={logs}
         doctor={doctor}
         filter={logFilter}
-        onFilter={patch => setLogFilter(prev => ({ ...prev, ...patch }))}
+        onFilter={patch => filterLogs(patch)}
         onClear={clearLog}
         onRescan={api.scan}
       />
