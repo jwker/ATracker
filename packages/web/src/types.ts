@@ -81,7 +81,10 @@ export interface MatrixAgent {
 }
 
 export interface MatrixModel {
+  /** 聚合键：厂商/模型。cells 里也用它做键。 */
   id: string;
+  model: string;
+  vendor: string | null;
   tokens: number;
 }
 

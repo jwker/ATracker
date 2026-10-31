@@ -42,6 +42,15 @@ export function dirName(path: string): string {
   return parts.slice(-2).join('/');
 }
 
+/**
+ * 模型的显示名和聚合键：厂商/模型。
+ * 同名模型可能挂在不同厂商下（比如 minimax 和 minimax-cn），只看模型名会混成一条。
+ * 没有厂商时只给模型名。
+ */
+export function modelKey(vendor: string | null | undefined, model: string): string {
+  return vendor ? `${vendor}/${model}` : model;
+}
+
 function ranges(from?: string | null, to?: string | null): { from: string; to: string } {
   const today = new Date();
   const defTo = today.toISOString().slice(0, 10);
@@ -97,7 +106,7 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
   }
   for (const row of repo.matrix(from, to).cells) {
     if (!cells[row.agent]) cells[row.agent] = {};
-    cells[row.agent][row.model] = row.tokens;
+    cells[row.agent][modelKey(row.vendor, row.model)] = row.tokens;
   }
 
   const totals: any = bd.totals ?? { tokens: 0, cost_cny: 0, days: 0 };
@@ -132,24 +141,29 @@ export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | 
 
   const colTotal: Record<string, number> = {};
   const rowTotal: Record<string, number> = {};
+  const models = new Map<string, { id: string; model: string; vendor: string | null; tokens: number }>();
   let maxCell = 1;
 
   for (const row of repo.matrix(from, to).cells) {
     if (!cells[row.agent]) cells[row.agent] = {};
-    cells[row.agent][row.model] = row.tokens;
-    colTotal[row.model] = (colTotal[row.model] ?? 0) + row.tokens;
+    const key = modelKey(row.vendor, row.model);
+    cells[row.agent][key] = row.tokens;
+    colTotal[key] = (colTotal[key] ?? 0) + row.tokens;
     rowTotal[row.agent] = (rowTotal[row.agent] ?? 0) + row.tokens;
+    const hit = models.get(key);
+    models.set(key, {
+      id: key,
+      model: row.model,
+      vendor: row.vendor || null,
+      tokens: (hit?.tokens ?? 0) + row.tokens
+    });
     if (row.tokens > maxCell) maxCell = row.tokens;
   }
-
-  const models = Object.entries(colTotal)
-    .map(([id, tokens]) => ({ id, tokens }))
-    .sort((a, b) => b.tokens - a.tokens);
 
   return {
     from, to,
     agents: AGENTS,
-    models,
+    models: [...models.values()].sort((a, b) => b.tokens - a.tokens),
     cells,
     colTotal,
     rowTotal,
@@ -157,11 +171,12 @@ export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | 
   };
 }
 
-export function conversationsPayload(repo: Repo, filter: { dir?: string | null; agent?: string | null; model?: string | null; q?: string | null }) {
+export function conversationsPayload(repo: Repo, filter: { dir?: string | null; agent?: string | null; model?: string | null; vendor?: string | null; q?: string | null }) {
   const list = repo.conversations({
     dir: filter.dir ?? undefined,
     agent: filter.agent ?? undefined,
     model: filter.model ?? undefined,
+    vendor: filter.vendor ?? undefined,
     q: filter.q ?? undefined,
     limit: 500
   }) as any[];
@@ -315,17 +330,24 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
   for (const a of AGENTS) cells[a.id] = {};
   const colTotal: Record<string, number> = {};
   const rowTotal: Record<string, number> = {};
+  const modelRows = new Map<string, { id: string; model: string; vendor: string | null; tokens: number }>();
   let maxCell = 1;
   for (const row of repo.dayMatrix(date)) {
     if (!cells[row.agent]) cells[row.agent] = {};
-    cells[row.agent][row.model] = row.tokens;
-    colTotal[row.model] = (colTotal[row.model] ?? 0) + row.tokens;
+    const key = modelKey(row.vendor, row.model);
+    cells[row.agent][key] = row.tokens;
+    colTotal[key] = (colTotal[key] ?? 0) + row.tokens;
     rowTotal[row.agent] = (rowTotal[row.agent] ?? 0) + row.tokens;
+    const hit = modelRows.get(key);
+    modelRows.set(key, {
+      id: key,
+      model: row.model,
+      vendor: row.vendor || null,
+      tokens: (hit?.tokens ?? 0) + row.tokens
+    });
     if (row.tokens > maxCell) maxCell = row.tokens;
   }
-  const models = Object.entries(colTotal)
-    .map(([id, tokens]) => ({ id, tokens }))
-    .sort((a, b) => b.tokens - a.tokens);
+  const models = [...modelRows.values()].sort((a, b) => b.tokens - a.tokens);
 
   const hourFmt = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false

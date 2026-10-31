@@ -448,19 +448,21 @@ CREATE TABLE agg_day_dir (
   tokens INTEGER, cost_usd REAL, cost_cny REAL,
   PRIMARY KEY (day, dir)
 );
--- 按模型的日聚合：模型条形图用它
+-- 按模型的日聚合：模型条形图用它。
+-- 主键带 vendor：同名模型可能挂在不同厂商下（minimax 和 minimax-cn 都有 MiniMax-M3），
+-- 只按 model 分组会把两家合到一行，页面上就分不出是哪家的量。
 CREATE TABLE agg_day_model (
-  day TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT,
+  day TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER,
   tokens INTEGER, cost_usd REAL, cost_cny REAL,
-  PRIMARY KEY (day, model)
+  PRIMARY KEY (day, model, vendor)
 );
 -- 来源 × 模型的日聚合：交叉表用它
 CREATE TABLE agg_day_agent_model (
-  day TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT,
+  day TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER,
   tokens INTEGER, cost_usd REAL, cost_cny REAL,
-  PRIMARY KEY (day, agent, model)
+  PRIMARY KEY (day, agent, model, vendor)
 );
 -- 累计一行：4.1 和 4.2 直接读这张表
 CREATE TABLE agg_total (
@@ -489,6 +491,8 @@ CREATE TABLE agg_total (
 | 5.3 会话详情 | `usage_event` | 按 `session_id` 查，明细本来就要细 |
 
 **所有聚合查询都是小表扫描，前端每次刷新都是毫秒级。**
+
+**模型的显示和聚合都带厂商。** 接口里模型的聚合键是 `厂商/模型名`，页面上也这么显示。同名模型在不同厂商下是两条记录，交叉表的行、条形图的条目、按模型筛选会话都按这个键区分。没有厂商的模型（个别来源不上报 `provider`）只显示模型名。
 
 ### 4.3 增量维护
 

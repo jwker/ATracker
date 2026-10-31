@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import type { DayPayload } from '../types.ts';
 import type { Unit } from '../state.ts';
 import { LeadRow } from '../components/LeadRow.tsx';
-import { fmtPct, fmtTok, money, moneyUsd, hhmm } from '../format.ts';
+import { fmtPct, fmtTok, modelLabel, money, moneyUsd, hhmm } from '../format.ts';
 
 interface TodayViewProps {
   day: DayPayload;
@@ -11,7 +11,7 @@ interface TodayViewProps {
   onPrevDay: () => void;
   onNextDay: () => void;
   onToday: () => void;
-  onOpenCell: (agent: string, model: string) => void;
+  onOpenCell: (agent: string, model: string, vendor: string | null) => void;
   onOpenDir: (dir: string) => void;
 }
 
@@ -142,14 +142,14 @@ export function TodayView(props: TodayViewProps) {
               );
               return (
                 <tr key={m.id}>
-                  <td className="l">{m.id}</td>
+                  <td className="l">{modelLabel(m.model, m.vendor)}</td>
                   {day.matrix.agents.map(a => {
                     const v = day.matrix.cells[a.id]?.[m.id] ?? 0;
                     return (
                       <td
                         key={a.id}
                         className="c"
-                        onClick={() => props.onOpenCell(a.id, m.id)}
+                        onClick={() => props.onOpenCell(a.id, m.model, m.vendor)}
                         style={heatStyle(v, day.matrix.maxCell)}
                       >
                         {v ? tok(v) : '-'}
@@ -228,9 +228,9 @@ export function TodayView(props: TodayViewProps) {
         </div>
         <div className="bars">
           {day.byModel.map(x => (
-            <div className="row" key={x.model}>
+            <div className="row" key={x.model + '|' + (x.vendor ?? '')}>
               <div className="top">
-                <span>{x.model}</span>
+                <span>{modelLabel(x.model, x.vendor)}</span>
                 <span className="dots" />
                 <span className="v">{fmtPct(x.tokens / (t.tokens || 1))} / {tok(x.tokens)}</span>
               </div>
@@ -326,7 +326,7 @@ export function TodayView(props: TodayViewProps) {
               <tr key={c.ts + '-' + i}>
                 <td className="l">{c.time}</td>
                 <td className="l">
-                  {c.model}
+                  {modelLabel(c.model, c.vendor)}
                   <div className="muted">{c.agent} · {c.dirName}</div>
                 </td>
                 <td>{tok(c.tokens)}</td>

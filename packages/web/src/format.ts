@@ -40,6 +40,15 @@ export function fmtPct(ratio: number): string {
   return (ratio * 100).toFixed(1) + '%';
 }
 
+/**
+ * 模型的显示名：厂商/模型。
+ * 同名模型可能挂在不同厂商下（minimax 和 minimax-cn 都有 MiniMax-M3），
+ * 只写模型名会看不出区别。没有厂商时只显示模型名。
+ */
+export function modelLabel(model: string, vendor: string | null | undefined): string {
+  return vendor ? `${vendor}/${model}` : model;
+}
+
 export function money(cny: number | null | undefined): string {
   return '¥' + (cny ?? 0).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,

@@ -1,6 +1,6 @@
 import type { ConversationDetail, ConversationsPayload } from '../types.ts';
 import type { ConversationFilter, Unit } from '../state.ts';
-import { dayOf, fmtTok, hhmm, money, moneyUsd } from '../format.ts';
+import { dayOf, fmtTok, hhmm, modelLabel, money, moneyUsd } from '../format.ts';
 
 interface ConversationsViewProps {
   conv: ConversationsPayload;
@@ -46,7 +46,7 @@ export function ConversationsView(props: ConversationsViewProps) {
     <div className="filterline">
       <span>会话 {list.length} 条</span>
       {filter.agent && <span className="pill">{filter.agent}</span>}
-      {filter.model && <span className="pill">{filter.model}</span>}
+      {filter.model && <span className="pill">{modelLabel(filter.model, filter.vendor)}</span>}
       {(filter.agent || filter.model) && (
         <button className="clear" onClick={props.onClear}>清除筛选</button>
       )}
@@ -158,7 +158,7 @@ export function ConversationsView(props: ConversationsViewProps) {
       </div>
       <div className="detail-title">{title}</div>
       <div className="detail-meta">
-        {cur.dirName} / {cur.agent} / {cur.model}
+        {cur.dirName} / {cur.agent} / {modelLabel(cur.model, cur.vendor)}
       </div>
       <div style={{ marginTop: 8 }}>
         {date !== '—' && (
@@ -244,7 +244,7 @@ export function ConversationsView(props: ConversationsViewProps) {
                 <td className="l t">
                   {t.isChild ? '↳ 子 agent' : `${t.localDay} ${hhmm(t.ts)}`}
                 </td>
-                <td className="l">{t.model}</td>
+                <td className="l">{modelLabel(t.model, t.vendor)}</td>
                 <td>{tok(t.input)}</td>
                 <td>{tok(t.output)}</td>
                 <td>{tok(t.cacheRead)}</td>

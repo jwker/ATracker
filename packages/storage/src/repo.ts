@@ -7,6 +7,12 @@ import { TZ_SQL_OFFSET } from '../../core/src/time.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
+ * 在 Repo.migrate() 里补上对应的重建步骤。
+ */
+const SCHEMA_VERSION = 1;
+
 export interface StoredEvent {
   eventId: string;
   agent: string;
@@ -49,7 +55,25 @@ export class Repo {
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
+    this.migrate();
+  }
+
+  /** 建表 + 按版本补老库。只往前加，不改历史文件。 */
+  private migrate(): void {
     this.db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
+    const from = (this.db.prepare('PRAGMA user_version').get() as any).user_version as number;
+    if (from >= SCHEMA_VERSION) return;
+
+    // 1：模型的聚合表主键加 vendor。同名模型在不同厂商下要分开统计，旧表装不下，
+    // 删了重建，聚合能从 usage_event 全量重算，不丢数据。
+    if (from < 1) {
+      this.db.exec('DROP TABLE IF EXISTS agg_day_model;');
+      this.db.exec('DROP TABLE IF EXISTS agg_day_agent_model;');
+      this.db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
+      this.rebuildAggregates([]);
+    }
+
+    this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 
   close(): void {
@@ -252,11 +276,11 @@ export class Repo {
         ).run(day);
 
         this.db.prepare(
-          `INSERT INTO agg_day_model (day, model, vendor, ${COLS}) SELECT local_day AS day, model, provider, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, model`
+          `INSERT INTO agg_day_model (day, model, vendor, ${COLS}) SELECT local_day AS day, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, model, vendor`
         ).run(day);
 
         this.db.prepare(
-          `INSERT INTO agg_day_agent_model (day, agent, model, vendor, ${COLS}) SELECT local_day AS day, agent, model, provider, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, agent, model`
+          `INSERT INTO agg_day_agent_model (day, agent, model, vendor, ${COLS}) SELECT local_day AS day, agent, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, agent, model, vendor`
         ).run(day);
       }
       this.refreshTotal();
@@ -328,19 +352,19 @@ export class Repo {
   /** 区间内的来源 × 模型交叉表。 */
   matrix(from: string, to: string): any {
     const rows = this.db.prepare(
-      `SELECT agent, model, SUM(tokens) tokens, SUM(cost_cny) cost_cny
+      `SELECT agent, model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny
        FROM agg_day_agent_model WHERE day >= ? AND day <= ?
-       GROUP BY agent, model`
+       GROUP BY agent, model, vendor`
     ).all(from, to) as any[];
     return { cells: rows };
   }
 
-  /** 区间内的按模型和按目录汇总。 */
+  /** 区间内的按模型和按目录汇总。模型带厂商，同名不同厂商分成两行。 */
   breakdown(from: string, to: string): { byModel: any[]; byDir: any[]; totals: any } {
     const byModel = this.db.prepare(
       `SELECT model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny,
               SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
-       FROM agg_day_model WHERE day >= ? AND day <= ? GROUP BY model ORDER BY tokens DESC`
+       FROM agg_day_model WHERE day >= ? AND day <= ? GROUP BY model, vendor ORDER BY tokens DESC`
     ).all(from, to);
     const byDir = this.db.prepare(
       `SELECT dir, SUM(tokens) tokens, SUM(cost_cny) cost_cny,
@@ -366,12 +390,13 @@ export class Repo {
   }
 
   /** 会话列表。 */
-  conversations(filter: { dir?: string; agent?: string; model?: string; q?: string; limit?: number }): any[] {
+  conversations(filter: { dir?: string; agent?: string; model?: string; vendor?: string; q?: string; limit?: number }): any[] {
     const where: string[] = [];
     const args: any[] = [];
     if (filter.dir) { where.push('cwd = ?'); args.push(filter.dir); }
     if (filter.agent) { where.push('agent = ?'); args.push(filter.agent); }
     if (filter.model) { where.push('model = ?'); args.push(filter.model); }
+    if (filter.vendor) { where.push('provider = ?'); args.push(filter.vendor); }
     if (filter.q) { where.push('(session_id LIKE ? OR cwd LIKE ?)'); args.push('%' + filter.q + '%', '%' + filter.q + '%'); }
     const sql = `SELECT agent, session_id, cwd, model, provider, COUNT(*) events,
                         SUM(input_tokens) input, SUM(output_tokens) output,
@@ -445,7 +470,7 @@ export class Repo {
     return this.db.prepare(
       `SELECT agent, model, vendor, SUM(tokens) tokens, SUM(cost_cny) cost_cny
        FROM agg_day_agent_model WHERE day = ?
-       GROUP BY agent, model`
+       GROUP BY agent, model, vendor`
     ).all(day);
   }
 
