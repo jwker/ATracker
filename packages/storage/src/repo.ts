@@ -190,6 +190,7 @@ export class Repo {
          cost_cny, cost_usd, cost_source, thinking_level)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(event_id) DO UPDATE SET
+         session_id=excluded.session_id, parent_session_id=excluded.parent_session_id, is_child=excluded.is_child,
          ts=excluded.ts, local_day=excluded.local_day, local_month=excluded.local_month, cwd=excluded.cwd,
          model=excluded.model, provider=excluded.provider,
          input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
