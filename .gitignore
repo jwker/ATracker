@@ -3,3 +3,6 @@ data/
 *.log
 .DS_Store
 packages/web/dist/
+
+# 桌面打包产物
+release/

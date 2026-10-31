@@ -1,0 +1,40 @@
+# 桌面打包配置。应用根目录就是这个仓库，main 指向 packages/desktop/src/main.ts。
+# 服务端在 Electron 的 main 进程里直接跑 TypeScript（Electron 45 的 Node 24 支持），
+# 所以包内容就是源码 + 前端构建产物，没有额外的后端构建步骤。
+
+appId: com.jwker.atracker
+productName: ATracker
+directories:
+  output: release
+  buildResources: build
+
+# 用本地已经下载好的 Electron，不去 GitHub 拉（国内网络经常连不上）。
+electronDist: node_modules/electron/dist
+
+files:
+  - package.json
+  - packages/desktop/src/**
+  - packages/core/src/**
+  - packages/storage/src/**
+  - packages/collectors/src/**
+  - packages/server/src/**
+  - packages/web/dist/**
+  # 运行时不需要任何第三方依赖：electron 是内置的，SQLite 用 node:sqlite
+  - "!node_modules/**"
+  - "!**/*.map"
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  artifactName: ATracker-${version}-${arch}.${ext}
+
+win:
+  target:
+    - nsis
+  artifactName: ATracker-${version}-setup.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

@@ -19,6 +19,7 @@
     "packages/storage/**/*.ts",
     "packages/collectors/**/*.ts",
     "packages/server/**/*.ts",
-    "packages/cli/**/*.ts"
+    "packages/cli/**/*.ts",
+    "packages/desktop/**/*.ts"
   ]
 }
