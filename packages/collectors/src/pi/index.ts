@@ -9,9 +9,27 @@ import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
 
+/**
+ * 读会话头。cwd 和会话 id 只写在文件第一行的 session 记录里，
+ * 文件变大时从上次偏移接着读是读不到这一行的，所以每次解析前单独读一次。
+ */
+async function readHeader(ctx: ScanContext, path: string): Promise<{ sessionId: string; cwd: string }> {
+  for await (const { line } of ctx.lines(path, 0)) {
+    let rec: any;
+    try { rec = JSON.parse(line); } catch { rec = null; }
+    if (rec?.type === 'session') {
+      return { sessionId: rec.id ?? '', cwd: rec.cwd ?? '' };
+    }
+    break; // 头就在第一行
+  }
+  return { sessionId: '', cwd: '' };
+}
+
 export const piCollector: Collector = {
   id: 'pi',
   label: 'pi',
+  // v2：续读时补读会话头，并配合写入端允许重写 session_id，历史空目录一次补齐。
+  version: '2',
   roots: () => [join(homedir(), '.pi', 'agent', 'sessions')],
 
   async *scan(ctx: ScanContext): AsyncGenerator<UsageEvent> {
@@ -25,8 +43,9 @@ export const piCollector: Collector = {
       const st = ctx.shouldParse(path);
       if (!st.parse) { skipped++; continue; }
 
-      let sessionId = '';
-      let cwd = '';
+      const header = await readHeader(ctx, path);
+      let sessionId = header.sessionId;
+      let cwd = header.cwd;
       let offset = st.offset;
 
       for await (const { line, endOffset } of ctx.lines(path, st.offset)) {

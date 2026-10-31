@@ -175,8 +175,22 @@ export async function runScan(
 
   for (const collector of collectors) {
     curSource = collector.version ? `${collector.id}:${collector.version}` : collector.id;
+
+    // 会话元信息要先读。scan 跑完会把文件游标推进到新位置，
+    // 之后同一个文件再问 shouldParse 就是「指纹没变」，元信息会被整个跳过。
+    if (collector.sessions) {
+      const sessionRows: any[] = [];
+      try {
+        for await (const meta of collector.sessions(ctx)) {
+          sessionRows.push(meta);
+        }
+      } catch (err) {
+        repo.log(batchId, Date.now(), 'warn', collector.id, `会话信息读取失败：${(err as Error).message}`);
+      }
+      if (sessionRows.length) repo.upsertSessions(sessionRows);
+    }
+
     const collected: any[] = [];
-    const sessionRows: any[] = [];
     try {
       for await (const ev of collector.scan(ctx)) {
         eventsRead++;
@@ -214,18 +228,6 @@ export async function runScan(
     if (collected.length) {
       eventsWritten += repo.upsertEvents(collected);
       filesScanned++;
-    }
-
-    // 会话元信息（标题等）
-    if (collector.sessions) {
-      try {
-        for await (const meta of collector.sessions(ctx)) {
-          sessionRows.push(meta);
-        }
-      } catch (err) {
-        repo.log(batchId, Date.now(), 'warn', collector.id, `会话信息读取失败：${(err as Error).message}`);
-      }
-      if (sessionRows.length) repo.upsertSessions(sessionRows);
     }
   }
 
