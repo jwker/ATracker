@@ -218,8 +218,12 @@ export class ATrackerServer {
       }
       if (p === '/api/total') return json(totalPayload(this.repo));
       if (p === '/api/calendar') return json(calendarPayload(this.repo, q.get('month') ?? new Date().toISOString().slice(0, 7)));
-      if (p === '/api/aggregate') return json(aggregatePayload(this.repo, q.get('from'), q.get('to')));
-      if (p === '/api/matrix') return json(matrixPayload(this.repo, q.get('from'), q.get('to')));
+      if (p === '/api/aggregate') {
+        return json(aggregatePayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1'));
+      }
+      if (p === '/api/matrix') {
+        return json(matrixPayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1'));
+      }
       if (p === '/api/day') return json(dayPayload(this.repo, q.get('date')));
       if (p === '/api/conversations') {
         return json(conversationsPayload(this.repo, {

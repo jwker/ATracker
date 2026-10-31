@@ -74,13 +74,21 @@
   .sec-h span { font-size: 9px; color: var(--muted); letter-spacing: .08em; }
   .sec-h .r { margin-left: auto; font-size: 9px; color: var(--muted); }
   /* 当前范围。一块强调色底的标签，天数跟在后面。写在 .sec-h 下是为了压过 .sec-h span 的小灰字。 */
-  .sec-h .scope { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-  .sec-h .scope-pill { display: inline-block; font-size: 10px; background: var(--accent); color: var(--paper); padding: 1px 7px; letter-spacing: .02em; }
-  .sec-h .scope-pill span { color: inherit; }
-  .sec-h .scope-pill .arrow { opacity: .7; margin: 0 4px; }
-  .sec-h .scope-badge { display: inline-block; font-size: 8.5px; border: 1px solid var(--rule); color: var(--muted); padding: 0 4px; }
-  .sec-h .scope-x { background: none; border: 0; padding: 0; font-size: 9px; color: var(--muted); text-decoration: underline; cursor: pointer; }
-  .sec-h .scope-x:hover { color: var(--accent); }
+  /* 范围标签：月度页顶部一行；总账页用同尺寸的静态说明 */
+  .scope { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .scope-pill { display: inline-block; font-size: 10px; background: var(--accent); color: var(--paper); padding: 1px 7px; letter-spacing: .02em; }
+  .scope-pill .arrow { opacity: .7; margin: 0 4px; }
+  .scope-badge { display: inline-block; font-size: 8.5px; border: 1px solid var(--rule); color: var(--muted); padding: 0 4px; }
+  .scope-x { background: none; border: 0; padding: 0; font-size: 9px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+  .scope-x:hover { color: var(--accent); }
+  .scope-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; margin-bottom: 9px; }
+  .scope-row .lead { font-size: 9px; color: var(--muted); letter-spacing: .18em; }
+  .scope-row .go { margin-left: auto; background: none; border: 0; padding: 0; font-size: 9px; color: var(--muted); text-decoration: underline; letter-spacing: .04em; cursor: pointer; }
+  .scope-row .go:hover { color: var(--accent); }
+  .fixed-scope { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; margin-bottom: 9px; }
+  .fixed-scope .chip { border: 1px solid var(--ink); font-size: 9px; padding: 0 6px; letter-spacing: .1em; }
+  .fixed-scope .v { font-size: 10px; letter-spacing: .04em; }
+  .fixed-scope .hint { margin-left: auto; font-size: 9px; color: var(--faint); }
   .total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 4px; }
   .total-line .lab { font-size: 9.5px; letter-spacing: .18em; color: var(--muted); }
   /* 范围 / 总量 分段切换器 */
@@ -93,6 +101,13 @@
   .total-line .side { text-align: right; }
   .total-line .hero { font-size: clamp(22px, 3.4vw, 34px); color: var(--accent); letter-spacing: -.03em; }
   .total-line .tiny { font-size: 9px; color: var(--muted); letter-spacing: .04em; }
+  /* 四桶：一行四格，取代原来的四行引导线 */
+  .brow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .brow .c { padding: 1px 8px 0; border-left: 1px dotted var(--rule); }
+  .brow .c:first-child { border-left: 0; padding-left: 0; }
+  .brow .k { font-size: 8.5px; color: var(--muted); letter-spacing: .1em; white-space: nowrap; }
+  .brow .v { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .brow .s { font-size: 8.5px; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
   .leadrow { display: flex; align-items: baseline; gap: 5px; padding: 2px 0; }
   .leadrow .nm { white-space: nowrap; }
   .leadrow .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-3px); }
@@ -101,6 +116,7 @@
   .leadrow .acc { color: var(--accent); }
   .cal-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .cal-tools .scope { font-size: 10px; letter-spacing: .06em; }
+  .cal-tools .tip { margin-left: auto; font-size: 9px; color: var(--faint); }
   .legend { display: flex; flex-wrap: wrap; gap: 3px 13px; margin: 8px 0 9px; }
   .lg { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; font-size: 9.5px; color: var(--ink); }
   .lg .sw { width: 10px; height: 10px; background: var(--c); border: 1px solid var(--paper); }

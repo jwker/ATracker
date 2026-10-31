@@ -414,9 +414,10 @@ CREATE TABLE agg_total (
 
 | 模块 | 数据来源 | 查询 |
 | --- | --- | --- |
-| 4.1 token 总量与缓存命中率 | `agg_total` | 一行，O(1) |
-| 4.2 token 总数四项 | `agg_total` | 一行，O(1) |
-| 4.3 日历每格数字 | `agg_day_dir` 按月分组求和 | 一个月 31 行 |
+| 4.1 总账的累计总量与覆盖天数 | `agg_total` + `usage_event`（最早一天） | 一行，O(1) |
+| 4.1 总账/月度的区间汇总 | `agg_day_*` 按范围求和（总账用 `all=1` 取全期） | 区间天数行 |
+| 4.2 TOKEN 四桶 | 取自上面两行的区间汇总，不再单独查 | 同上 |
+| 4.3 日历每格数字（只在月度页） | `agg_day_dir` 按月分组求和 | 一个月 31 行 |
 | 4.3 日历堆叠条 | `agg_day_dir` 按月 | 同上 |
 | 4.4 区间 token 构成 | `agg_day_*` 按范围求和 | 区间天数行 |
 | 4.4.2 来源 × 模型 交叉表 | `agg_day_agent_model` 按范围求和 | 区间 × 来源数 × 模型数 |
@@ -742,7 +743,8 @@ localStorage.setItem('atracker-mode', mode);
 | `packages/web/src/main.tsx` | 挂载 React 根节点 |
 | `packages/web/src/App.tsx` | 页面状态、取数、导航、SSE 刷新 |
 | `packages/web/src/router.ts` | hash 路由：解析、构建、订阅 |
-| `packages/web/src/views/` | 总账、今日、会话、日志四个视图 |
+| `packages/web/src/components/` | 四桶、交叉表、模型/目录条形图、月历、范围标签 |
+| `packages/web/src/views/` | 总账、月度、今日、会话、日志五个视图 |
 | `packages/web/src/components/` | 页头等公共组件 |
 | `packages/web/src/receipt.css` | 主题变量和组件样式。第一套是「热敏小票」（`design/v3/02-receipt.html`） |
 
@@ -750,17 +752,21 @@ localStorage.setItem('atracker-mode', mode);
 
 **取数层。** `src/api.ts` 只负责请求接口；`src/format.ts` 负责单位换算。视图组件不自己拼单位。
 
-**路由：每个视图一个 hash 路径，状态全在 URL 里。** 四个页面各自占一段地址，互不共享状态：
+**路由：每个视图一个 hash 路径，状态全在 URL 里。** 五个页面各自占一段地址，互不共享状态：
 
 | 路由 | 页面 | 参数 |
 | --- | --- | --- |
-| `#/` | 总账 | `month=YYYY-MM`、`from`、`to`（日历选区）、`scope=total` |
+| `#/` | 总账（全期） | 无 |
+| `#/month` | 月度（本月） | `from`、`to`（日历选区） |
+| `#/month/YYYY-MM` | 月度（指定月） | 同上 |
 | `#/today` | 今日（今天） | 无 |
 | `#/today/YYYY-MM-DD` | 今日（指定日期） | 无 |
 | `#/conversations` | 会话 | `dir`、`agent`、`model`、`vendor`、`q`、`id` |
 | `#/logs` | 日志 | `batch`、`level`、`source`、`q` |
 
-不带参数就是该页的默认状态：总账是本月无选区，今日是今天，会话和日志无筛选。顶部四个导航按钮总是跳到各自默认状态，所以不会出现「在总账选了某天，再去今日看到那天」这种串页；浏览器后退能回到刚才的状态。
+不带参数就是该页的默认状态：总账是全期，月度是本月无选区，今日是今天，会话和日志无筛选。顶部五个导航按钮总是跳到各自默认状态，所以不会出现「在月度选了某天，再去今日看到那天」这种串页；浏览器后退能回到刚才的状态。
+
+**总账和月度拆开，是因为一页里不该有两种作用域。** 原先一页里顶部有个「当前范围 / 全部记录」切换器，但它只管一个大数字，四桶、交叉表、模型、目录却跟着日历选区走。现在总账固定全期（数据用 `/api/aggregate?all=1`，服务端按库里最早/最晚一天取区间），月度固定「一个月或一个选区」，页面上不再有作用域切换器。
 
 用 hash 而不是 pathname 有两个原因：服务端只做静态文件托管，没有 history 回退规则；打包成桌面版后可能直接用 `file://` 打开页面，hash 路由在两种情况下都能工作。同一页内改筛选条件用 `replaceState`，不往历史里堆记录；跨页用 `pushState`，后退能回上一页。旧链接（`?view=conv&dir=…`）在启动时自动转成新路由。
 

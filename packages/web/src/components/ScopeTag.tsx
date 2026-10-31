@@ -1,5 +1,6 @@
-// 当前范围。首页有两处显示：四桶的小节标题，和月历小节标题的右侧。
-// 范围决定下面所有数字的算法，所以做成一块能认出来的标签。
+// 月度页的范围标签。这是页面上唯一说明「现在看的是哪段」的地方：
+// 整月显示月份，选中后显示区间并给出清除入口；选中单天时，右侧出现
+// 跳到今日页的入口（今日页是唯一看单天明细的页面）。
 
 import type { Selection } from '../state.ts';
 import { monthMeta } from '../format.ts';
@@ -7,12 +8,11 @@ import { monthMeta } from '../format.ts';
 interface ScopeTagProps {
   sel: Selection | null;
   month: string;
-  /** 有选中时给的清除入口 */
-  onClear?: () => void;
+  onClear: () => void;
+  onOpenDay: (day: string) => void;
 }
 
-export function ScopeTag(props: ScopeTagProps) {
-  const { sel, month } = props;
+export function ScopeTag({ sel, month, onClear, onOpenDay }: ScopeTagProps) {
   const meta = monthMeta(month);
 
   const days = !sel
@@ -28,19 +28,23 @@ export function ScopeTag(props: ScopeTagProps) {
       : [sel.a, sel.b];
 
   return (
-    <span className="scope">
-      <span className="scope-pill">
-        {parts.map((p, i) => (
-          <span key={p}>
-            {i > 0 && <span className="arrow">→</span>}
-            {p}
-          </span>
-        ))}
+    <div className="scope-row">
+      <span className="lead">范围</span>
+      <span className="scope">
+        <span className="scope-pill">
+          {parts.map((p, i) => (
+            <span key={p}>
+              {i > 0 && <span className="arrow">→</span>}
+              {p}
+            </span>
+          ))}
+        </span>
+        <span className="scope-badge">{days} 天</span>
+        {sel && <button className="scope-x" onClick={onClear}>清除</button>}
       </span>
-      <span className="scope-badge">{days} 天</span>
-      {sel && props.onClear && (
-        <button className="scope-x" onClick={props.onClear}>清除</button>
+      {sel && sel.a === sel.b && (
+        <button className="go" onClick={() => onOpenDay(sel.a)}>查看这天的明细 →</button>
       )}
-    </span>
+    </div>
   );
 }

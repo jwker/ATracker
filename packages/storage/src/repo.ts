@@ -338,6 +338,12 @@ export class Repo {
     return this.db.prepare('SELECT * FROM agg_total WHERE id = 1').get() ?? null;
   }
 
+  /** 库里最早和最晚的一天。总账页的「全期」用它，不用另算区间。 */
+  dayBounds(): { first: string | null; last: string | null } {
+    const r = this.db.prepare('SELECT MIN(local_day) first, MAX(local_day) last FROM usage_event').get() as any;
+    return { first: r?.first ?? null, last: r?.last ?? null };
+  }
+
   /** 某个月每天的用量和按目录的拆分。 */
   calendar(month: string): { days: any[]; legend: any[] } {
     const days = this.db.prepare(
@@ -388,7 +394,7 @@ export class Repo {
       `SELECT COALESCE(SUM(tokens),0) tokens,
               COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
               COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
-              COUNT(*) days
+              COUNT(DISTINCT day) days
        FROM agg_day_agent WHERE day >= ? AND day <= ?`
     ).get(from, to) as any;
     return { byModel, byDir, totals };
