@@ -11,6 +11,7 @@ import { ScopeTag } from '../components/ScopeTag.tsx';
 import {
   fmtPct,
   fmtTok,
+  modelLabel,
   money,
   moneyUsd,
   monthMeta,
@@ -31,7 +32,7 @@ interface HomeViewProps {
   onToday: () => void;
   onSelectDay: (day: string) => void;
   onOpenDir: (path: string) => void;
-  onOpenCell: (agent: string, model: string) => void;
+  onOpenCell: (agent: string, model: string, vendor: string | null) => void;
   onClearSelection: () => void;
   /** 顶部大字看当前范围还是全部记录 */
   topScope: 'range' | 'total';
@@ -258,14 +259,14 @@ export function HomeView(props: HomeViewProps) {
               );
               return (
                 <tr key={m.id}>
-                  <td className="l">{m.id}</td>
+                  <td className="l">{modelLabel(m.model, m.vendor)}</td>
                   {matrix.agents.map(a => {
                     const v = matrix.cells[a.id]?.[m.id] ?? 0;
                     return (
                       <td
                         key={a.id}
                         className="c"
-                        onClick={() => props.onOpenCell(a.id, m.id)}
+                        onClick={() => props.onOpenCell(a.id, m.model, m.vendor)}
                         style={heatStyle(v, matrix.maxCell)}
                       >
                         {v ? tok(v) : '-'}
@@ -294,9 +295,9 @@ export function HomeView(props: HomeViewProps) {
         </div>
         <div className="bars">
           {models.map(x => (
-            <div className="row" key={x.model}>
+            <div className="row" key={x.model + '|' + (x.vendor ?? '')}>
               <div className="top">
-                <span>{x.model}</span>
+                <span>{modelLabel(x.model, x.vendor)}</span>
                 <span className="dots" />
                 <span className="v">
                   {fmtPct(x.tokens / (agg.total || 1))} / {tok(x.tokens)}

@@ -91,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_scan_log_batch ON scan_log(batch_id);
 CREATE INDEX IF NOT EXISTS idx_scan_log_at    ON scan_log(at DESC);
 
 -- 物化聚合。查询这些表，不扫明细。
+-- 模型按「厂商 + 模型名」区分：同名模型在不同厂商下是两条记录。
 CREATE TABLE IF NOT EXISTS agg_day_agent (
   day TEXT NOT NULL, agent TEXT NOT NULL,
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
@@ -104,16 +105,16 @@ CREATE TABLE IF NOT EXISTS agg_day_dir (
   PRIMARY KEY (day, dir)
 );
 CREATE TABLE IF NOT EXISTS agg_day_model (
-  day TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT,
+  day TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER, cost_cny REAL, cost_usd REAL,
-  PRIMARY KEY (day, model)
+  PRIMARY KEY (day, model, vendor)
 );
 CREATE TABLE IF NOT EXISTS agg_day_agent_model (
-  day TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT,
+  day TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT '',
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER, cost_cny REAL, cost_usd REAL,
-  PRIMARY KEY (day, agent, model)
+  PRIMARY KEY (day, agent, model, vendor)
 );
 
 -- 累计一行。

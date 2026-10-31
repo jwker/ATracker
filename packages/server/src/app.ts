@@ -222,7 +222,8 @@ export class ATrackerServer {
       if (p === '/api/day') return json(dayPayload(this.repo, q.get('date')));
       if (p === '/api/conversations') {
         return json(conversationsPayload(this.repo, {
-          dir: q.get('dir'), agent: q.get('agent'), model: q.get('model'), q: q.get('q')
+          dir: q.get('dir'), agent: q.get('agent'), model: q.get('model'),
+          vendor: q.get('vendor'), q: q.get('q')
         }));
       }
       if (p === '/api/conversation') {

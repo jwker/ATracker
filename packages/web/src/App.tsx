@@ -38,6 +38,7 @@ interface NavOptions {
   dir?: string;
   agent?: string;
   model?: string | null;
+  vendor?: string | null;
   day?: string;
   date?: string;
 }
@@ -96,7 +97,8 @@ function initialConvFilter(): ConversationFilter {
   return {
     dir: params.get('dir'),
     agent: params.get('agent'),
-    model: params.get('model')
+    model: params.get('model'),
+    vendor: params.get('vendor')
   };
 }
 
@@ -221,6 +223,7 @@ export function App() {
     api.conversations({
       agent: convFilter.agent,
       model: convFilter.model,
+      vendor: convFilter.vendor,
       q: convQ
     })
       .then(data => {
@@ -232,7 +235,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, convFilter.agent, convFilter.model, convQ, refreshToken]);
+  }, [view, convFilter.agent, convFilter.model, convFilter.vendor, convQ, refreshToken]);
 
   // 选中的会话必须落在当前这一组里。目录换了就换成新组里的第一个；
   // 选中的目录在这批结果里不存在，就退回全部目录。
@@ -334,12 +337,17 @@ export function App() {
       setConvQ('');
       setConvId(null);
     } else if (opts.dir) {
-      nextFilter = { dir: opts.dir, agent: null, model: null };
+      nextFilter = { dir: opts.dir, agent: null, model: null, vendor: null };
       setConvFilter(nextFilter);
       setConvQ('');
       setConvId(null);
     } else if (opts.agent) {
-      nextFilter = { dir: null, agent: opts.agent, model: opts.model ?? null };
+      nextFilter = {
+        dir: null,
+        agent: opts.agent,
+        model: opts.model ?? null,
+        vendor: opts.vendor ?? null
+      };
       setConvFilter(nextFilter);
       setConvQ('');
       setConvId(null);
@@ -353,11 +361,12 @@ export function App() {
 
     const url = new URL(location.href);
     url.searchParams.set('view', next);
-    for (const key of ['dir', 'agent', 'model', 'from', 'date']) url.searchParams.delete(key);
+    for (const key of ['dir', 'agent', 'model', 'vendor', 'from', 'date']) url.searchParams.delete(key);
     if (next === 'conv') {
       if (nextFilter.dir) url.searchParams.set('dir', nextFilter.dir);
       if (nextFilter.agent) url.searchParams.set('agent', nextFilter.agent);
       if (nextFilter.model) url.searchParams.set('model', nextFilter.model);
+      if (nextFilter.vendor) url.searchParams.set('vendor', nextFilter.vendor);
     }
     if (next === 'today') url.searchParams.set('date', nextDate);
     if (nextSel) url.searchParams.set('from', nextSel.a);
@@ -461,7 +470,7 @@ export function App() {
         topScope={topScope}
         onTopScope={setTopScope}
         onOpenDir={dir => navigate('conv', { dir })}
-        onOpenCell={(agent, model) => navigate('conv', { agent, model })}
+        onOpenCell={(agent, model, vendor) => navigate('conv', { agent, model, vendor })}
       />
     );
   } else if (view === 'today') {
@@ -473,7 +482,7 @@ export function App() {
         onPrevDay={prevDay}
         onNextDay={nextDay}
         onToday={backToToday}
-        onOpenCell={(agent, model) => navigate('conv', { agent, model })}
+        onOpenCell={(agent, model, vendor) => navigate('conv', { agent, model, vendor })}
         onOpenDir={dir => navigate('conv', { dir })}
       />
     );

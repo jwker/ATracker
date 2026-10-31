@@ -35,6 +35,7 @@ export const api = {
     dir?: string | null;
     agent?: string | null;
     model?: string | null;
+    vendor?: string | null;
     q?: string | null;
   }) => request<ConversationsPayload>('/api/conversations', filter),
   conversation: (id: string) => request<ConversationDetail>('/api/conversation', { id }),
