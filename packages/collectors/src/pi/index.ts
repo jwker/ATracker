@@ -28,8 +28,8 @@ async function readHeader(ctx: ScanContext, path: string): Promise<{ sessionId: 
 export const piCollector: Collector = {
   id: 'pi',
   label: 'pi',
-  // v2：续读时补读会话头，并配合写入端允许重写 session_id，历史空目录一次补齐。
-  version: '2',
+  // v3：厂商改成信任自报的 provider（不再按模型名覆盖），历史行重扫一遍补上。
+  version: '3',
   roots: () => [join(homedir(), '.pi', 'agent', 'sessions')],
 
   async *scan(ctx: ScanContext): AsyncGenerator<UsageEvent> {

@@ -15,24 +15,21 @@ const RULES: { re: RegExp; vendor: string }[] = [
   { re: /^doubao|^ernie/i, vendor: 'baidu' }
 ];
 
-/** 已知厂商的 provider 键也直接认。 */
-const KNOWN_PROVIDERS = new Set([
-  'openai', 'anthropic', 'deepseek', 'minimax', 'minimax-cn', 'zai', 'google', 'alibaba',
-  'moonshot', 'meta', 'mistral', 'xai', 'baidu', 'custom'
-]);
-
 export function inferVendor(model: string): string | null {
   for (const r of RULES) if (r.re.test(model)) return r.vendor;
   return null;
 }
 
-/** 来源自报优先，自报的不认就查表。 */
+/**
+ * 厂商：来源自报的 provider 原样用，没自报才按模型名推断。
+ *
+ * 不要拿“已知厂商名单”去否决自报值。同一个模型可以通过不同渠道拿到，
+ * 渠道（provider）才是花销算在哪里的区分：opencode 的 deepseek-v4.1-flash-free
+ * 自报 provider 是 opencode，经 opencode-go 走的是 opencode-go，直连才是 deepseek。
+ * 以前只认名单里的键，不在名单里的被模型名推断覆盖，这三家全被归到了 deepseek。
+ */
 export function resolveVendor(model: string, provider: string | null): string | null {
-  if (provider) {
-    const p = provider.toLowerCase();
-    if (KNOWN_PROVIDERS.has(p)) return p;
-    const inferred = inferVendor(model);
-    return inferred ?? p;
-  }
+  const p = provider?.trim();
+  if (p) return p;
   return inferVendor(model);
 }
