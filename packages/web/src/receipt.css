@@ -68,6 +68,17 @@
   .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--ink); border-color: var(--ink); }
   .tear { text-align: center; font-size: 8.5px; letter-spacing: .3em; color: var(--faint); margin: 14px 0 8px; }
+  /* 刷新中的提示：顶部一条细线在最上面走，正文微微变淡，不清屏、不跳滚动 */
+  .loadtrack { position: relative; height: 0; }
+  .loadtrack i {
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    background-size: 42% 100%; background-repeat: no-repeat;
+    animation: loadslide .9s linear infinite;
+  }
+  @keyframes loadslide { from { background-position: -45% 0; } to { background-position: 105% 0; } }
+  .body { transition: opacity .12s linear; }
+  .body.is-refreshing { opacity: .55; }
   .sec { margin-top: 16px; }
   .sec-h { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--ink); padding-bottom: 3px; margin-bottom: 9px; }
   .sec-h b { font-size: 10px; letter-spacing: .18em; font-weight: 700; }
