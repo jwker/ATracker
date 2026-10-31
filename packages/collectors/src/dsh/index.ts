@@ -6,7 +6,7 @@
 //
 // 口径：usage.inputTokens 不含缓存，cacheReadTokens / cacheWriteTokens 分开报。
 
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
@@ -26,7 +26,7 @@ export const dshCollector: Collector = {
     const all = await ctx.files(this.roots()[0], p => p.endsWith('.jsonl.zstd'));
     const bySession = new Map<string, { path: string; version: number }>();
     for (const path of all) {
-      const dir = path.slice(0, path.lastIndexOf('/'));
+      const dir = dirname(path);
       const sessionDir = basename(dir);
       const version = versionOf(basename(path));
       const prev = bySession.get(sessionDir);
@@ -103,7 +103,7 @@ export const dshCollector: Collector = {
     const all = await ctx.files(this.roots()[0], p => p.endsWith('.jsonl.zstd'));
     const bySession = new Map<string, { path: string; version: number }>();
     for (const path of all) {
-      const dir = path.slice(0, path.lastIndexOf('/'));
+      const dir = dirname(path);
       const sessionDir = basename(dir);
       const version = versionOf(basename(path));
       const prev = bySession.get(sessionDir);

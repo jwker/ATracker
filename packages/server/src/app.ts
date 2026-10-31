@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Repo } from '../../storage/src/repo.ts';
 import { Pricing } from '../../core/src/pricing.ts';
-import { loadCollectors, runScan } from '../../collectors/src/scanner.ts';
+import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
   dayPayload, logPayload, matrixPayload, totalPayload
@@ -51,8 +51,10 @@ export class ATrackerServer {
     this.repo = new Repo(opts.dbPath);
     this.pricing = Pricing.load(opts.pricingPath);
     this.opts = {
+      // 端口 0 表示让系统分配一个空闲端口，桌面版用它避让已占用的端口。
       port: opts.port ?? 4178,
-      host: opts.host ?? '0.0.0.0',
+      // 默认只监听本机。要给局域网看就显式传 0.0.0.0。
+      host: opts.host ?? '127.0.0.1',
       watch: opts.watch ?? true,
       debounceMs: opts.debounceMs ?? 2000,
       pollMs: opts.pollMs ?? 5 * 60_000
@@ -60,7 +62,8 @@ export class ATrackerServer {
     this.webDir = opts.webDir ?? join(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
   }
 
-  async start(): Promise<string> {
+  /** 启动服务。返回实际监听的地址和端口（传 port: 0 时端口是系统分配的）。 */
+  async start(): Promise<{ url: string; host: string; port: number }> {
     this.server.on('request', (req, res) => { void this.handle(req, res); });
     if (this.opts.watch) this.startWatchers();
     if (this.opts.pollMs > 0) {
@@ -69,7 +72,9 @@ export class ATrackerServer {
       this.pollTimer.unref?.();
     }
     await new Promise<void>(resolve => this.server.listen(this.opts.port, this.opts.host, resolve));
-    return `http://${this.opts.host}:${this.opts.port}`;
+    const addr = this.server.address();
+    const port = typeof addr === 'object' && addr ? addr.port : this.opts.port;
+    return { url: `http://${this.opts.host}:${port}`, host: this.opts.host, port };
   }
 
   async close(): Promise<void> {
@@ -240,9 +245,8 @@ export class ATrackerServer {
       }
       if (p === '/api/scan/batches') return json({ batches: this.repo.recentBatches(50) });
       if (p === '/api/doctor') {
-        const collectors = await loadCollectors();
         return json({
-          sources: collectors.map(c => {
+          sources: COLLECTORS.map(c => {
             const roots = c.roots();
             const ok = roots.some(r => existsSync(r));
             return { id: c.id, label: c.label, roots, ok };

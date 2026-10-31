@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { Repo } from '../../storage/src/repo.ts';
 import { Pricing } from '../../core/src/pricing.ts';
 import { RATE } from '../../core/src/money.ts';
-import { loadCollectors, runScan } from '../../collectors/src/scanner.ts';
+import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import { localMonth } from '../../core/src/time.ts';
 import { fmtTok } from '../../core/src/units.ts';
 import { reconcile } from './reconcile.ts';
@@ -51,6 +51,8 @@ function lanAddresses(): string[] {
 
 /** 默认路由所在的网卡地址。拿不到就退到第一个非内部网卡。 */
 function primaryAddress(): string | undefined {
+  // route 是 macOS 的命令。其他平台直接跳过，退到第一个非内部网卡。
+  if (process.platform !== 'darwin') return undefined;
   try {
     const out = execFileSync('route', ['-n', 'get', 'default'], { encoding: 'utf8' });
     const name = out.match(/interface:\s*(\S+)/)?.[1];
@@ -168,16 +170,20 @@ if (cmd === 'scan') {
     host,
     watch: !process.argv.includes('--no-watch')
   });
-  await server.start();
-  console.log(`ATracker 已启动：监听 ${host}:${port}`);
+  const addr = await server.start();
+  console.log(`ATracker 已启动：监听 ${addr.host}:${addr.port}`);
   const addrs = lanAddresses();
-  if (addrs.length) {
-    console.log(`  局域网访问 http://${addrs[0]}:${port}`);
-    if (addrs.length > 1) {
-      console.log(`  其他网卡   ${addrs.slice(1).map(a => `http://${a}:${port}`).join('  ')}`);
+  if (addr.host === '0.0.0.0') {
+    if (addrs.length) {
+      console.log(`  局域网访问 http://${addrs[0]}:${addr.port}`);
+      if (addrs.length > 1) {
+        console.log(`  其他网卡   ${addrs.slice(1).map(a => `http://${a}:${addr.port}`).join('  ')}`);
+      }
+    } else {
+      console.log('  没有找到局域网地址，只能本机访问');
     }
   } else {
-    console.log('  没有找到局域网地址，只能本机访问');
+    console.log(`  只给本机访问：${addr.url}`);
   }
   console.log(`  数据库 ${DB}`);
   console.log(`  监听文件变化自动扫描，关掉用 --no-watch`);
@@ -192,7 +198,7 @@ if (cmd === 'scan') {
   console.log(reconcile(repo));
   repo.close();
 } else if (cmd === 'doctor') {
-  const collectors = await loadCollectors();
+  const collectors = COLLECTORS;
   const repo = openRepo();
   console.log('来源          路径      文件   事件        上次扫描');
   console.log('─'.repeat(78));

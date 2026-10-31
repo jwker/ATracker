@@ -1,14 +1,11 @@
 // 采集编排：把采集器产出的事件算价、落库、维护聚合。
 
 import { readdir } from 'node:fs/promises';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { statSync } from 'node:fs';
-import { open } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname } from 'node:path';
 
 import type { Collector, ScanContext, LogLevel } from './types.ts';
 import type { UsageEvent } from '../../core/src/types.ts';
@@ -18,27 +15,23 @@ import { assignColors } from '../../core/src/palette.ts';
 import { localDay, localMonth } from '../../core/src/time.ts';
 import { zstdLines } from './zstd.ts';
 import type { Repo } from '../../storage/src/repo.ts';
+import { claudeCodeCollector } from './claude-code/index.ts';
+import { codexCollector } from './codex/index.ts';
+import { dshCollector } from './dsh/index.ts';
+import { opencodeCollector } from './opencode/index.ts';
+import { piCollector } from './pi/index.ts';
 
-const here = dirname(fileURLToPath(import.meta.url));
-
-/** 自动发现采集器：扫目录，不手写列表，避免加了忘了注册。 */
-export async function loadCollectors(): Promise<Collector[]> {
-  const dir = here;
-  const entries = await readdir(dir, { withFileTypes: true });
-  const out: Collector[] = [];
-  for (const e of entries) {
-    if (!e.isDirectory() || e.name.startsWith('_') || e.name === 'node_modules') continue;
-    const file = join(dir, e.name, 'index.ts');
-    try {
-      const mod = await import(pathToFileURL(file).href);
-      const found = Object.values(mod).find((v: any) => v && typeof v === 'object' && typeof v.scan === 'function' && v.id);
-      if (found) out.push(found as Collector);
-    } catch {
-      // 不是采集器目录，跳过
-    }
-  }
-  return out.sort((a, b) => a.id.localeCompare(b.id));
-}
+/**
+ * 采集器清单。手写而不是扫目录，因为打包后（asar / 单文件）扫目录 + 动态
+ * import 会把 `.ts` 路径和目录结构都当成前提，加一个来源改这里一行更稳。
+ */
+export const COLLECTORS: Collector[] = [
+  claudeCodeCollector,
+  codexCollector,
+  dshCollector,
+  opencodeCollector,
+  piCollector
+].sort((a, b) => a.id.localeCompare(b.id));
 
 export interface ScanOptions {
   trigger: 'watch' | 'poll' | 'manual';
@@ -59,7 +52,7 @@ export async function runScan(
   pricing: Pricing,
   opts: ScanOptions
 ): Promise<ScanSummary> {
-  const collectors = (await loadCollectors()).filter(c => !opts.only || opts.only.includes(c.id));
+  const collectors = COLLECTORS.filter(c => !opts.only || opts.only.includes(c.id));
   const batchId = repo.startBatch(opts.trigger, Date.now());
   const sessionStates = new Map<string, Map<string, number>>();
   let curSource = 'unknown';

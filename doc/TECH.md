@@ -179,6 +179,8 @@ export interface Collector {
 
 `ScanContext` 提供文件枚举能力，采集器不自己写目录遍历。
 
+**采集器清单是手写的。** `scanner.ts` 顶部的 `COLLECTORS` 数组按 id 排好五个采集器，`runScan` 和 `doctor` 都读它。以前是扫 `packages/collectors/src/` 目录再动态 `import()`，那等于把「源码目录结构」和「`.ts` 后缀」当成运行前提，打包成 asar 或单文件后会坏。加来源就是新增一个目录加一行注册，与原来一样。
+
 ### 2.3 文件指纹与增量（已实现）
 
 每次扫描都读一遍全部文件太慢，所以给每个源文件记一条指纹：
