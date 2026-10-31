@@ -55,7 +55,7 @@
     background: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 4px, var(--ink) 4px 5px, transparent 5px 9px, var(--ink) 9px 12px, transparent 12px 14px, var(--ink) 14px 15px, transparent 15px 19px); }
   .rno { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted);
     border-top: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); padding: 4px 0; margin-top: 6px; }
-  .navrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 11px 0 2px; }
+  .navrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 11px 0 16px; }
   .tab { border: 1px solid var(--ink); background: transparent; padding: 4px 9px; font-size: 10px; letter-spacing: .12em; }
   .tab[aria-current="true"] { background: var(--ink); color: var(--paper); }
   .sp { flex: 1; }
@@ -63,7 +63,6 @@
   .unit span { border-left: 1px solid var(--rule); padding: 3px 7px; font-size: 9px; color: var(--muted); letter-spacing: .08em; }
   .unit span:first-child { border-left: 0; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .ghost { border: 1px dashed var(--rule); background: transparent; color: var(--muted); padding: 3px 8px; font-size: 9px; letter-spacing: .1em; }
-  .tear { text-align: center; font-size: 8.5px; color: var(--faint); letter-spacing: .3em; margin: 12px 0 10px; }
 
   /* 范围：总账是静态一行，月度是可选标签 */
   .fixed-scope { display: flex; align-items: baseline; gap: 8px; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; margin-bottom: 9px; }
@@ -188,12 +187,10 @@
       <div class="unit"><span>中文</span><span>缩写</span><span>千分位</span></div>
       <button class="ghost">夜间小票</button>
     </div>
-    <div class="tear">TEAR ALONG DOTTED LINE</div>
 
     <div class="fixed-scope">
       <span class="chip">全期</span>
       <span class="v">覆盖 42 天 · 2026-06-11 → 今天</span>
-      <span class="hint">看某个月或某个区间，去「月度」</span>
     </div>
 
     <div class="total-line">
@@ -321,7 +318,6 @@
       <div class="unit"><span>中文</span><span>缩写</span><span>千分位</span></div>
       <button class="ghost">夜间小票</button>
     </div>
-    <div class="tear">TEAR ALONG DOTTED LINE</div>
 
     <div class="scope-row">
       <span class="lead">范围</span>

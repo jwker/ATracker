@@ -56,7 +56,7 @@
       var(--ink) 14px 15px, transparent 15px 19px);
   }
   .rno { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted); border-top: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); padding: 4px 0; }
-  .navrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 13px 0 4px; }
+  .navrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 13px 0 16px; }
   .tab { background: transparent; border: 1px solid var(--ink); padding: 4px 10px; cursor: pointer; font-size: 10px; letter-spacing: .12em; }
   .tab:hover { background: var(--wash); }
   .tab[aria-current="true"] { background: var(--ink); color: var(--paper); }
@@ -67,7 +67,6 @@
   .unit button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--ink); border-color: var(--ink); }
-  .tear { text-align: center; font-size: 8.5px; letter-spacing: .3em; color: var(--faint); margin: 14px 0 8px; }
   /* 刷新中的提示：顶部一条细线在最上面走，正文微微变淡，不清屏、不跳滚动 */
   .loadtrack { position: relative; height: 0; }
   .loadtrack i {
@@ -99,7 +98,6 @@
   .fixed-scope { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; margin-bottom: 9px; }
   .fixed-scope .chip { border: 1px solid var(--ink); font-size: 9px; padding: 0 6px; letter-spacing: .1em; }
   .fixed-scope .v { font-size: 10px; letter-spacing: .04em; }
-  .fixed-scope .hint { margin-left: auto; font-size: 9px; color: var(--faint); }
   .total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 4px; }
   .total-line .lab { font-size: 9.5px; letter-spacing: .18em; color: var(--muted); }
   /* 范围 / 总量 分段切换器 */
