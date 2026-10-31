@@ -2,6 +2,8 @@
 
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
+-- 服务和 CLI 可能同时写库。拿不到写锁时等 5 秒再报错，不要一碰就失败。
+PRAGMA busy_timeout = 5000;
 
 -- 用量明细。只追加，修正靠同一个 event_id 覆盖。
 CREATE TABLE IF NOT EXISTS usage_event (
