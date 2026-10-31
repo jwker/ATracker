@@ -68,8 +68,8 @@ export function CalendarMonth(props: CalendarMonthProps) {
         <span className="r">{stale ? '正在更新…' : `${cal.days.length} 天有用量`}</span>
       </div>
       <div className="cal-tools">
-        <button className="ghost" onClick={props.onPrevMonth}>PREV</button>
-        <button className="ghost" onClick={props.onNextMonth}>NEXT</button>
+        <button className="ghost" onClick={props.onPrevMonth}>上个月</button>
+        <button className="ghost" onClick={props.onNextMonth}>下个月</button>
         <button className="ghost" onClick={props.onThisMonth}>本月</button>
         <span className="scope">点击一天选中，再点另一天成区间</span>
         <span className="tip">色块 = 目录；区间外的日子不画色条</span>
