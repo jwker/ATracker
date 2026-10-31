@@ -7,11 +7,13 @@ import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 
+import type { DeviceInfo } from '../../core/src/device.ts';
 import type { Collector, ScanContext, LogLevel } from './types.ts';
 import type { UsageEvent } from '../../core/src/types.ts';
 import { resolveVendor } from '../../core/src/catalog.ts';
 import { assignColors } from '../../core/src/palette.ts';
 import { localDay, localMonth } from '../../core/src/time.ts';
+import { loadDevice } from '../../core/src/device.ts';
 import { zstdLines } from './zstd.ts';
 import type { Repo } from '../../storage/src/repo.ts';
 import { claudeCodeCollector } from './claude-code/index.ts';
@@ -35,6 +37,8 @@ export const COLLECTORS: Collector[] = [
 export interface ScanOptions {
   trigger: 'watch' | 'poll' | 'manual';
   only?: string[];
+  /** 本机身份。不传就按 ~/.atracker/device.json 现读。 */
+  device?: DeviceInfo;
 }
 
 export interface ScanSummary {
@@ -50,6 +54,9 @@ export async function runScan(
   repo: Repo,
   opts: ScanOptions
 ): Promise<ScanSummary> {
+  const device = opts.device ?? loadDevice();
+  repo.touchDevice(device);
+
   const collectors = COLLECTORS.filter(c => !opts.only || opts.only.includes(c.id));
   const batchId = repo.startBatch(opts.trigger, Date.now());
   const sessionStates = new Map<string, Map<string, number>>();
@@ -169,7 +176,7 @@ export async function runScan(
       } catch (err) {
         repo.log(batchId, Date.now(), 'warn', collector.id, `会话信息读取失败：${(err as Error).message}`);
       }
-      if (sessionRows.length) repo.upsertSessions(sessionRows);
+      if (sessionRows.length) repo.upsertSessions(sessionRows.map(r => ({ ...r, device: device.id })));
     }
 
     const collected: any[] = [];
@@ -180,6 +187,7 @@ export async function runScan(
         affectedDays.add(day);
         collected.push({
           eventId: ev.eventId,
+          device: device.id,
           agent: ev.agent,
           sessionId: ev.sessionId,
           parentSessionId: ev.parentSessionId,

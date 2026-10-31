@@ -6,6 +6,7 @@ import type {
   ConversationDetail,
   ConversationsPayload,
   DayPayload,
+  DevicesPayload,
   DoctorPayload,
   LogsPayload,
   MatrixPayload,
@@ -49,6 +50,7 @@ export const api = {
     q?: string | null;
   }) => request<LogsPayload>('/api/logs', filter),
   doctor: () => request<DoctorPayload>('/api/doctor'),
+  devices: () => request<DevicesPayload>('/api/devices'),
   scan: async (): Promise<void> => {
     const res = await fetch('/api/scan', { method: 'POST' });
     if (!res.ok) throw new Error(`/api/scan ${res.status}`);

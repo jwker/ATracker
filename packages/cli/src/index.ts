@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process';
 
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
+import { loadDevice } from '../../core/src/device.ts';
 import { localMonth } from '../../core/src/time.ts';
 import { fmtTok } from '../../core/src/units.ts';
 import { reconcile } from './reconcile.ts';
@@ -72,8 +73,11 @@ if (cmd === 'scan') {
   const only = arg('source')?.split(',').map(s => s.trim()).filter(Boolean);
   const trigger = (arg('trigger') as 'watch' | 'poll' | 'manual') ?? 'manual';
   const repo = openRepo();
+  const device = loadDevice();
+  repo.touchDevice(device);
+  repo.claimUnassigned(device.id);
   const t0 = Date.now();
-  const s = await runScan(repo, { trigger, only });
+  const s = await runScan(repo, { trigger, only, device });
   console.log(`批次 ${s.batchId} · 耗时 ${Date.now() - t0}ms`);
   console.log(`  读取 ${s.eventsRead} 条事件，落库 ${s.eventsWritten} 条，覆盖 ${s.days.length} 天`);
   if (s.errors) console.log(`  错误 ${s.errors} 个`);

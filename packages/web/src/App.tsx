@@ -20,6 +20,7 @@ import type {
 import type {
   AggregatePayload,
   CalendarPayload,
+  DevicesPayload,
   ConversationDetail,
   ConversationsPayload,
   DayPayload,
@@ -190,6 +191,7 @@ export function App() {
   const [convDetail, setConvDetail] = useState<ConversationDetail | null>(null);
   const [logs, setLogs] = useState<LogsPayload | null>(null);
   const [doctor, setDoctor] = useState<DoctorPayload | null>(null);
+  const [devices, setDevices] = useState<DevicesPayload | null>(null);
   const [day, setDay] = useState<DayPayload | null>(null);
 
   const [error, setError] = useState<string | null>(null);
@@ -359,12 +361,14 @@ export function App() {
     let alive = true;
     Promise.all([
       api.logs({ batch: logFilter.batch, level: logFilter.lvl, source: logFilter.src, q: logFilter.q }),
-      api.doctor()
+      api.doctor(),
+      api.devices()
     ])
-      .then(([l, d]) => {
+      .then(([l, d, dv]) => {
         if (!alive) return;
         setLogs(l);
         setDoctor(d);
+        setDevices(dv);
         setError(null);
       })
       .catch(err => {
@@ -591,6 +595,7 @@ export function App() {
       <LogsView
         logs={logs}
         doctor={doctor}
+        devices={devices}
         filter={logFilter}
         onFilter={patch => filterLogs(patch)}
         onClear={clearLog}

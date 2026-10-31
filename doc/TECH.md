@@ -370,9 +370,17 @@ zstd 多帧要用自己写的帧遍历器（Node 的 `zlib.zstdDecompressSync` �
 `usage_event` 是明细，可能有几百万行，每次算总量都扫一遍不行。维护三张日聚合表和一张累计表：
 
 ```sql
--- 按 agent 的日聚合
+-- 设备。id 来自 ~/.atracker/device.json，远端设备同步进来后也会出现在这里
+CREATE TABLE device (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  platform   TEXT,
+  created_at INTEGER NOT NULL,
+  last_seen  INTEGER
+);
+-- 按 agent 的日聚合（device 进主键：同一个 agent 在多台机器上是分开的）
 CREATE TABLE agg_day_agent (
-  day TEXT NOT NULL, agent TEXT NOT NULL,
+  day TEXT NOT NULL, device TEXT NOT NULL, agent TEXT NOT NULL,
   input INTEGER, output INTEGER, cache_read INTEGER, cache_write INTEGER, reasoning INTEGER,
   tokens INTEGER, cost_usd REAL, cost_cny REAL,
   PRIMARY KEY (day, agent)
