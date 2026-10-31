@@ -4,7 +4,7 @@
 // 跑项目里的 .ts，`node:sqlite` 也在，所以 main 进程里 import ATrackerServer
 // 就能用。窗口只是把这个本地服务当普通网页打开。
 
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
@@ -27,6 +27,101 @@ function databasePath(): string {
   if (fromEnv) return fromEnv;
   if (!app.isPackaged) return join(ROOT, 'data', 'atracker.db');
   return join(app.getPath('userData'), 'atracker.db');
+}
+
+/**
+ * 应用菜单。自己写一份，因为默认菜单里没有「重新扫描」这种本应用的常用动作。
+ * 角色项（role）交给系统翻译，自定义项用中文。
+ */
+function buildMenu(): void {
+  const isMac = process.platform === 'darwin';
+
+  const template: MenuItemConstructorOptions[] = [
+    // 菜单项的 role 交给系统处理，但 label 自己写中文，和界面保持一致
+    ...(isMac
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' as const, label: `关于 ${app.name}` },
+            { type: 'separator' as const },
+            { role: 'services' as const, label: '服务' },
+            { type: 'separator' as const },
+            { role: 'hide' as const, label: `隐藏 ${app.name}` },
+            { role: 'hideOthers' as const, label: '隐藏其他' },
+            { role: 'unhide' as const, label: '全部显示' },
+            { type: 'separator' as const },
+            { role: 'quit' as const, label: `退出 ${app.name}` }
+          ]
+        }]
+      : []),
+    {
+      label: '文件',
+      submenu: [
+        {
+          label: '重新扫描',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => { void server?.triggerScan('manual'); }
+        },
+        {
+          label: '打开数据目录',
+          click: () => { void shell.openPath(app.getPath('userData')); }
+        },
+        { type: 'separator' },
+        isMac
+          ? { role: 'close', label: '关闭窗口' }
+          : { role: 'quit', label: '退出' }
+      ]
+    },
+    {
+      label: '编辑',
+      submenu: [
+        { role: 'undo', label: '撤销' },
+        { role: 'redo', label: '重做' },
+        { type: 'separator' },
+        { role: 'cut', label: '剪切' },
+        { role: 'copy', label: '复制' },
+        { role: 'paste', label: '粘贴' },
+        { role: 'selectAll', label: '全选' }
+      ]
+    },
+    {
+      label: '视图',
+      submenu: [
+        // 页面刷新和扫描是两件事，刷新用 Shift，把 ⌘R 让给「重新扫描」
+        { role: 'reload', label: '重新加载页面', accelerator: 'CmdOrCtrl+Shift+R' },
+        { role: 'forceReload', label: '强制重新加载' },
+        { role: 'toggleDevTools', label: '开发者工具' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: '实际大小' },
+        { role: 'zoomIn', label: '放大' },
+        { role: 'zoomOut', label: '缩小' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: '全屏' }
+      ]
+    },
+    {
+      label: '窗口',
+      submenu: [
+        { role: 'minimize', label: '最小化' },
+        { role: 'zoom', label: '缩放' },
+        ...(isMac
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const, label: '全部置于顶层' }
+            ]
+          : [{ role: 'close' as const, label: '关闭窗口' }])
+      ]
+    }
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+
+  if (process.env.ATRACKER_DEBUG_MENU) {
+    console.log('菜单：', JSON.stringify(
+      Menu.getApplicationMenu()?.items.map(i => [i.label, i.submenu?.items.map(x => x.label)]),
+      null, 1
+    ));
+  }
 }
 
 async function openWindow(): Promise<void> {
@@ -85,7 +180,10 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
 
-  app.whenReady().then(openWindow).catch(err => {
+  app.whenReady().then(() => {
+    buildMenu();
+    return openWindow();
+  }).catch(err => {
     // 起不来就把原因打出来，别留一个空白窗口。
     console.error('启动失败：', err);
     app.quit();
