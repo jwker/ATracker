@@ -13,6 +13,7 @@ electronDist: node_modules/electron/dist
 
 files:
   - package.json
+  - build/buildinfo.json
   - packages/desktop/src/**
   - packages/core/src/**
   - packages/storage/src/**

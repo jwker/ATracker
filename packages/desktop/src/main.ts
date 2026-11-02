@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
 import { iCloudAvailable, iCloudRoot, iCloudSyncDir, loadConfig, saveConfig } from '../../core/src/config.ts';
+import { buildInfo } from '../../core/src/build.ts';
 
 /** 打包后是 .../Resources/app.asar，开发时是仓库根目录。 */
 const ROOT = app.getAppPath();
@@ -390,6 +391,14 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    // 「关于」面板显示版本和提交，两台机器对比用
+    const b = buildInfo(app.getVersion());
+    app.setAboutPanelOptions({
+      applicationName: 'ATracker',
+      applicationVersion: `${b.version}${b.dirty ? '+' : ''} (${b.commit})`,
+      version: b.commit,
+      credits: `本机 AI 编码 agent 的 token 用量看板\n${b.builtAt ? '构建于 ' + b.builtAt : ''}`
+    });
     buildMenu();
     return openWindow();
   }).catch(err => {

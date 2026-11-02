@@ -20,6 +20,7 @@ import type {
 } from './state.ts';
 import type {
   AggregatePayload,
+  BuildInfo,
   CalendarPayload,
   DevicesPayload,
   SyncPayload,
@@ -204,6 +205,7 @@ export function App() {
   const [doctor, setDoctor] = useState<DoctorPayload | null>(null);
   const [devices, setDevices] = useState<DevicesPayload | null>(null);
   const [sync, setSync] = useState<SyncPayload | null>(null);
+  const [build, setBuild] = useState<BuildInfo | null>(null);
   const [day, setDay] = useState<DayPayload | null>(null);
 
   const [error, setError] = useState<string | null>(null);
@@ -243,6 +245,15 @@ export function App() {
     } else if (v === 'log') navigate('/logs', [], { replace: true });
     else navigate('/', [], { replace: true });
   }, []);
+
+  // 构建信息：版本号 + 提交，两台机器对比用
+  useEffect(() => {
+    let alive = true;
+    api.status()
+      .then(s => { if (alive) setBuild(s.build ?? null); })
+      .catch(() => { /* 拿不到不影响主流程 */ });
+    return () => { alive = false; };
+  }, [refreshToken]);
 
   // 设备列表。只在多设备时才用得上，取一次就够。
   useEffect(() => {
@@ -641,6 +652,7 @@ export function App() {
         doctor={doctor}
         devices={devices}
         sync={sync}
+        build={build}
         onSyncChanged={() => setRefreshToken(n => n + 1)}
         filter={logFilter}
         onFilter={patch => filterLogs(patch)}

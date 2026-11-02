@@ -2,6 +2,7 @@
 
 import type {
   AggregatePayload,
+  BuildInfo,
   CalendarPayload,
   ConversationDetail,
   ConversationsPayload,
@@ -28,6 +29,7 @@ async function request<T>(
 }
 
 export const api = {
+  status: () => request<{ ok: boolean; build?: BuildInfo; total: TotalPayload }>('/api/status'),
   total: (device?: string | null) => request<TotalPayload>('/api/total', { device }),
   calendar: (month: string, device?: string | null) => request<CalendarPayload>('/api/calendar', { month, device }),
   aggregate: (from: string, to: string, device?: string | null) =>

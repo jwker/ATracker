@@ -11,6 +11,7 @@ import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import { deviceFilePath, loadDevice, saveDeviceName, type DeviceInfo } from '../../core/src/device.ts';
 import { exportRollup, importRollups, type ImportSummary } from '../../storage/src/sync.ts';
+import { buildInfo } from '../../core/src/build.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
   dayPayload, logPayload, matrixPayload, totalPayload
@@ -301,6 +302,7 @@ export class ATrackerServer {
         const total = totalPayload(this.repo);
         return json({
           ok: true,
+          build: buildInfo(),
           total,
           hasData: total.total > 0,
           scanning: this.scanning,

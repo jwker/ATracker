@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { DevicesPayload, DoctorPayload, LogsPayload, SyncPayload } from '../types.ts';
+import type { BuildInfo, DevicesPayload, DoctorPayload, LogsPayload, SyncPayload } from '../types.ts';
+import { BuildStamp } from '../components/BuildStamp.tsx';
 import { SyncPanel } from '../components/SyncPanel.tsx';
 import type { LogFilter } from '../state.ts';
 import { fmtTime, full } from '../format.ts';
@@ -9,6 +10,7 @@ interface LogsViewProps {
   doctor: DoctorPayload | null;
   devices: DevicesPayload | null;
   sync: SyncPayload | null;
+  build: BuildInfo | null;
   onSyncChanged: () => void;
   filter: LogFilter;
   onFilter: (patch: Partial<LogFilter>) => void;
@@ -260,6 +262,7 @@ export function LogsView(props: LogsViewProps) {
           {rows.length === 0 && <div className="placeholder">没有符合条件的日志行。</div>}
         </div>
       </div>
+      <BuildStamp build={props.build} />
     </>
   );
 }

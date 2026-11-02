@@ -130,7 +130,35 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 默认按当前机器架构打包（Apple Silicon 上是 arm64）。要 x64 或 universal 就在命令后面加
 `--x64` / `--universal`，这时需要能下载对应架构的 Electron。
 
-**换版本号**：`npm version patch`（或 minor / major），dmg 文件名会跟着变。
+## 版本号怎么加
+
+这个项目现在会装到两三台机器上，所以要能一眼看出「这台跑的是哪一版」。
+
+**规则**（开发期用 `0.x`）：
+
+| 什么时候 | 怎么做 | 例子 |
+| --- | --- | --- |
+| 只提交、不装机 | 不动版本号 | — |
+| 要装到机器上的修复 | `npm version patch` | 0.1.1 → 0.1.2 |
+| 一个能说清楚的新功能 | `npm version minor` | 0.1.2 → 0.2.0 |
+| 给别人用、接口稳定了 | `npm version major` | 0.9.0 → 1.0.0 |
+
+打包时 `scripts/buildinfo.mjs` 会把**版本号 + git 提交 + 构建时间**写进 `build/buildinfo.json`，跟着包一起打进去。应用里两处能看到：
+
+- 日志页最底部的版本行：`ATracker 0.1.1 · 提交 3f2a1c9 · 11-02 12:30 构建`
+- 「关于 ATracker」面板
+
+两台机器对比时**看提交哈希比看版本号准**——版本号只在装机的那次跳，哈希每次提交都变。
+
+一次完整的发版流程：
+
+```bash
+npm version patch          # 改 package.json，并建一个 commit（不加 tag 也行）
+npm run dist:mac:unsigned  # 自动带新版本号 + 当前提交
+open release/ATracker-<新版本>-arm64.dmg
+```
+
+`electron-builder` 的 `--dir` 模式（`npm run pack:mac`）不产出安装包，但也会刷新 buildinfo，适合只看「这一版对不对」。
 
 打包后的应用把数据库放在用户数据目录（macOS 是 `~/Library/Application Support/ATracker/atracker.db`），首次启动会自动扫一遍本机日志，不需要手动跑 `npm run scan`。
 

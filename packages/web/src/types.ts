@@ -229,6 +229,14 @@ export interface SyncPayload {
   devices: DeviceRow[];
 }
 
+export interface BuildInfo {
+  version: string;
+  commit: string;
+  dirty: boolean;
+  branch: string;
+  builtAt: string;
+}
+
 export interface DevicesPayload {
   /** 本机身份 */
   local: DeviceInfo;

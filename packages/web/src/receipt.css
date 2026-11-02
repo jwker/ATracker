@@ -67,7 +67,10 @@
   .unit button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--ink); border-color: var(--ink); }
-  /* 说明框：用来解释「这里为什么没数据」 */
+  /* 版本行：页脚一行小字，两台机器对比版本用 */
+  .buildstamp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 18px; padding-top: 8px; border-top: 1px dashed var(--rule); font-size: 8.5px; color: var(--faint); letter-spacing: .04em; }
+
+  /* 说明框：用来解释「这里为什么没有数据」 */
   .note-box { border-left: 3px solid var(--accent); background: var(--wash); padding: 7px 10px; font-size: 9.5px; color: var(--muted); line-height: 1.75; }
 
   /* 同步面板 */
