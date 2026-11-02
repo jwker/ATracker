@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
-import { iCloudAvailable, iCloudSyncDir, loadConfig, saveConfig } from '../../core/src/config.ts';
+import { iCloudAvailable, iCloudRoot, iCloudSyncDir, loadConfig, saveConfig } from '../../core/src/config.ts';
 
 /** 打包后是 .../Resources/app.asar，开发时是仓库根目录。 */
 const ROOT = app.getAppPath();
@@ -130,27 +130,28 @@ function warnIfDuplicateInstall(): void {
 }
 
 /**
- * 开关多设备同步。iCloud 目录不可用时给提示并把勾去掉，不写配置文件。
- * 同步状态存在 ~/.atracker/config.json 的 syncDir 字段里。
+ * 当前应该用的同步目录：配置里有就用配置的，没配过就是 iCloud 默认目录。
+ * 也就是说「不改任何设置」也能直接用。
  */
-async function toggleSync(on: boolean): Promise<void> {
-  if (!on) {
-    server?.setSyncDir(null);
-    saveConfig({ syncDir: null });
-    buildMenu();
-    return;
-  }
+function currentSyncDir(): string {
+  return loadConfig().syncDir ?? iCloudSyncDir();
+}
 
-  const dir = iCloudSyncDir();
-  if (!iCloudAvailable()) {
+/**
+ * 把某个目录设成同步目录并打开同步。iCloud 默认目录要求 iCloud Drive 已开；
+ * 自己选的目录不检查这个，因为可能是 Syncthing 之类的普通文件夹。
+ */
+function applySyncDir(dir: string, opts: { requireICloud: boolean }): boolean {
+  if (opts.requireICloud && !iCloudAvailable()) {
     dialog.showMessageBoxSync({
       type: 'warning',
       message: 'iCloud Drive 目录不可用',
-      detail: `找不到 ${dir}。先在「系统设置 → Apple 账户 → iCloud」里打开 iCloud Drive，再来开这个开关。`,
+      detail: `找不到 ${iCloudRoot() ?? '~/Library/Mobile Documents/com~apple~CloudDocs'}。\n` +
+        '先在「系统设置 → Apple 账户 → iCloud」里打开 iCloud Drive；' +
+        '或者用「文件 → 同步目录…」选一个别的文件夹。',
       buttons: ['好']
     });
-    buildMenu();
-    return;
+    return false;
   }
 
   try {
@@ -162,12 +163,40 @@ async function toggleSync(on: boolean): Promise<void> {
       detail: `${dir}\n${(err as Error).message}`,
       buttons: ['好']
     });
-    buildMenu();
-    return;
+    return false;
   }
 
   server?.setSyncDir(dir);
   saveConfig({ syncDir: dir });
+  return true;
+}
+
+/** 开关多设备同步，用当前目录（没配过就是 iCloud 默认目录）。 */
+function toggleSync(on: boolean): void {
+  if (!on) {
+    server?.setSyncDir(null);
+    saveConfig({ syncDir: null });
+    buildMenu();
+    return;
+  }
+  applySyncDir(currentSyncDir(), { requireICloud: loadConfig().syncDir === null });
+  buildMenu();
+}
+
+/** 选一个同步目录。选完自动打开同步。 */
+async function chooseSyncDir(): Promise<void> {
+  const result = await dialog.showOpenDialog({
+    title: '选择多设备同步目录',
+    message: '两台机器指向同一个目录即可（iCloud Drive、Syncthing、Dropbox、局域网共享盘都行）',
+    defaultPath: currentSyncDir(),
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: '用这个目录'
+  });
+  if (result.canceled || !result.filePaths[0]) {
+    buildMenu();
+    return;
+  }
+  applySyncDir(result.filePaths[0], { requireICloud: false });
   buildMenu();
 }
 
@@ -210,10 +239,16 @@ function buildMenu(): void {
         },
         { type: 'separator' },
         {
-          label: '多设备同步（iCloud）',
+          label: '多设备同步',
           type: 'checkbox',
           checked: loadConfig().syncDir !== null,
-          click: (item) => { void toggleSync(item.checked); }
+          click: (item) => { toggleSync(item.checked); }
+        },
+        {
+          label: '同步目录…',
+          // macOS 支持 sublabel，直接把当前目录显示在菜单里
+          sublabel: currentSyncDir(),
+          click: () => { void chooseSyncDir(); }
         },
         { type: 'separator' },
         isMac
@@ -267,7 +302,10 @@ function buildMenu(): void {
 
   if (process.env.ATRACKER_DEBUG_MENU) {
     console.log('菜单：', JSON.stringify(
-      Menu.getApplicationMenu()?.items.map(i => [i.label, i.submenu?.items.map(x => x.label)]),
+      Menu.getApplicationMenu()?.items.map(i => [
+        i.label,
+        i.submenu?.items.map(x => (x.sublabel ? `${x.label}（${x.sublabel}）` : x.label))
+      ]),
       null, 1
     ));
   }

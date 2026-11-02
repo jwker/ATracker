@@ -178,7 +178,7 @@ atracker sync import [--dir <目录>]
 
 同步目录的优先级：`--sync-dir <路径>` > `--sync`（用 iCloud 默认目录 `~/Library/Mobile Documents/com~apple~CloudDocs/ATracker`）> `ATRACKER_SYNC_DIR` > `~/.atracker/config.json` 里的 `syncDir`。都没有就关掉，不读也不写。
 
-桌面版在「文件 → 多设备同步（iCloud）」里开关，切换时写到 `~/.atracker/config.json`，不用重启。文件按「设备 + 月」拆，`atracker-<设备id>-<月>.jsonl`，每个几十 KB。
+桌面版在「文件 → 多设备同步」里开关，切换时写到 `~/.atracker/config.json`，不用重启。开关用的是当前配置的目录；没配过就是 iCloud 默认目录，所以不改任何设置也能直接用。「文件 → 同步目录…」可以换成任意文件夹，选完自动打开同步。文件按「设备 + 月」拆，`atracker-<设备id>-<月>.jsonl`，每个几十 KB。
 
 日志页有一块「多设备同步」面板：目录、上次导出、上次对表（读了几份文件、导入了多少行）、错误，以及每台设备的最后写入时间、改名 / 忽略 / 恢复。**忽略**会删掉本机库里这台设备的行并停止导入，同步目录里对方写的文件不动，随时可以恢复。
 
@@ -226,7 +226,7 @@ atracker sync import [--dir <目录>]
 | 同一个项目在两台机器上分成两个目录 | 目录按绝对路径归并，`/Users/a/proj` 和 `/Users/b/proj` 就是两条记录，这是设计如此 |
 | 点开对方的会话没有逐轮明细 | 明细不同步，只同步标题、轮次数、四桶和总量 |
 
-**想换一个同步目录**（Syncthing、Dropbox、局域网共享盘）时，桌面版菜单目前只有 iCloud 这一个开关，改不了路径，要么手动编辑 `~/.atracker/config.json` 的 `syncDir` 后重启，要么用下面的命令行方式。
+**想换一个同步目录**（Syncthing、Dropbox、局域网共享盘）：桌面版菜单「文件 → 同步目录…」选一个文件夹即可，选完自动打开同步，当前路径会显示在菜单项的右侧。也可以手动改 `~/.atracker/config.json` 的 `syncDir`，或者用下面的命令行方式。
 
 **不开桌面版时**（比如远程登录一台服务器）用命令行，效果一样：
 
