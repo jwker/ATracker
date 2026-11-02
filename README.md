@@ -161,7 +161,24 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 
 `GET /api/devices` 返回本机身份、身份文件路径，以及库里出现过的设备列表。日志页的诊断区会显示本机设备名和 id 前 8 位。
 
-`ATRACKER_DEVICE_FILE` 可以指定身份文件位置（测试用）。多设备同步还没做，见 `doc/PLAN.md`。
+`ATRACKER_DEVICE_FILE` 可以指定身份文件位置（测试用）。
+
+## 多设备同步（P2：格式与导入导出）
+
+每台设备把自己的数据写成一个目录里的 rollup 文件，读别人的文件把数字汇总到本机库。**文件各管各的，谁都不改别人的**；「合并」只发生在查询阶段。
+
+```bash
+atracker sync export [--dir <目录>]   # 把自己写成 atracker-<设备id>-<月>.jsonl
+atracker sync import [--dir <目录>]   # 读目录里别人的文件，导入本机库
+```
+
+默认目录是 `~/.atracker/sync`，也可以用 `ATRACKER_SYNC_DIR` 或 `--dir` 指定。文件按「设备 + 月」拆，每个几十 KB。
+
+文件是 JSONL，三种行：`device`（设备自述）、`agg`（日级聚合，`k` 区分 agent / dir / model / agent_model 四种维度）、`session`（会话汇总）。目录字段是绝对路径。
+
+导入按「设备 + 月」整块替换（先删再插），重复导入幂等。本机自己的文件会被跳过——本机的数据本来就该从明细重算。重建聚合时只重算「明细里有数据的设备」，所以本机重扫不会把远端设备的行删掉（这条专门验过）。
+
+还没做的：写文件到 iCloud 目录、扫描后自动导出/启动时自动导入、界面上的设备筛选。
 
 ## 采集器的版本号
 
