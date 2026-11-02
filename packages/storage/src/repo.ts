@@ -572,6 +572,22 @@ export class Repo {
     return { days, legend: dirs };
   }
 
+  /**
+   * 区间内的调用次数。远端设备只有聚合、没有明细，所以返回 null——
+   * 调用次数只有本机有资格给。
+   */
+  countEvents(from: string, to: string, device?: string): number | null {
+    // 全部设备、或者指定了一台没有明细的设备（远端），都给不出次数：
+    // 聚合里没有这个字段，硬算只会算成本机的那一份。
+    if (!device) return null;
+    const has = this.db.prepare('SELECT 1 FROM usage_event WHERE device = ? LIMIT 1').get(device);
+    if (!has) return null;
+    const r = this.db.prepare(
+      'SELECT COUNT(*) n FROM usage_event WHERE device = ? AND local_day >= ? AND local_day <= ?'
+    ).get(device, from, to) as any;
+    return r?.n ?? 0;
+  }
+
   /** 区间内的来源 × 模型交叉表。 */
   matrix(from: string, to: string, device?: string): any {
     const dev = device ? ' AND device = ?' : '';

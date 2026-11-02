@@ -167,7 +167,9 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
       model: m.model, vendor: m.vendor, tokens: m.tokens
     })),
     byAgent: byAgent.map((a: any) => ({ agent: a.agent, tokens: a.tokens })),
-    byAgentModel: cells
+    byAgentModel: cells,
+    /** 调用次数；远端设备（没有明细）时是 null */
+    events: repo.countEvents(from, to, device)
   };
 }
 

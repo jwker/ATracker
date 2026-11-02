@@ -13,6 +13,7 @@ interface TodayViewProps {
   onToday: () => void;
   onOpenCell: (agent: string, model: string, vendor: string | null) => void;
   onOpenDir: (dir: string) => void;
+  onShare: () => void;
 }
 
 /** 小时图里柱子区的高度。标签占 15px，柱子按百分比填满剩下的部分。 */
@@ -65,6 +66,7 @@ export function TodayView(props: TodayViewProps) {
           <span className="scope">
             {day.date} {day.weekday} / 截至 {day.cutoff}
           </span>
+          <button className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
         </div>
         <div className="total-line">
           <div>

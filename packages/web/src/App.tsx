@@ -8,6 +8,7 @@ import { MonthView } from './views/MonthView.tsx';
 import { TodayView } from './views/TodayView.tsx';
 import { ConversationsView } from './views/ConversationsView.tsx';
 import { LogsView } from './views/LogsView.tsx';
+import { CardView } from './views/CardView.tsx';
 import { dayOf, monthRange, shiftMonth } from './format.ts';
 import { navigate, useRoute, type Params } from './router.ts';
 import type {
@@ -50,6 +51,7 @@ function viewOf(path: string): View {
   if (path === '/month' || path.startsWith('/month/')) return 'month';
   if (path === '/conversations') return 'conv';
   if (path === '/logs') return 'log';
+  if (path === '/card') return 'card';
   return 'home';
 }
 
@@ -436,6 +438,16 @@ export function App() {
 
   /* ---------- 导航 ---------- */
 
+  /** 打开分享卡片页。带上当前的范围、日期和设备，卡片跟页面保持一致。 */
+  function openCard(): void {
+    navigate('/card', [
+      ['from', range.from],
+      ['to', range.to],
+      ['date', dayDate],
+      ['device', showAll ? 'all' : deviceParam]
+    ]);
+  }
+
   /** 切设备。只改 URL 里的 device 参数，当前页和选区都保留。 */
   function selectDevice(deviceId: string | null) {
     // null 表示全部设备，写成 device=all；具体设备写 id；本机也写 id，
@@ -572,6 +584,7 @@ export function App() {
       <LedgerView
         total={total}
         deviceName={showAll ? null : devices?.devices.find(d => d.id === deviceParam)?.name ?? devices?.local.name ?? null}
+        onShare={openCard}
         agg={agg}
         matrix={matrix}
         unit={unit}
@@ -617,6 +630,7 @@ export function App() {
       refreshing = day.date !== dayDate;
       body = (
       <TodayView
+        onShare={openCard}
         day={day}
         unit={unit}
         onPrevDay={prevDay}
@@ -628,6 +642,18 @@ export function App() {
       />
       );
     }
+  } else if (view === 'card') {
+    body = (
+      <CardView
+        from={range.from}
+        to={range.to}
+        date={dayDate}
+        device={showAll ? 'all' : deviceParam}
+        localDeviceId={devices?.local.id ?? null}
+        version={build?.version ?? 'dev'}
+        onBack={() => history.back()}
+      />
+    );
   } else if (view === 'conv') {
     body = conv ? (
       <ConversationsView

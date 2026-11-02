@@ -66,6 +66,8 @@ export interface AggregatePayload {
   byModel: ModelAggregate[];
   byAgent: AgentAggregate[];
   byAgentModel: Record<string, Record<string, number>>;
+  /** 调用次数；远端设备没有明细，为 null */
+  events?: number | null;
 }
 
 export interface MatrixAgent {

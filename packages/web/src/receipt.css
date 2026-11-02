@@ -67,6 +67,16 @@
   .unit button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--ink); border-color: var(--ink); }
+  /* 「分享卡片」入口：一行小字按钮，跟在范围说明后面 */
+  .sharebtn { margin-left: auto; background: none; border: 0; padding: 0; color: var(--accent); font-size: 9px; letter-spacing: .06em; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .sharebtn:hover { color: var(--ink); }
+
+  /* 分享卡片页 */
+  .cardrow { display: flex; gap: 18px; flex-wrap: wrap; }
+  .cardcell { display: flex; flex-direction: column; gap: 6px; }
+  .cardhead { display: flex; align-items: baseline; justify-content: space-between; font-size: 9px; color: var(--muted); letter-spacing: .1em; }
+  .sharecanvas { width: 320px; height: auto; border: 1px solid var(--rule); display: block; }
+
   /* 版本行：页脚一行小字，两台机器对比版本用 */
   .buildstamp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 18px; padding-top: 8px; border-top: 1px dashed var(--rule); font-size: 8.5px; color: var(--faint); letter-spacing: .04em; }
 
