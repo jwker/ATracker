@@ -44,6 +44,9 @@ interface SessionLine {
   sessionId: string;
   title: string | null;
   dir: string | null;
+  /** 会话里用得最多的模型 */
+  model: string | null;
+  vendor: string | null;
   events: number;
   tokens: number;
   input: number;
@@ -127,7 +130,7 @@ function aggLines(repo: Repo, deviceId: string, month: string, kind: AggKind): A
 
 function sessionLines(repo: Repo, deviceId: string, month: string): SessionLine[] {
   return (repo.db.prepare(
-    `SELECT agent, session_id, title, dir, events, tokens, input, output, cache_read, cache_write, first_ts, last_ts
+    `SELECT agent, session_id, title, dir, model, vendor, events, tokens, input, output, cache_read, cache_write, first_ts, last_ts
      FROM session_usage WHERE device = ? AND month = ?`
   ).all(deviceId, month) as any[]).map(r => ({
     t: 'session' as const,
@@ -137,6 +140,8 @@ function sessionLines(repo: Repo, deviceId: string, month: string): SessionLine[
     sessionId: r.session_id,
     title: r.title ?? null,
     dir: r.dir ?? null,
+    model: r.model ?? null,
+    vendor: r.vendor ?? null,
     events: r.events ?? 0,
     tokens: r.tokens ?? 0,
     input: r.input ?? 0,
@@ -298,10 +303,12 @@ function insertAgg(repo: Repo, l: AggLine): void {
 function insertSession(repo: Repo, l: SessionLine): void {
   repo.db.prepare(
     `INSERT OR REPLACE INTO session_usage
-       (device, agent, session_id, month, title, dir, events, tokens, input, output, cache_read, cache_write, first_ts, last_ts)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       (device, agent, session_id, month, title, dir, model, vendor, events, tokens,
+        input, output, cache_read, cache_write, first_ts, last_ts)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
     l.device, l.agent, l.sessionId, l.month, l.title ?? null, l.dir ?? null,
+    l.model ?? null, l.vendor ?? null,
     l.events, l.tokens, l.input, l.output, l.cacheRead, l.cacheWrite, l.firstTs, l.lastTs
   );
 }

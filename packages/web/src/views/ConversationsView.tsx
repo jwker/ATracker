@@ -113,7 +113,10 @@ export function ConversationsView(props: ConversationsViewProps) {
             onClick={() => props.onSelect(cv.id)}
             aria-current={cv.id === cur?.id}
           >
-            <span className="t">{cv.title || cv.sessionId.slice(0, 8)}</span>
+            <span className="t">
+              {cv.title || cv.sessionId.slice(0, 8)}
+              {!cv.detail && <span className="pill" style={{ marginLeft: 6 }}>{cv.deviceName}</span>}
+            </span>
             <span className="m">
               {cv.firstTs ? dayOf(cv.firstTs) : '—'} / {cv.agent} / {tok(cv.tokens)}
             </span>
@@ -157,6 +160,7 @@ export function ConversationsView(props: ConversationsViewProps) {
       </div>
       <div className="detail-title">{title}</div>
       <div className="detail-meta">
+        {!cur.detail && <>{cur.deviceName} / </>}
         {cur.dirName} / {cur.agent} / {modelLabel(cur.model, cur.vendor)}
       </div>
       <div style={{ marginTop: 8 }}>
@@ -187,6 +191,7 @@ export function ConversationsView(props: ConversationsViewProps) {
         <LeadRow label="缓存写入" value={tok(st.buckets.cacheWrite)} />
       </div>
 
+      {st.dayRows.length > 0 && (
       <div className="sec bars">
         <div className="sec-h">
           <b>逐日用量</b>
@@ -211,7 +216,19 @@ export function ConversationsView(props: ConversationsViewProps) {
           </div>
         ))}
       </div>
+      )}
 
+      {!detail.detail ? (
+        <div className="sec">
+          <div className="sec-h">
+            <b>逐轮明细</b>
+            <span>REMOTE</span>
+          </div>
+          <div className="note-box">
+            这个会话发生在其它设备上，本机只同步了汇总（标题、轮次数、四桶和总量），逐轮明细没有同步。
+          </div>
+        </div>
+      ) : (
       <div className="sec">
         <div className="sec-h">
           <b>逐轮明细</b>
@@ -251,6 +268,7 @@ export function ConversationsView(props: ConversationsViewProps) {
           </tbody>
         </table>
       </div>
+      )}
 
       <div className="sec">
         <div className="sec-h">

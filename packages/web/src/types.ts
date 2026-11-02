@@ -95,6 +95,11 @@ export interface MatrixPayload {
 
 export interface ConversationSummary {
   id: string;
+  /** 哪台设备产生的会话 */
+  device: string;
+  deviceName: string;
+  /** 本机有逐轮明细 */
+  detail: boolean;
   agent: string;
   sessionId: string;
   dir: string;
@@ -147,6 +152,8 @@ export interface ConversationStats {
 export interface ConversationDetail {
   id: string;
   agent: string;
+  /** 本机有没有这个会话的逐轮明细 */
+  detail: boolean;
   sessionId: string;
   title: string | null;
   dir: string | null;

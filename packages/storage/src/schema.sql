@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS session_usage (
   month       TEXT NOT NULL,
   title       TEXT,
   dir         TEXT,
+  -- 会话里用得最多的那个模型（跨设备列表要按模型筛）
+  model       TEXT,
+  vendor      TEXT,
   events      INTEGER NOT NULL DEFAULT 0,
   tokens      INTEGER NOT NULL DEFAULT 0,
   input       INTEGER NOT NULL DEFAULT 0,

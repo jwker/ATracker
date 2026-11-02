@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 export interface StoredEvent {
   eventId: string;
@@ -107,6 +107,14 @@ export class Repo {
       if (!cols.includes('ignored')) {
         this.db.exec('ALTER TABLE device ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0;');
       }
+    }
+
+    // 5：会话汇总补 model / vendor，跨设备会话列表要按模型筛
+    if (from < 5) {
+      const cols = (this.db.prepare('PRAGMA table_info(session_usage)').all() as any[]).map(c => c.name);
+      if (!cols.includes('model')) this.db.exec('ALTER TABLE session_usage ADD COLUMN model TEXT;');
+      if (!cols.includes('vendor')) this.db.exec('ALTER TABLE session_usage ADD COLUMN vendor TEXT;');
+      this.rebuildAggregates([]);
     }
 
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
@@ -418,14 +426,32 @@ export class Repo {
 
   /** 重算某个设备某个月的会话汇总。远端设备的会话由 sync import 直接写入。 */
   rebuildSessionUsage(device: string, month: string): void {
-    this.db.prepare('DELETE FROM session_usage WHERE device = ? AND month = ?').run(device, month);
+    // 一个会话只落在它最后一天所属的月份里。跨月的会话在旧月份可能留有旧行，
+    // 所以按「这个月结束的那些会话」删，而不是按 month 列删。
+    this.db.prepare(
+      `DELETE FROM session_usage WHERE device = ? AND agent || ':' || session_id IN (
+         SELECT agent || ':' || session_id FROM usage_event
+         WHERE device = ? AND substr(local_day, 1, 7) = ?
+         GROUP BY agent, session_id
+         HAVING substr(MAX(local_day), 1, 7) = ?
+       )`
+    ).run(device, device, month, month);
     this.db.prepare(
       `INSERT INTO session_usage
-         (device, agent, session_id, month, title, dir, events, tokens, input, output, cache_read, cache_write, first_ts, last_ts)
+         (device, agent, session_id, month, title, dir, model, vendor, events, tokens,
+          input, output, cache_read, cache_write, first_ts, last_ts)
        SELECT e.device, e.agent, e.session_id,
               substr(MAX(e.local_day), 1, 7),
               s.title,
               COALESCE(s.cwd, MIN(e.cwd)),
+              (SELECT model FROM usage_event m
+                WHERE m.device = e.device AND m.agent = e.agent AND m.session_id = e.session_id
+                GROUP BY model ORDER BY SUM(m.input_tokens + m.output_tokens + m.cache_read_tokens + m.cache_write_tokens) DESC
+                LIMIT 1),
+              (SELECT provider FROM usage_event m
+                WHERE m.device = e.device AND m.agent = e.agent AND m.session_id = e.session_id
+                ORDER BY (m.input_tokens + m.output_tokens + m.cache_read_tokens + m.cache_write_tokens) DESC
+                LIMIT 1),
               COUNT(*),
               SUM(e.input_tokens + e.output_tokens + e.cache_read_tokens + e.cache_write_tokens),
               SUM(e.input_tokens), SUM(e.output_tokens), SUM(e.cache_read_tokens), SUM(e.cache_write_tokens),
@@ -434,8 +460,9 @@ export class Repo {
        LEFT JOIN session_title s
          ON s.device = e.device AND s.agent = e.agent AND s.session_id = e.session_id
        WHERE e.device = ? AND substr(e.local_day, 1, 7) = ?
-       GROUP BY e.device, e.agent, e.session_id`
-    ).run(device, month);
+       GROUP BY e.device, e.agent, e.session_id
+       HAVING substr(MAX(e.local_day), 1, 7) = ?`
+    ).run(device, month, month);
   }
 
   /** 重算累计。聚合表很小，直接全量重算比增量更不容易出错。 */
@@ -565,23 +592,59 @@ export class Repo {
     ).all(from, to, ...(device ? [device] : []));
   }
 
-  /** 会话列表。 */
-  conversations(filter: { dir?: string; agent?: string; model?: string; vendor?: string; q?: string; limit?: number }): any[] {
+  /**
+   * 会话列表：本机从明细汇总，远端从 session_usage 取，合在一起按最后活跃倒序。
+   * 远端会话带 detail=0——逐轮明细没有同步，详情页要据此说明。
+   */
+  conversations(filter: {
+    dir?: string; agent?: string; model?: string; vendor?: string; q?: string; limit?: number; device?: string;
+  }): any[] {
     const where: string[] = [];
     const args: any[] = [];
     if (filter.dir) { where.push('cwd = ?'); args.push(filter.dir); }
     if (filter.agent) { where.push('agent = ?'); args.push(filter.agent); }
     if (filter.model) { where.push('model = ?'); args.push(filter.model); }
-    if (filter.vendor) { where.push('provider = ?'); args.push(filter.vendor); }
-    if (filter.q) { where.push('(session_id LIKE ? OR cwd LIKE ?)'); args.push('%' + filter.q + '%', '%' + filter.q + '%'); }
-    const sql = `SELECT agent, session_id, cwd, model, provider, COUNT(*) events,
-                        SUM(input_tokens) input, SUM(output_tokens) output,
-                        SUM(cache_read_tokens) cache_read, SUM(cache_write_tokens) cache_write,
-                        MIN(ts) first_ts, MAX(ts) last_ts
-                 FROM usage_event ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-                 GROUP BY agent, session_id ORDER BY last_ts DESC LIMIT ?`;
+    if (filter.vendor) { where.push('vendor = ?'); args.push(filter.vendor); }
+    if (filter.device) { where.push('device = ?'); args.push(filter.device); }
+    if (filter.q) {
+      where.push('(session_id LIKE ? OR cwd LIKE ? OR title LIKE ?)');
+      args.push(`%${filter.q}%`, `%${filter.q}%`, `%${filter.q}%`);
+    }
+
+    const sql = `
+      SELECT * FROM (
+        SELECT e.device, e.agent, e.session_id, MIN(e.cwd) cwd, MIN(e.model) model, MIN(e.provider) vendor,
+               s.title AS title, COUNT(*) events,
+               SUM(e.input_tokens) input, SUM(e.output_tokens) output,
+               SUM(e.cache_read_tokens) cache_read, SUM(e.cache_write_tokens) cache_write,
+               MIN(e.ts) first_ts, MAX(e.ts) last_ts, 1 AS detail
+        FROM usage_event e
+        LEFT JOIN session_title s
+          ON s.device = e.device AND s.agent = e.agent AND s.session_id = e.session_id
+        GROUP BY e.device, e.agent, e.session_id
+
+        UNION ALL
+
+        SELECT su.device, su.agent, su.session_id, su.dir AS cwd, su.model, su.vendor,
+               su.title, su.events, su.input, su.output, su.cache_read, su.cache_write,
+               su.first_ts, su.last_ts, 0 AS detail
+        FROM session_usage su
+        WHERE NOT EXISTS (
+          SELECT 1 FROM usage_event e2
+          WHERE e2.device = su.device AND e2.agent = su.agent AND e2.session_id = su.session_id
+        )
+      )
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ORDER BY last_ts DESC LIMIT ?`;
     args.push(filter.limit ?? 200);
     return this.db.prepare(sql).all(...args);
+  }
+
+  /** 同步过来的会话汇总（本机没有明细的那些）。 */
+  sessionSummary(agent: string, sessionId: string): any {
+    return this.db.prepare(
+      'SELECT * FROM session_usage WHERE agent = ? AND session_id = ? LIMIT 1'
+    ).get(agent, sessionId) ?? null;
   }
 
   /** 单个会话的逐条明细。limit 给 0 表示不限。 */

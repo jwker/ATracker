@@ -210,11 +210,16 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
     limit: 500
   }) as any[];
   const titles = repo.sessionTitles();
+  const deviceNames = new Map(repo.devices().map((d: any) => [d.id as string, d.name as string]));
 
   const items = list.map(c => {
     const meta = titles.get(`${c.agent}:${c.session_id}`);
     return {
       id: `${c.agent}:${c.session_id}`,
+      device: c.device,
+      deviceName: deviceNames.get(c.device) ?? c.device.slice(0, 8),
+      /** 1 = 本机有逐轮明细；0 = 只有同步过来的汇总 */
+      detail: c.detail === 1,
       agent: c.agent,
       sessionId: c.session_id,
       dir: c.cwd,
@@ -222,7 +227,7 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
       color: dirColor(c.cwd),
       model: c.model,
       vendor: c.provider,
-      title: meta?.title ?? null,
+      title: c.title ?? meta?.title ?? null,
       events: c.events,
       tokens: c.input + c.output + c.cache_read + c.cache_write,
       input: c.input, output: c.output, cacheRead: c.cache_read, cacheWrite: c.cache_write,
@@ -254,6 +259,34 @@ export function conversationPayload(repo: Repo, id: string, limit = 200) {
   const titles = repo.sessionTitles();
   const meta = titles.get(`${agent}:${sessionId}`);
 
+  // 本机没有这个会话的明细时，看是不是同步过来的远端会话
+  if (events.length === 0) {
+    const remote = repo.sessionSummary(agent, sessionId);
+    if (remote) {
+      const b = {
+        input: remote.input, output: remote.output,
+        cacheRead: remote.cache_read, cacheWrite: remote.cache_write
+      };
+      return {
+        id,
+        agent,
+        sessionId,
+        title: remote.title,
+        dir: remote.dir,
+        detail: false,
+        eventTotal: remote.events,
+        truncated: false,
+        events: [],
+        stats: {
+          buckets: b,
+          total: remote.tokens,
+          byDay: {},
+          dayRows: []
+        }
+      };
+    }
+  }
+
   const buckets = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 };
   const byDay: Record<string, number> = {};
 
@@ -273,6 +306,7 @@ export function conversationPayload(repo: Repo, id: string, limit = 200) {
     sessionId,
     title: meta?.title ?? null,
     dir: meta?.cwd ?? events[0]?.cwd ?? null,
+    detail: true,
     eventTotal: total,
     truncated: total > events.length,
     events: events.map(e => ({
