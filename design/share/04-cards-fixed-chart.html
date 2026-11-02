@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATracker 设计稿 · 分享卡片 v4（柱状图高度）</title>
+<style>
+  :root {
+    --desk:#cfd0cb; --paper:#f6f5f0; --ink:#17181a; --muted:#6c6e69; --faint:#a9aba5;
+    --rule:#c9cbc4; --accent:#bf3b22; --wash:#e8e8e2;
+    --t0:#17181a; --t1:#3c3e3a; --t2:#5c5f59; --t3:#7d8079; --t4:#a0a39b; --t5:#c3c6be;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--desk); color: var(--ink);
+    font-family: "Courier New", "SF Mono", Menlo, monospace;
+    padding: 28px 16px 60px;
+  }
+  .title { max-width: 820px; margin: 0 auto 4px; font-size: 13px; letter-spacing: .16em; }
+  .sub { max-width: 820px; margin: 0 auto 26px; font-size: 11px; line-height: 1.8; color: #4a4b47; }
+
+  .row { max-width: 820px; margin: 0 auto; display: flex; gap: 40px; flex-wrap: wrap; }
+  .item { display: flex; flex-direction: column; gap: 9px; }
+  .item .cap { font-size: 11px; letter-spacing: .1em; }
+  .item .cap b { font-size: 12px; }
+  .item .cap .tag { color: #4a4b47; }
+  .item .note { font-size: 10.5px; line-height: 1.85; color: #3f403d; width: 360px; }
+  .item .note b { color: #17181a; }
+
+  /* 预览 1/3：真卡 1080×1920 */
+  .card { width: 360px; height: 640px; position: relative; overflow: hidden; background: var(--desk); display: flex; align-items: center; justify-content: center; }
+
+  .paper {
+    width: 306px; height: 604px; background: var(--paper); position: relative;
+    padding: 20px 24px 18px; box-shadow: 0 10px 26px #00000026;
+    display: flex; flex-direction: column;
+  }
+  .paper::before, .paper::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 8px;
+    background:
+      linear-gradient(135deg, var(--desk) 4px, transparent 0) 0 0 / 8px 8px repeat-x,
+      linear-gradient(45deg, var(--desk) 4px, transparent 0) 0 0 / 8px 8px repeat-x;
+    background-color: var(--paper);
+  }
+  .paper::before { top: -8px; }
+  .paper::after { bottom: -8px; transform: rotate(180deg); }
+
+  .brand { text-align: center; border-bottom: 2px solid var(--ink); padding-bottom: 7px; }
+  .brand .nm { font-size: 18px; letter-spacing: .3em; font-weight: 700; }
+  .brand .sb { font-size: 7px; letter-spacing: .26em; color: var(--muted); margin-top: 2px; }
+  .meta { display: flex; justify-content: space-between; font-size: 8px; color: var(--muted); padding: 5px 0; border-bottom: 1px dashed var(--rule); }
+
+  .big { margin-top: auto; }
+  .big .lab { font-size: 8px; letter-spacing: .18em; color: var(--muted); }
+  .big .val { font-size: 42px; font-weight: 700; letter-spacing: -.04em; line-height: 1.05; white-space: nowrap; }
+  .big .val small { font-size: 21px; letter-spacing: 0; margin-left: 3px; }
+  .big .sub { font-size: 8px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+  .hit { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+  .hit .n { font-size: 21px; color: var(--accent); letter-spacing: -.02em; }
+  .hit .t { font-size: 8px; color: var(--muted); }
+
+  .sec { margin-top: 13px; }
+  .sec.topmodels { margin-top: auto; }
+  .sec-h { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--ink); padding-bottom: 2px; font-size: 8px; letter-spacing: .16em; }
+  .sec-h span:last-child { color: var(--muted); letter-spacing: .04em; font-weight: 400; }
+  .rowline { display: flex; align-items: baseline; gap: 4px; font-size: 9px; padding: 2.5px 0; }
+  .rowline .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 216px; }
+  .rowline .dots { flex: 1; border-bottom: 1px dotted var(--faint); transform: translateY(-2px); }
+  .rowline .v { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* 柱状图：小时 / 按天共用 */
+  /* 图表固定高度，不随数据量或剩余空间变化 */
+  .chart { position: relative; margin-top: 6px; height: 96px; border-bottom: 1px solid var(--ink); display: flex; align-items: flex-end; gap: 2px; }
+  .chart i { flex: 1; background: var(--t3); display: block; min-height: 1px; }
+  .chart i.hot { background: var(--accent); }
+  .chart i.empty { background: var(--wash); }
+  .chart-x { display: flex; justify-content: space-between; font-size: 6.5px; color: var(--faint); margin-top: 3px; }
+  .chart-note { display: flex; justify-content: space-between; font-size: 7.5px; color: var(--muted); margin-top: 4px; }
+
+  .foot { margin-top: auto; padding-top: 8px; border-top: 1px dashed var(--rule); text-align: center; font-size: 7px; color: var(--faint); letter-spacing: .18em; }
+</style>
+</head>
+<body>
+
+<div class="title">ATracker · 分享卡片 v4</div>
+<div class="sub">
+  柱状图从「吃剩余高度」改成固定 96px（真卡 288px），不管数据有多少根柱子都一样高；<br>
+  卡片剩下的空白分摊到大数字上方和 TOP 模型上方两处，不再集中成一个大洞。真卡 1080×1920，预览 1/3。
+</div>
+
+<div class="row">
+
+  <!-- ============ 卡片一：时间范围 ============ -->
+  <div class="item">
+    <div class="cap"><b>卡片一 · 时间范围</b> <span class="tag">按天</span></div>
+    <div class="card">
+      <div class="paper">
+        <div class="brand">
+          <div class="nm">ATRACKER</div>
+          <div class="sb">TOKEN RECEIPT</div>
+        </div>
+        <div class="meta"><span>2026-10-04 → 11-02</span><span>近 30 天</span></div>
+
+        <div class="big">
+          <div class="lab">TOKEN 总量</div>
+          <div class="val">32.59<small>亿</small></div>
+          <div class="sub">14869 次调用<br />输入 8181.4 万 · 输出 889.0 万 · 命中 31.68 亿</div>
+        </div>
+        <div class="hit"><span class="n">97.5%</span><span class="t">输入来自缓存</span></div>
+
+        <div class="sec">
+          <div class="sec-h"><span>按天</span><span>10-04 → 11-02</span></div>
+          <div class="chart">
+            <i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i>
+            <i style="height:2%"></i><i style="height:9%"></i><i style="height:2%"></i><i style="height:50%"></i><i style="height:51%"></i><i style="height:83%"></i><i style="height:39%"></i><i style="height:49%"></i><i style="height:1%"></i><i style="height:10%"></i><i style="height:12%"></i><i style="height:17%"></i><i style="height:25%"></i><i style="height:69%"></i><i style="height:100%" class="hot"></i><i style="height:73%"></i><i style="height:1%"></i><i style="height:55%"></i>
+          </div>
+          <div class="chart-x"><span>10-04</span><span>10-19</span><span>11-02</span></div>
+          <div class="chart-note"><span>高峰 10-30 · 5.05 亿</span><span>有记录 19 天</span></div>
+        </div>
+
+        <div class="sec topmodels">
+          <div class="sec-h"><span>TOP 模型</span><span>占区间</span></div>
+          <div class="rowline"><span class="nm">minimax-cn/MiniMax-M3.1-Flash</span><span class="dots"></span><span class="v">34.4%</span></div>
+          <div class="rowline"><span class="nm">opencode-go/deepseek-v4.1-flash</span><span class="dots"></span><span class="v">20.2%</span></div>
+          <div class="rowline"><span class="nm">opencode/deepseek-v4.1-flash-free</span><span class="dots"></span><span class="v">10.7%</span></div>
+        </div>
+
+        <div class="foot">ATRACKER 0.1.3</div>
+      </div>
+    </div>
+    <div class="note">
+      <b>和今天卡完全同构</b>：品牌 → 日期范围 → 大数字 → 调用次数和四桶 → 命中率 → 图 → TOP 模型 → 版本。<br>
+      <b>图换成了按天</b>：范围里有 30 天就画 30 根柱子，没记录的天画浅灰底线，最高的两天标红。横轴标起止日期。<br>
+      <b>注意</b>：调用次数只有本机有（同步过来的聚合不含次数），所以卡片上的「N 次调用」是本机的数。
+    </div>
+  </div>
+
+  <!-- ============ 卡片二：今天 ============ -->
+  <div class="item">
+    <div class="cap"><b>卡片二 · 今天</b> <span class="tag">按小时</span></div>
+    <div class="card">
+      <div class="paper">
+        <div class="brand">
+          <div class="nm">ATRACKER</div>
+          <div class="sb">TOKEN RECEIPT</div>
+        </div>
+        <div class="meta"><span>2026-11-02 星期日</span><span>截至 12:48</span></div>
+
+        <div class="big">
+          <div class="lab">今日 TOKEN</div>
+          <div class="val">2.78<small>亿</small></div>
+          <div class="sub">613 次调用<br />输入 453.6 万 · 输出 42.9 万 · 命中 2.73 亿</div>
+        </div>
+        <div class="hit"><span class="n">98.4%</span><span class="t">输入来自缓存</span></div>
+
+        <div class="sec">
+          <div class="sec-h"><span>按小时</span><span>00:00 → 12:48</span></div>
+          <div class="chart">
+            <i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i>
+            <i style="height:17%"></i><i style="height:34%"></i><i style="height:85%"></i><i style="height:66%"></i><i class="hot" style="height:100%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i>
+            <i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i><i class="empty" style="height:2%"></i>
+          </div>
+          <div class="chart-x"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+          <div class="chart-note"><span>高峰 12:00 · 8003.5 万</span><span>活跃 5 小时</span></div>
+        </div>
+
+        <div class="sec topmodels">
+          <div class="sec-h"><span>TOP 模型</span><span>占今天</span></div>
+          <div class="rowline"><span class="nm">opencode-go/deepseek-v4.1-flash</span><span class="dots"></span><span class="v">97.0%</span></div>
+          <div class="rowline"><span class="nm">opencode/deepseek-v4.1-flash-free</span><span class="dots"></span><span class="v">2.5%</span></div>
+          <div class="rowline"><span class="nm">minimax-cn-coding-plan/MiniMax-M3.1-Flash</span><span class="dots"></span><span class="v">0.5%</span></div>
+        </div>
+
+        <div class="foot">ATRACKER 0.1.3</div>
+      </div>
+    </div>
+    <div class="note">
+      <b>相对上一版的改动</b>：四桶那行加上「613 次调用」；去掉「Asia/Shanghai」；柱状图下方只留「活跃 5 小时」，不再带调用次数；底部那行「2 台设备 · 只读采集本机日志」删掉，只留版本号。<br>
+      <b>为什么两张卡同构</b>：同一套阅读顺序，用户看第一张就学会第二张；代码上也能共用同一个模板，只有图和数据不同。
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
