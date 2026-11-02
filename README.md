@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="build/icon.png" width="128" alt="ATracker">
+</p>
+
 # ATracker 实现说明
 
 本机 AI 编码 agent 的 token 用量看板。只读采集各 agent 的本地日志，不加钩子、不改 agent 行为、不上传数据。
@@ -123,21 +127,25 @@ data/atracker.db     运行时生成
 ```bash
 npm run desktop            # 开发：直接在 Electron 里跑，用仓库的 data/atracker.db
 npm run pack:mac           # 只出 .app（不签名、不打包成 dmg），最快，用来验证
-npm run dist:mac:unsigned  # 出未签名的 release/ATracker-<版本>-arm64.dmg 和 .zip
+npm run dist:mac:unsigned  # 出未签名的 release/ATracker-<版本>-<提交>-arm64.dmg 和 .zip
 npm run dist:mac           # 正式包：用钥匙串里的 Developer ID 签名，再打 dmg
 npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上跑
 ```
 
 打包前会自动 `npm run build:web`，不用手动构建前端。产物都在 `release/`：
 
-| 文件                                 | 说明                                        |
-| ------------------------------------ | ------------------------------------------- |
-| `release/ATracker-0.1.0-arm64.dmg` | 安装包，双击拖进「应用程序」                |
-| `release/ATracker-0.1.0-arm64.zip` | 同一份 .app 的压缩包，给不走 dmg 的分发渠道 |
-| `release/mac-arm64/ATracker.app`   | 解包后的 .app，验证时直接双击这个           |
+| 文件                                        | 说明                                        |
+| ------------------------------------------- | ------------------------------------------- |
+| `release/ATracker-0.2.0-db80429-arm64.dmg`  | 安装包，双击拖进「应用程序」                |
+| `release/ATracker-0.2.0-db80429-arm64.zip`  | 同一份 .app 的压缩包，给不走 dmg 的分发渠道 |
+| `release/mac-arm64/ATracker.app`            | 解包后的 .app，只有 `pack:mac` 会留下       |
+
+文件名里的三段分别来自 `package.json` 的版本号、当前提交的短哈希、目标架构；工作区有未提交改动时哈希后面会多一个 `-dev`，一眼能看出这不是干净版本。发版前用 `npm version minor`（新功能）或 `patch`（修 bug）走一步，它会改版本号并打好 tag，工作区脏的时候会拒绝执行。
 
 默认按当前机器架构打包（Apple Silicon 上是 arm64）。要 x64 或 universal 就在命令后面加
 `--x64` / `--universal`，这时需要能下载对应架构的 Electron。
+
+`dist:mac*` 打完会删掉 `release/mac-arm64`，因为里面的 .app 会被 Spotlight 当成第二个应用。要留着排查问题就设 `ATRACKER_KEEP_APP_DIR=1`。
 
 ## 分享卡片
 
@@ -156,51 +164,6 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 实现上不引第三方截图库：`packages/web/src/card/render.ts` 直接用 canvas 画（文字、点线、柱状图），网页版和桌面版走同一条路。纸的高度按内容算——模型多的时候纸会自己拉长，实测每多一个模型多 15px（预览），画面上限 6 行模型。
 
 **调用次数只有本机有**：同步过来的聚合里没有这个字段，所以切到「全部设备」或别的设备时，卡片上「N 次调用」这一段会自动去掉。
-
-## 版本号怎么加
-
-这个项目现在会装到两三台机器上，所以要能一眼看出「这台跑的是哪一版」。
-
-**规则**（开发期用 `0.x`）：
-
-| 什么时候 | 怎么做 | 例子 |
-| --- | --- | --- |
-| 只提交、不装机 | 不动版本号 | — |
-| 要装到机器上的修复 | `npm version patch` | 0.1.1 → 0.1.2 |
-| 一个能说清楚的新功能 | `npm version minor` | 0.1.2 → 0.2.0 |
-| 给别人用、接口稳定了 | `npm version major` | 0.9.0 → 1.0.0 |
-
-打包时 `scripts/buildinfo.mjs` 会把**版本号 + git 提交 + 构建时间**写进 `build/buildinfo.json`，跟着包一起打进去。应用里两处能看到：
-
-- 日志页最底部的版本行：`ATracker 0.1.1 · 提交 3f2a1c9 · 11-02 12:30 构建`
-- 「关于 ATracker」面板
-
-两台机器对比时**看提交哈希比看版本号准**——版本号只在装机的那次跳，哈希每次提交都变。
-
-一次完整的发版流程：
-
-```bash
-npm version patch          # 改 package.json，并建一个 commit（不加 tag 也行）
-npm run dist:mac:unsigned  # 自动带新版本号 + 当前提交
-open release/ATracker-<新版本>-arm64.dmg
-```
-
-`electron-builder` 的 `--dir` 模式（`npm run pack:mac`）不产出安装包，但也会刷新 buildinfo，适合只看「这一版对不对」。
-
-打包后的应用把数据库放在用户数据目录（macOS 是 `~/Library/Application Support/ATracker/atracker.db`），首次启动会自动扫一遍本机日志，不需要手动跑 `npm run scan`。
-
-**窗口尺寸**：默认取屏幕工作区宽度的 80%（夹在 1000–1400 之间）和高度 92%（上限 1200），这块屏幕上就是 1210×820，小票两侧各留 195px 桌面。拖过之后尺寸和位置记在 `~/Library/Application Support/ATracker/window-state.json`，下次沿用；删掉这个文件就回到默认值。位置只在还落在某块屏幕里时才恢复，换了显示器不会跑到屏幕外。
-
-外壳只有 `packages/desktop/src/main.ts` 一个文件：主进程里 `import ATrackerServer`，起一个只监听 `127.0.0.1`、端口随机的本地服务，再把窗口指过去。服务端代码没有为桌面版改写，也没有 IPC，所以 `npm run serve` 和桌面版跑的是同一套代码。数据目录、监听地址、端口都由 main 传入。
-
-几个注意点：
-
-- **包是未签名的。** 本机构建没配证书，第一次打开要右键 →「打开」，或者 `xattr -dr com.apple.quarantine /Applications/ATracker.app`。要正经分发就配好 Developer ID 和 `notarytool` 凭据，再跑 `npm run dist:mac`。
-- **Electron 二进制要先下载。** `npm install` 之后如果 `node_modules/electron/dist` 是空的，说明下载被墙了，用镜像补一次：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js`。
-- **打包不联网拉 Electron。** `electron-builder.yml` 里 `electronDist` 指向 `node_modules/electron/dist`，用本地这份。
-- **图标**：源文件是 `build/icon.svg`——强调红 `#bf3b22`（和页面里的红同一个值）铺满整个圆角画布，上面一张米色小票，三行内容（深色、浅灰、加粗的深色）。没有透明边距。改完跑 `npm run icon` 重新生成 `build/icon.png`（1024px），打包时 electron-builder 自动转成 icns / ico。
-- **菜单**：应用菜单、文件（重新扫描 ⌘R、打开数据目录）、编辑、视图（重新加载页面 ⇧⌘R、开发者工具）、窗口，都是中文。
-- **重复副本**：macOS 没有安装登记，复制一份 `.app` 就是第二份，系统层面挡不住「装第二次」。能挡的是同时运行：Info.plist 里带 `LSMultipleInstancesProhibited`（第二份会由系统拒绝启动），应用内还有单实例锁兜底。另外，如果从 `/Applications` 以外的地方启动而 `/Applications` 里已经有一份，会弹提示告诉你两份的路径和版本。
 
 ## 设备标识
 
