@@ -538,7 +538,10 @@ export function App() {
     body = <ErrorScreen message={error} />;
   } else if (view === 'home') {
     // 全期汇总的起止要和 total 报的对上，避免刚从月度页切过来时用月度数字画一帧。
-    const stale = !agg || !matrix || (total !== null && total.firstDay !== null && agg.from !== total.firstDay);
+    // 全期汇总的起止要和 total 报的对上（两头都比），否则说明拿到的还是
+    // 上一次请求的数据，先继续显示加载态。
+    const stale = !agg || !matrix || (total !== null && total.firstDay !== null &&
+      (agg.from !== total.firstDay || agg.to !== total.lastDay));
     if (!total || !agg || !matrix) {
       body = <LoadingScreen />;
     } else if (total.total === 0) {
@@ -548,6 +551,7 @@ export function App() {
       body = (
       <LedgerView
         total={total}
+        deviceName={device ? devices?.devices.find(d => d.id === device)?.name ?? null : null}
         agg={agg}
         matrix={matrix}
         unit={unit}

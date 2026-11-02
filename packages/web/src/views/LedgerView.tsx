@@ -11,6 +11,8 @@ import { fmtPct, fmtTok } from '../format.ts';
 
 interface LedgerViewProps {
   total: TotalPayload;
+  /** 选中了单台设备时传它，页面上要标明范围是哪台机器 */
+  deviceName?: string | null;
   agg: AggregatePayload;
   matrix: MatrixPayload;
   unit: Unit;
@@ -28,8 +30,9 @@ export function LedgerView(props: LedgerViewProps) {
   return (
     <>
       <div className="fixed-scope">
-        <span className="chip">全期</span>
+        <span className="chip">{props.deviceName ? '单设备' : '全期'}</span>
         <span className="v">
+          {props.deviceName ? `${props.deviceName} · ` : ''}
           {total.firstDay ? `覆盖 ${total.days} 天 · ${total.firstDay} → ${total.lastDay}` : '还没有记录'}
         </span>
       </div>
@@ -38,7 +41,7 @@ export function LedgerView(props: LedgerViewProps) {
         <div>
           <div className="lab">TOKEN 总量</div>
           <div className="val">{tok(total.total)}</div>
-          <div className="tiny">全期累计 / 四桶合计</div>
+          <div className="tiny">{props.deviceName ? '这台设备 / 四桶合计' : '全期累计 / 四桶合计'}</div>
         </div>
         <div className="side">
           <div className="lab">缓存命中率</div>

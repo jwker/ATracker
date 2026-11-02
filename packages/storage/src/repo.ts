@@ -511,8 +511,11 @@ export class Repo {
    * 库里最早和最晚的一天。总账页的「全期」用它。
    * 读聚合表而不是明细：同步进来的远端设备只有聚合行。
    */
-  dayBounds(): { first: string | null; last: string | null } {
-    const r = this.db.prepare('SELECT MIN(day) first, MAX(day) last FROM agg_day_agent').get() as any;
+  dayBounds(device?: string): { first: string | null; last: string | null } {
+    const dev = device ? ' WHERE device = ?' : '';
+    const r = this.db.prepare(
+      `SELECT MIN(day) first, MAX(day) last FROM agg_day_agent${dev}`
+    ).get(...(device ? [device] : [])) as any;
     return { first: r?.first ?? null, last: r?.last ?? null };
   }
 

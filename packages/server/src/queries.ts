@@ -68,9 +68,17 @@ function ranges(from?: string | null, to?: string | null): { from: string; to: s
  * 区间参数。`all` 表示全期：总账页用它，不用前端先查最早一天再回填。
  * 没有 all 也没有 from/to 时落到最近 30 天。
  */
-function rangeArgs(repo: Repo, from: string | null | undefined, to: string | null | undefined, all: boolean) {
+function rangeArgs(
+  repo: Repo,
+  from: string | null | undefined,
+  to: string | null | undefined,
+  all: boolean,
+  device?: string
+) {
   if (!all) return ranges(from, to);
-  const { first, last } = repo.dayBounds();
+  // 单设备时用这台设备自己的起止日期，否则总账页拿 total 的 firstDay/lastDay
+  // 和这里的区间对不上，前端会一直以为数据还没到（一直转圈）。
+  const { first, last } = repo.dayBounds(device);
   return { from: first ?? '0000-01-01', to: last ?? ranges().to };
 }
 
@@ -126,7 +134,7 @@ export function calendarPayload(repo: Repo, month: string, device?: string) {
 }
 
 export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false, device?: string) {
-  const { from, to } = rangeArgs(repo, fromQ, toQ, all);
+  const { from, to } = rangeArgs(repo, fromQ, toQ, all, device);
   const bd = repo.breakdown(from, to, device);
   const byAgent = repo.byAgent(from, to, device);
 
@@ -164,7 +172,7 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
 }
 
 export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false, device?: string) {
-  const { from, to } = rangeArgs(repo, fromQ, toQ, all);
+  const { from, to } = rangeArgs(repo, fromQ, toQ, all, device);
   const cells: Record<string, Record<string, number>> = {};
   for (const a of AGENTS) cells[a.id] = {};
 
