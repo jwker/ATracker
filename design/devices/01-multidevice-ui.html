@@ -334,20 +334,35 @@
 
 <!-- ============ 4. 今日页 ============ -->
 <div class="sheet">
-  <div class="cap"><b>四、今日页：建议不做设备过滤</b><span class="r">保持本机口径，标题加标注</span></div>
-  <p class="why">今日页是「今天这台机器上发生了什么」——它能下钻到小时、当天的会话、最贵的调用，这些都依赖明细，而明细只有本机有。加设备条会让人以为能看到别的设备的小时图，实际只能看到本机的。所以只在标题上加一句「本机」，把口径说清楚。</p>
+  <div class="cap"><b>四、今日页：加设备条，但要区分能不能下钻</b><span class="r">已实现（89916fa）</span></div>
+  <p class="why">今日页也加了设备条，但这一页有一半内容依赖<b>逐轮明细</b>（小时图、最大的几次调用、扫描记录），而明细不同步。所以接口会告诉前端当前在哪个范围，能下钻就显示，不能就把那几块整块藏掉，并在顶部说清楚。三种情况都画在下面。</p>
   <div class="receipt">
-    <div class="rhead"><div class="name">ATRACKER</div><div class="sub">TODAY</div></div>
+    <div class="rhead"><div class="name">ATRACKER</div><div class="sub">TODAY · SCOPE</div></div>
     <div class="navrow">
       <button class="tab">总账</button><button class="tab">月度</button><button class="tab" aria-current="true">今日</button><button class="tab">会话</button><button class="tab">日志</button>
     </div>
-    <div class="sec" style="margin-top:4px">
-      <div class="sec-h">
-        <b>当日 TOKENS</b>
-        <span>2026-11-02 星期日 / 截至 09:20 / 本机</span>
-        <span class="r">2.22 亿</span>
-      </div>
-      <div class="note">别的设备今天的用量看「月度」页选今天：那里有跨设备的合计，也能切到单台。今日页只负责本机的明细下钻。</div>
+    <div class="devstrip">
+      <span class="cap2">设备</span>
+      <button class="chip on">全部设备</button>
+      <button class="chip">my-macbook（本机）</button>
+      <button class="chip">办公室 iMac</button>
+    </div>
+
+    <div class="sec" style="margin-top:2px">
+      <div class="sec-h"><b>情况 1 · 全部设备</b><span>合计准，明细只有本机</span></div>
+      <div class="daynote">合计包含所有设备；小时图和「最大的几次调用」只有本机的明细。</div>
+      <div class="note">总量、四桶、交叉表、按来源/模型/目录、当天会话都是全设备合计；小时图那一条是纯本机的，所以要标注。</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>情况 2 · 单台远端设备</b><span>只有汇总</span></div>
+      <div class="daynote">这台设备只同步了汇总：小时图、逐轮明细、扫描记录都只有本机才有。</div>
+      <div class="note">显示的区块：总量（「四桶合计」而不是「N 次调用」，因为次数不在聚合里）、四桶、交叉表、按来源、按模型、按目录、当天会话。<br>隐藏的区块：一天之内（小时图）、最大的几次调用、采集状态。</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><b>情况 3 · 本机</b><span>和加多设备之前完全一样</span></div>
+      <div class="note">没有提示条，所有区块都在。</div>
     </div>
   </div>
 </div>
@@ -381,17 +396,18 @@
           <span class="id">bbbb2222</span>
           <span class="v">11-01 18:40</span>
           <span class="act">改名</span>
-          <span class="act">移除</span>
+          <span class="act">忽略</span>
         </div>
-        <div class="devrow">
+        <div class="devrow" style="opacity:.6">
           <span class="nm">旧笔记本</span>
           <span class="id">aaaa1111</span>
           <span class="v">10-24 15:02</span>
-          <span class="act">改名</span>
-          <span class="act">移除</span>
+          <span class="v">已忽略</span>
+          <span class="act">恢复</span>
         </div>
         <div class="note" style="margin-top:8px">
-          「移除」只删本机库里这台设备的副本，对方机器和它在同步目录里的文件都不动。想彻底清掉那台设备的贡献，移除后下次对表会再导进来——所以真正的做法是让对方停止导出，或者从同步目录里删掉它的文件。
+          为什么是<b>「忽略」而不是「移除」</b>：同步目录里的文件是对方写的，删掉属于越权，而且对方下次扫描还会写回来。真正想表达的是「这台设备我不想在本机看到」，那是本机的意愿 —— 用一个 <code>ignored</code> 标记表达最准确，而且可以随时「恢复」。<br>
+          忽略时会顺手删掉本机库里这台设备的所有行（聚合和会话），省的占地方；恢复后下次对表会重新导入。代价是恢复要等一次同步。
         </div>
       </div>
     </div>
@@ -451,9 +467,9 @@
         <tr><td>单设备视图的「全期」行</td><td><code>views/LedgerView.tsx</code></td><td>改文案（显示设备名和最后写入）</td></tr>
         <tr><td>会话页合并远端</td><td><code>views/ConversationsView.tsx</code>、<code>repo.conversations()</code></td><td>待做：union usage_event 与 session_usage</td></tr>
         <tr><td>会话详情「明细不在本机」</td><td><code>views/ConversationsView.tsx</code></td><td>待做</td></tr>
-        <tr><td>今日页标注本机口径</td><td><code>views/TodayView.tsx</code></td><td>待做，一行文案</td></tr>
+        <tr><td>今日页设备筛选</td><td><code>views/TodayView.tsx</code>、<code>queries.dayPayload</code></td><td>已做（89916fa）：scope / canDetail 两个字段决定哪些区块渲染</td></tr>
         <tr><td>日志页同步面板</td><td><code>views/LogsView.tsx</code></td><td>待做，数据来自 <code>/api/sync</code></td></tr>
-        <tr><td>设备改名 / 移除</td><td><code>server/app.ts</code> + 面板</td><td>待做，P4 末尾</td></tr>
+        <tr><td>设备改名 / 忽略 / 恢复</td><td><code>server/app.ts</code> + 面板 + <code>device.ignored</code></td><td>待做，P4 末尾</td></tr>
         <tr><td>接 iCloud 目录</td><td><code>desktop/main.ts</code>、CLI 默认值</td><td>待做，P4</td></tr>
       </tbody>
     </table>
