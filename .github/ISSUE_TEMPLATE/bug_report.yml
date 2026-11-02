@@ -1,0 +1,66 @@
+name: Bug 报告
+description: 数字不对、页面异常、采集报错
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        数字对不上时请先跑一遍 `node packages/cli/src/index.ts doctor` 和 `reconcile`，把输出贴上来。
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 具体现象，比如"10 月 31 号有数据，但月度卡片的柱子到 30 号就没了"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你预期是什么
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 日志页页脚或「关于」面板里显示的版本和提交
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: 跟哪个来源有关
+      multiple: true
+      options:
+        - codex
+        - Claude Code
+        - pi
+        - opencode
+        - DeepSeek Harness
+        - 不确定 / 跟来源无关
+
+  - type: dropdown
+    id: run
+    attributes:
+      label: 怎么跑的
+      options:
+        - 桌面应用
+        - npm run serve
+        - 命令行（scan / stats / sync）
+        - 其它
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: doctor / reconcile 输出
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其它信息
+      description: 截图、控制台报错、node 版本

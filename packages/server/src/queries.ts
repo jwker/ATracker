@@ -1,4 +1,4 @@
-// 接口载荷。字段形状对齐 design/v3/_core.js 要的数据，前端移植时不用改结构。
+// 接口载荷。字段形状对齐前端组件需要的数据，前端不用自己拼结构。
 import { basename, dirname, posix, win32 } from 'node:path';
 import type { Repo } from '../../storage/src/repo.ts';
 import { dirColor } from '../../core/src/palette.ts';

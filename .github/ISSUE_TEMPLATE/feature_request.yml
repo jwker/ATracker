@@ -1,0 +1,24 @@
+name: 功能建议
+description: 想加一个视图、一个来源、一种口径
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 先说问题，再说方案。"加一个导出按钮"不如说清楚导出来做什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你想到的做法
+
+  - type: markdown
+    attributes:
+      value: |
+        说明一下这个项目的两个既定约束，跟它们冲突的建议大概率不会被采纳：
+
+        - **不折算金额。** 口径收敛不出来，理由见 [为什么不折算金额](https://github.com/jwker/ATracker/blob/main/docs/why-no-cost.md)。
+        - **采集只读。** 不给 agent 装钩子，不改 agent 的任何文件。
