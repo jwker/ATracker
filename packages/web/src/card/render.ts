@@ -139,12 +139,14 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
 
   // 先算纸高，再决定纸的纵向位置（竖直居中）
   const rows = data.models.length;
+  // 各段的纵向占位。整体留白偏松：板块之间空 40–50px，
+  // 上面紧贴会让卡片看起来像表格。
   const h = {
-    padTop: 60, brand: 104, meta: 60, gapA: 26,
-    lab: 34, value: 132, sub: 34, hit: 60, gapB: 30,
-    chartHead: 40, chart: 216, axis: 30, note: 30, gapC: 26,
-    modelsHead: 40, row: 34 * rows, gapD: 26,
-    footerLine: 24, footer: 40, padBottom: 56
+    padTop: 84, brand: 116, meta: 70, gapA: 48,
+    lab: 42, value: 142, sub: 46, hit: 80, gapB: 50,
+    chartHead: 50, chart: 244, axis: 40, note: 44, gapC: 46,
+    modelsHead: 50, row: 46 * rows, gapD: 46,
+    footerLine: 30, footer: 54, padBottom: 76
   };
   const paperH = Object.values(h).reduce((a, b) => a + b, 0);
   const paperX = (CARD_W - PAPER_W) / 2;
@@ -164,33 +166,33 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   ctx.fillStyle = C.ink;
   ctx.font = font(54, 700);
   ctx.letterSpacing = '16px';
-  ctx.fillText('ATRACKER', CARD_W / 2, y + 46);
+  ctx.fillText('ATRACKER', CARD_W / 2, y + 52);
   ctx.letterSpacing = '0px';
   ctx.font = font(21);
   ctx.fillStyle = C.muted;
-  ctx.fillText('TOKEN RECEIPT', CARD_W / 2, y + 82);
+  ctx.fillText('TOKEN RECEIPT', CARD_W / 2, y + 86);
   y += h.brand;
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.moveTo(x, y - 16);
-  ctx.lineTo(x + CONTENT_W, y - 16);
+  ctx.moveTo(x, y - 6);
+  ctx.lineTo(x + CONTENT_W, y - 6);
   ctx.stroke();
 
   // 日期行
   ctx.textAlign = 'left';
   ctx.font = font(24);
   ctx.fillStyle = C.muted;
-  ctx.fillText(data.metaLeft, x, y + 24);
+  ctx.fillText(data.metaLeft, x, y + 28);
   ctx.textAlign = 'right';
-  ctx.fillText(data.metaRight, x + CONTENT_W, y + 24);
+  ctx.fillText(data.metaRight, x + CONTENT_W, y + 28);
   y += h.meta;
   ctx.strokeStyle = C.rule;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 6]);
   ctx.beginPath();
-  ctx.moveTo(x, y - 8);
-  ctx.lineTo(x + CONTENT_W, y - 8);
+  ctx.moveTo(x, y - 12);
+  ctx.lineTo(x + CONTENT_W, y - 12);
   ctx.stroke();
   ctx.setLineDash([]);
 
@@ -200,15 +202,15 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   ctx.font = font(24);
   ctx.fillStyle = C.muted;
   ctx.letterSpacing = '4px';
-  ctx.fillText(data.bigLabel, x, y + 24);
+  ctx.fillText(data.bigLabel, x, y + 28);
   ctx.letterSpacing = '0px';
   y += h.lab;
   ctx.font = font(126, 700);
   ctx.fillStyle = C.ink;
-  ctx.fillText(data.bigValue, x, y + 100);
+  ctx.fillText(data.bigValue, x, y + 106);
   const vw = ctx.measureText(data.bigValue).width;
   ctx.font = font(63, 700);
-  ctx.fillText(data.bigUnit, x + vw + 8, y + 100);
+  ctx.fillText(data.bigUnit, x + vw + 8, y + 106);
   y += h.value;
 
   // 调用次数 + 四桶：一行，字号按可用宽度收缩
@@ -219,17 +221,17 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
     ctx.font = font(subSize);
   }
   ctx.fillStyle = C.muted;
-  ctx.fillText(data.buckets, x, y + 26);
+  ctx.fillText(data.buckets, x, y + 30);
   y += h.sub;
 
   // 命中率
   ctx.font = font(63);
   ctx.fillStyle = C.accent;
-  ctx.fillText(data.hitRate, x, y + 46);
+  ctx.fillText(data.hitRate, x, y + 52);
   const hw = ctx.measureText(data.hitRate).width;
   ctx.font = font(24);
   ctx.fillStyle = C.muted;
-  ctx.fillText('输入来自缓存', x + hw + 14, y + 44);
+  ctx.fillText('输入来自缓存', x + hw + 14, y + 50);
   y += h.hit;
 
   // 图表标题 + 分隔线
@@ -237,21 +239,21 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   ctx.font = font(24);
   ctx.fillStyle = C.ink;
   ctx.letterSpacing = '4px';
-  ctx.fillText(data.chartTitle, x, y + 26);
+  ctx.fillText(data.chartTitle, x, y + 30);
   ctx.letterSpacing = '0px';
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(x, y + 34);
-  ctx.lineTo(x + CONTENT_W, y + 34);
+  ctx.moveTo(x, y + 40);
+  ctx.lineTo(x + CONTENT_W, y + 40);
   ctx.stroke();
-  y += h.chartHead + 10;
+  y += h.chartHead + 12;
 
   // 柱子
   const n = Math.max(1, data.bars.length);
   const gap = n > 24 ? 6 : 9;
   const bw = (CONTENT_W - gap * (n - 1)) / n;
-  const baseY = y + 216;
+  const baseY = y + h.chart;
   for (let i = 0; i < n; i++) {
     const b = data.bars[i]!;
     const bx = x + i * (bw + gap);
@@ -259,7 +261,7 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
       ctx.fillStyle = C.wash;
       ctx.fillRect(bx, baseY - 6, bw, 6);
     } else {
-      const bh = Math.max(8, b.v * 216);
+      const bh = Math.max(8, b.v * h.chart);
       ctx.fillStyle = b.hot ? C.accent : C.bar;
       ctx.fillRect(bx, baseY - bh, bw, bh);
     }
@@ -279,7 +281,7 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   labels.forEach((lb, i) => {
     const t = labels.length === 1 ? 0 : i / (labels.length - 1);
     ctx.textAlign = i === 0 ? 'left' : i === labels.length - 1 ? 'right' : 'center';
-    ctx.fillText(lb, x + t * CONTENT_W, y + 30);
+    ctx.fillText(lb, x + t * CONTENT_W, y + 34);
   });
   ctx.textAlign = 'left';
   y += h.axis + 4;
@@ -287,9 +289,9 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   // 图注
   ctx.font = font(22);
   ctx.fillStyle = C.muted;
-  ctx.fillText(data.chartNoteLeft, x, y + 22);
+  ctx.fillText(data.chartNoteLeft, x, y + 26);
   ctx.textAlign = 'right';
-  ctx.fillText(data.chartNoteRight, x + CONTENT_W, y + 22);
+  ctx.fillText(data.chartNoteRight, x + CONTENT_W, y + 26);
   ctx.textAlign = 'left';
   y += h.note;
 
@@ -298,21 +300,21 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   ctx.font = font(24);
   ctx.fillStyle = C.ink;
   ctx.letterSpacing = '4px';
-  ctx.fillText('TOP 模型', x, y + 26);
+  ctx.fillText('TOP 模型', x, y + 30);
   ctx.letterSpacing = '0px';
   ctx.textAlign = 'right';
   ctx.fillStyle = C.muted;
-  ctx.fillText(data.chartTitle.indexOf('小时') >= 0 ? '占今天' : '占区间', x + CONTENT_W, y + 26);
+  ctx.fillText(data.chartTitle.indexOf('小时') >= 0 ? '占今天' : '占区间', x + CONTENT_W, y + 30);
   ctx.textAlign = 'left';
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(x, y + 34);
-  ctx.lineTo(x + CONTENT_W, y + 34);
+  ctx.moveTo(x, y + 40);
+  ctx.lineTo(x + CONTENT_W, y + 40);
   ctx.stroke();
   y += h.modelsHead;
   for (const m of data.models) {
-    leader(ctx, m.label, m.pct.toFixed(1) + '%', x, y + 26, CONTENT_W, 27);
+    leader(ctx, m.label, m.pct.toFixed(1) + '%', x, y + 32, CONTENT_W, 27);
     y += h.row / Math.max(1, rows);
   }
   y += h.gapD;
