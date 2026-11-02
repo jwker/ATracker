@@ -31,7 +31,8 @@ execFileSync('npm', ['run', 'build:web'], { cwd: root, stdio: 'inherit', env });
 execFileSync('npx', ['electron-builder', ...passthrough], { cwd: root, stdio: 'inherit', env });
 
 // 4. mac 的中间目录用完就删（里面的 .app 会被 Spotlight 当成第二个应用）
-if (passthrough.includes('--mac') && !passthrough.includes('--dir')) {
+// ATRACKER_KEEP_APP_DIR=1 可以留着，排查打包问题时用
+if (!process.env.ATRACKER_KEEP_APP_DIR && passthrough.includes('--mac') && !passthrough.includes('--dir')) {
   for (const dir of ['release/mac-arm64', 'release/mac']) {
     rmSync(join(root, dir), { recursive: true, force: true });
   }
