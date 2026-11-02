@@ -27,13 +27,15 @@ async function request<T>(
 }
 
 export const api = {
-  total: () => request<TotalPayload>('/api/total'),
-  calendar: (month: string) => request<CalendarPayload>('/api/calendar', { month }),
-  aggregate: (from: string, to: string) => request<AggregatePayload>('/api/aggregate', { from, to }),
+  total: (device?: string | null) => request<TotalPayload>('/api/total', { device }),
+  calendar: (month: string, device?: string | null) => request<CalendarPayload>('/api/calendar', { month, device }),
+  aggregate: (from: string, to: string, device?: string | null) =>
+    request<AggregatePayload>('/api/aggregate', { from, to, device }),
   /** 全期汇总。总账页用，服务端按库里的最早/最晚一天取区间。 */
-  aggregateAll: () => request<AggregatePayload>('/api/aggregate', { all: 1 }),
-  matrix: (from: string, to: string) => request<MatrixPayload>('/api/matrix', { from, to }),
-  matrixAll: () => request<MatrixPayload>('/api/matrix', { all: 1 }),
+  aggregateAll: (device?: string | null) => request<AggregatePayload>('/api/aggregate', { all: 1, device }),
+  matrix: (from: string, to: string, device?: string | null) =>
+    request<MatrixPayload>('/api/matrix', { from, to, device }),
+  matrixAll: (device?: string | null) => request<MatrixPayload>('/api/matrix', { all: 1, device }),
   day: (date: string) => request<DayPayload>('/api/day', { date }),
   conversations: (filter: {
     dir?: string | null;

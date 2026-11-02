@@ -423,6 +423,20 @@ export class Repo {
     return this.db.prepare('SELECT * FROM agg_total WHERE id = 1').get() ?? null;
   }
 
+  /** 指定设备的累计（不含设备参数就是全部设备）。总账页切设备时用它。 */
+  totalFor(device?: string): { input: number; output: number; cache_read: number; cache_write: number; reasoning: number; tokens: number; days: number; first: string | null; last: string | null } {
+    const where = device ? 'WHERE device = ?' : '';
+    const args = device ? [device] : [];
+    const r = this.db.prepare(
+      `SELECT COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
+              COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
+              COALESCE(SUM(reasoning),0) reasoning, COALESCE(SUM(tokens),0) tokens,
+              COUNT(DISTINCT day) days, MIN(day) first, MAX(day) last
+       FROM agg_day_agent ${where}`
+    ).get(...args) as any;
+    return r;
+  }
+
   /**
    * 库里最早和最晚的一天。总账页的「全期」用它。
    * 读聚合表而不是明细：同步进来的远端设备只有聚合行。
@@ -439,19 +453,21 @@ export class Repo {
   }
 
   /** 某个月每天的用量和按目录的拆分。 */
-  calendar(month: string): { days: any[]; legend: any[] } {
+  calendar(month: string, device?: string): { days: any[]; legend: any[] } {
+    const dev = device ? ' AND device = ?' : '';
+    const devArgs = device ? [device] : [];
     const days = this.db.prepare(
       `SELECT day, SUM(tokens) tokens
-       FROM agg_day_agent WHERE day LIKE ? GROUP BY day ORDER BY day`
-    ).all(month + '%') as any[];
+       FROM agg_day_agent WHERE day LIKE ?${dev} GROUP BY day ORDER BY day`
+    ).all(month + '%', ...devArgs) as any[];
 
     const dirs = this.db.prepare(
-      `SELECT dir, SUM(tokens) tokens FROM agg_day_dir WHERE day LIKE ? GROUP BY dir ORDER BY tokens DESC`
-    ).all(month + '%') as any[];
+      `SELECT dir, SUM(tokens) tokens FROM agg_day_dir WHERE day LIKE ?${dev} GROUP BY dir ORDER BY tokens DESC`
+    ).all(month + '%', ...devArgs) as any[];
 
     const byDayDir = this.db.prepare(
-      `SELECT day, dir, tokens FROM agg_day_dir WHERE day LIKE ?`
-    ).all(month + '%') as any[];
+      `SELECT day, dir, tokens FROM agg_day_dir WHERE day LIKE ?${dev}`
+    ).all(month + '%', ...devArgs) as any[];
 
     const map = new Map<string, Map<string, number>>();
     for (const r of byDayDir) {
@@ -463,43 +479,47 @@ export class Repo {
   }
 
   /** 区间内的来源 × 模型交叉表。 */
-  matrix(from: string, to: string): any {
+  matrix(from: string, to: string, device?: string): any {
+    const dev = device ? ' AND device = ?' : '';
     const rows = this.db.prepare(
       `SELECT agent, model, vendor, SUM(tokens) tokens
-       FROM agg_day_agent_model WHERE day >= ? AND day <= ?
+       FROM agg_day_agent_model WHERE day >= ? AND day <= ?${dev}
        GROUP BY agent, model, vendor`
-    ).all(from, to) as any[];
+    ).all(from, to, ...(device ? [device] : [])) as any[];
     return { cells: rows };
   }
 
   /** 区间内的按模型和按目录汇总。模型带厂商，同名不同厂商分成两行。 */
-  breakdown(from: string, to: string): { byModel: any[]; byDir: any[]; totals: any } {
+  breakdown(from: string, to: string, device?: string): { byModel: any[]; byDir: any[]; totals: any } {
+    const dev = device ? ' AND device = ?' : '';
+    const devArgs = device ? [device] : [];
     const byModel = this.db.prepare(
       `SELECT model, vendor, SUM(tokens) tokens,
               SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
-       FROM agg_day_model WHERE day >= ? AND day <= ? GROUP BY model, vendor ORDER BY tokens DESC`
-    ).all(from, to);
+       FROM agg_day_model WHERE day >= ? AND day <= ?${dev} GROUP BY model, vendor ORDER BY tokens DESC`
+    ).all(from, to, ...devArgs);
     const byDir = this.db.prepare(
       `SELECT dir, SUM(tokens) tokens,
               SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
-       FROM agg_day_dir WHERE day >= ? AND day <= ? GROUP BY dir ORDER BY tokens DESC`
-    ).all(from, to);
+       FROM agg_day_dir WHERE day >= ? AND day <= ?${dev} GROUP BY dir ORDER BY tokens DESC`
+    ).all(from, to, ...devArgs);
     const totals = this.db.prepare(
       `SELECT COALESCE(SUM(tokens),0) tokens,
               COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
               COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
               COUNT(DISTINCT day) days
-       FROM agg_day_agent WHERE day >= ? AND day <= ?`
-    ).get(from, to) as any;
+       FROM agg_day_agent WHERE day >= ? AND day <= ?${dev}`
+    ).get(from, to, ...devArgs) as any;
     return { byModel, byDir, totals };
   }
 
   /** 区间内的按来源汇总。 */
-  byAgent(from: string, to: string): any[] {
+  byAgent(from: string, to: string, device?: string): any[] {
+    const dev = device ? ' AND device = ?' : '';
     return this.db.prepare(
       `SELECT agent, SUM(tokens) tokens
-       FROM agg_day_agent WHERE day >= ? AND day <= ? GROUP BY agent ORDER BY tokens DESC`
-    ).all(from, to);
+       FROM agg_day_agent WHERE day >= ? AND day <= ?${dev} GROUP BY agent ORDER BY tokens DESC`
+    ).all(from, to, ...(device ? [device] : []));
   }
 
   /** 会话列表。 */

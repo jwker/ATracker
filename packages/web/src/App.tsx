@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { api } from './api.ts';
 import { Header } from './components/Header.tsx';
+import { DeviceStrip } from './components/DeviceStrip.tsx';
 import { LedgerView } from './views/LedgerView.tsx';
 import { MonthView } from './views/MonthView.tsx';
 import { TodayView } from './views/TodayView.tsx';
@@ -164,6 +165,9 @@ export function App() {
   const dayMatch = route.path.match(/^\/today\/(.+)$/);
   const dayDate = dayMatch && DAY_RE.test(dayMatch[1]) ? dayMatch[1] : todayDate();
 
+  // 设备筛选。跟着 URL 的 ?device= 走，只影响总账和月度。
+  const device = route.params.get('device');
+
   // 会话页的状态。
   const convFilter: ConversationFilter = {
     dir: route.params.get('dir'),
@@ -232,10 +236,19 @@ export function App() {
     else navigate('/', [], { replace: true });
   }, []);
 
-  // 累计总量。只有扫描完成时才会变，不跟着选区或日期重复取。
+  // 设备列表。只在多设备时才用得上，取一次就够。
   useEffect(() => {
     let alive = true;
-    api.total()
+    api.devices()
+      .then(d => { if (alive) setDevices(d); })
+      .catch(() => { /* 设备信息拿不到不影响主流程 */ });
+    return () => { alive = false; };
+  }, [refreshToken]);
+
+  // 累计总量。只有扫描完成时才会变，不跟着选区、日期或设备切换重复取。
+  useEffect(() => {
+    let alive = true;
+    api.total(device)
       .then(t => {
         if (!alive) return;
         setTotal(t);
@@ -245,13 +258,13 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [refreshToken]);
+  }, [refreshToken, device]);
 
   // 总账：全期累计、四桶、来源 × 模型。没有日历，也没有范围切换。
   useEffect(() => {
     if (view !== 'home') return;
     let alive = true;
-    Promise.all([api.aggregateAll(), api.matrixAll()])
+    Promise.all([api.aggregateAll(device), api.matrixAll(device)])
       .then(([a, m]) => {
         if (!alive) return;
         setAgg(a);
@@ -262,13 +275,13 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, refreshToken]);
+  }, [view, refreshToken, device]);
 
   // 月度：日历只跟月份走。改选区时不用重新取日历。
   useEffect(() => {
     if (view !== 'month') return;
     let alive = true;
-    api.calendar(month)
+    api.calendar(month, device)
       .then(c => {
         if (!alive) return;
         setCal(c);
@@ -278,13 +291,13 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, month, refreshToken]);
+  }, [view, month, refreshToken, device]);
 
   // 月度：区间汇总和交叉表跟着选区走。
   useEffect(() => {
     if (view !== 'month') return;
     let alive = true;
-    Promise.all([api.aggregate(range.from, range.to), api.matrix(range.from, range.to)])
+    Promise.all([api.aggregate(range.from, range.to, device), api.matrix(range.from, range.to, device)])
       .then(([a, m]) => {
         if (!alive) return;
         setAgg(a);
@@ -295,7 +308,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, range.from, range.to, refreshToken]);
+  }, [view, range.from, range.to, refreshToken, device]);
 
   // 会话列表。目录不进请求参数：一级菜单要列出所有目录，
   // 选哪个目录是前端的二级菜单状态。
@@ -401,6 +414,18 @@ export function App() {
   }, []);
 
   /* ---------- 导航 ---------- */
+
+  /** 切设备。只改 URL 里的 device 参数，当前页和选区都保留。 */
+  function selectDevice(deviceId: string | null) {
+    if (view === 'home') {
+      navigate('/', [['device', deviceId]], { replace: true });
+    } else if (view === 'month') {
+      const path = month === currentMonth() ? '/month' : `/month/${month}`;
+      navigate(path, [['from', sel?.a], ['to', sel?.b], ['device', deviceId]], { replace: true });
+    } else {
+      navigate(route.path, [['device', deviceId]], { replace: true });
+    }
+  }
 
   /** 点顶部导航。每个按钮都回到自己的默认状态。 */
   function handleNav(next: View) {
@@ -615,6 +640,9 @@ export function App() {
         onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
       />
       <div className="loadtrack">{refreshing && <i />}</div>
+      {(view === 'home' || view === 'month') && devices && (
+        <DeviceStrip devices={devices} active={device} onSelect={selectDevice} />
+      )}
       <div className={refreshing ? 'body is-refreshing' : 'body'}>{body}</div>
     </div>
   );

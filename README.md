@@ -163,16 +163,24 @@ npm run dist:win           # 出 Windows 安装包，要在 Windows 或 CI 上�
 
 `ATRACKER_DEVICE_FILE` 可以指定身份文件位置（测试用）。
 
-## 多设备同步（P2：格式与导入导出）
+## 多设备同步
 
 每台设备把自己的数据写成一个目录里的 rollup 文件，读别人的文件把数字汇总到本机库。**文件各管各的，谁都不改别人的**；「合并」只发生在查询阶段。
 
 ```bash
-atracker sync export [--dir <目录>]   # 把自己写成 atracker-<设备id>-<月>.jsonl
-atracker sync import [--dir <目录>]   # 读目录里别人的文件，导入本机库
+# 服务端自动同步：扫描完写自己的文件，启动时和每 60 秒读别人的文件
+atracker serve --sync-dir ~/.atracker/sync
+
+# 也可以手动跑一次
+atracker sync export [--dir <目录>]
+atracker sync import [--dir <目录>]
 ```
 
-默认目录是 `~/.atracker/sync`，也可以用 `ATRACKER_SYNC_DIR` 或 `--dir` 指定。文件按「设备 + 月」拆，每个几十 KB。
+同步目录用 `--sync-dir`、`ATRACKER_SYNC_DIR` 或 `--dir` 指定；不指定就关掉，不读也不写。文件按「设备 + 月」拆，`atracker-<设备id>-<月>.jsonl`，每个几十 KB。
+
+`GET /api/sync` 返回同步状态：目录、上次导出时间和文件、上次导入读了多少文件、导入了哪些设备。
+
+界面上的设备切换条只在库里有超过一台设备时出现，只影响总账和月度——今日、会话、日志还没按设备过滤。
 
 文件是 JSONL，三种行：`device`（设备自述）、`agg`（日级聚合，`k` 区分 agent / dir / model / agent_model 四种维度）、`session`（会话汇总）。目录字段是绝对路径。
 

@@ -109,11 +109,13 @@ if (cmd === 'scan') {
   const port = Number(arg('port') ?? 4178);
   // 默认监听所有网卡，局域网里的设备可以用本机 IP 打开。
   const host = arg('host') ?? '0.0.0.0';
+  const syncDir = arg('sync-dir') ?? process.env.ATRACKER_SYNC_DIR ?? null;
   const server = new ATrackerServer({
     dbPath: DB,
     port,
     host,
-    watch: !process.argv.includes('--no-watch')
+    watch: !process.argv.includes('--no-watch'),
+    syncDir
   });
   const addr = await server.start();
   console.log(`ATracker 已启动：监听 ${addr.host}:${addr.port}`);
@@ -131,6 +133,7 @@ if (cmd === 'scan') {
     console.log(`  只给本机访问：${addr.url}`);
   }
   console.log(`  数据库 ${DB}`);
+  console.log(syncDir ? `  多设备同步 ${syncDir}` : '  多设备同步 关闭（--sync-dir <目录> 打开）');
   console.log(`  监听文件变化自动扫描，关掉用 --no-watch`);
   console.log(`  只给本机访问用 --host 127.0.0.1`);
   console.log('  Ctrl-C 退出');
@@ -214,6 +217,6 @@ if (cmd === 'scan') {
   atracker stats                                     看累计用量
   atracker sync export|import [--dir <目录>]          多设备同步：导出自己的 rollup / 导入别人的
   atracker reconcile                                 拿各来源的汇总数据对账
-  atracker serve [--port 4178] [--host 0.0.0.0] [--no-watch]   启动本地服务
+  atracker serve [--port 4178] [--host 0.0.0.0] [--no-watch] [--sync-dir <目录>]   启动本地服务
   atracker doctor                                    看各来源是否可读`);
 }

@@ -67,6 +67,13 @@
   .unit button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--ink); border-color: var(--ink); }
+  /* 设备切换条：只在多设备时出现 */
+  .devstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; padding-bottom: 7px; border-bottom: 1px dashed var(--rule); }
+  .devstrip .cap { font-size: 9px; color: var(--muted); letter-spacing: .18em; }
+  .devstrip .chip { border: 1px solid var(--rule); background: transparent; padding: 2px 8px; font-size: 9.5px; color: var(--muted); cursor: pointer; letter-spacing: .02em; }
+  .devstrip .chip:hover { border-color: var(--ink); color: var(--ink); }
+  .devstrip .chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
   /* 刷新中的提示：顶部一条细线在最上面走，正文微微变淡，不清屏、不跳滚动 */
   .loadtrack { position: relative; height: 0; }
   .loadtrack i {

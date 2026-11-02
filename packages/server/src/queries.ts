@@ -74,7 +74,22 @@ function rangeArgs(repo: Repo, from: string | null | undefined, to: string | nul
   return { from: first ?? '0000-01-01', to: last ?? ranges().to };
 }
 
-export function totalPayload(repo: Repo) {
+export function totalPayload(repo: Repo, device?: string) {
+  if (device) {
+    const t = repo.totalFor(device);
+    return {
+      total: t.tokens,
+      buckets: {
+        input: t.input, output: t.output, cacheRead: t.cache_read,
+        cacheWrite: t.cache_write, reasoning: t.reasoning
+      },
+      days: t.days,
+      firstDay: t.first,
+      lastDay: t.last,
+      updatedAt: Date.now()
+    };
+  }
+
   const t = repo.total();
   if (!t) {
     return {
@@ -95,8 +110,8 @@ export function totalPayload(repo: Repo) {
   };
 }
 
-export function calendarPayload(repo: Repo, month: string) {
-  const { days, legend } = repo.calendar(month);
+export function calendarPayload(repo: Repo, month: string, device?: string) {
+  const { days, legend } = repo.calendar(month, device);
   const colors = colorMap(repo);
   return {
     month,
@@ -110,17 +125,17 @@ export function calendarPayload(repo: Repo, month: string) {
   };
 }
 
-export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false) {
+export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false, device?: string) {
   const { from, to } = rangeArgs(repo, fromQ, toQ, all);
-  const bd = repo.breakdown(from, to);
-  const byAgent = repo.byAgent(from, to);
+  const bd = repo.breakdown(from, to, device);
+  const byAgent = repo.byAgent(from, to, device);
 
   const colors = colorMap(repo);
   const cells: Record<string, Record<string, number>> = {};
   for (const a of AGENTS) {
     cells[a.id] = {};
   }
-  for (const row of repo.matrix(from, to).cells) {
+  for (const row of repo.matrix(from, to, device).cells) {
     if (!cells[row.agent]) cells[row.agent] = {};
     cells[row.agent][modelKey(row.vendor, row.model)] = row.tokens;
   }
@@ -148,7 +163,7 @@ export function aggregatePayload(repo: Repo, fromQ?: string | null, toQ?: string
   };
 }
 
-export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false) {
+export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | null, all = false, device?: string) {
   const { from, to } = rangeArgs(repo, fromQ, toQ, all);
   const cells: Record<string, Record<string, number>> = {};
   for (const a of AGENTS) cells[a.id] = {};
@@ -158,7 +173,7 @@ export function matrixPayload(repo: Repo, fromQ?: string | null, toQ?: string | 
   const models = new Map<string, { id: string; model: string; vendor: string | null; tokens: number }>();
   let maxCell = 1;
 
-  for (const row of repo.matrix(from, to).cells) {
+  for (const row of repo.matrix(from, to, device).cells) {
     if (!cells[row.agent]) cells[row.agent] = {};
     const key = modelKey(row.vendor, row.model);
     cells[row.agent][key] = row.tokens;

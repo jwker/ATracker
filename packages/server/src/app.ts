@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import { deviceFilePath, loadDevice, type DeviceInfo } from '../../core/src/device.ts';
+import { exportRollup, importRollups, type ImportSummary } from '../../storage/src/sync.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
   dayPayload, logPayload, matrixPayload, totalPayload
@@ -27,6 +28,10 @@ export interface ServerOptions {
   debounceMs?: number;
   /** 兜底轮询间隔，毫秒。0 表示关掉 */
   pollMs?: number;
+  /** 多设备同步目录。不给就关掉同步（不读也不写）。 */
+  syncDir?: string | null;
+  /** 同步目录的轮询间隔，毫秒。默认 60 秒。 */
+  syncPollMs?: number;
 }
 
 interface Client {
@@ -37,6 +42,13 @@ export class ATrackerServer {
   private repo: Repo;
   private device: DeviceInfo;
   private opts: Required<Pick<ServerOptions, 'port' | 'host' | 'watch' | 'debounceMs' | 'pollMs'>>;
+  private syncDir: string | null;
+  private syncPollMs: number;
+  private syncTimer: NodeJS.Timeout | null = null;
+  private lastExportAt: number | null = null;
+  private lastExportFiles: string[] = [];
+  private lastImportAt: number | null = null;
+  private lastImport: ImportSummary | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
   private clients = new Set<Client>();
   private watchers: FSWatcher[] = [];
@@ -61,6 +73,8 @@ export class ATrackerServer {
       debounceMs: opts.debounceMs ?? 2000,
       pollMs: opts.pollMs ?? 5 * 60_000
     };
+    this.syncDir = opts.syncDir ?? null;
+    this.syncPollMs = opts.syncPollMs ?? 60_000;
     this.webDir = opts.webDir ?? join(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
   }
 
@@ -73,6 +87,12 @@ export class ATrackerServer {
       this.pollTimer = setInterval(() => { void this.triggerScan('poll'); }, this.opts.pollMs);
       this.pollTimer.unref?.();
     }
+    if (this.syncDir) {
+      // 启动先读一遍别人的文件，再定期对表。
+      this.importSync();
+      this.syncTimer = setInterval(() => this.importSync(), this.syncPollMs);
+      this.syncTimer.unref?.();
+    }
     await new Promise<void>(resolve => this.server.listen(this.opts.port, this.opts.host, resolve));
     const addr = this.server.address();
     const port = typeof addr === 'object' && addr ? addr.port : this.opts.port;
@@ -83,6 +103,7 @@ export class ATrackerServer {
     for (const w of this.watchers) w.close();
     if (this.scanTimer) clearTimeout(this.scanTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.syncTimer) clearInterval(this.syncTimer);
     for (const c of this.clients) { try { c.res.end(); } catch { /* 已断开 */ } }
     this.clients.clear();
     await new Promise<void>(resolve => this.server.close(() => resolve()));
@@ -137,6 +158,7 @@ export class ATrackerServer {
     const t0 = Date.now();
     try {
       const summary = await runScan(this.repo, { trigger, device: this.device });
+      this.exportSync();
       this.broadcast('scan_done', {
         batch: summary.batchId,
         eventsWritten: summary.eventsWritten,
@@ -151,6 +173,31 @@ export class ATrackerServer {
         this.dirty = false;
         void this.triggerScan(trigger);
       }
+    }
+  }
+
+  /** 把本机数据写成 rollup 文件。同步目录没开就什么也不做。 */
+  private exportSync(): void {
+    if (!this.syncDir) return;
+    try {
+      this.lastExportFiles = exportRollup(this.repo, this.device, this.syncDir);
+      this.lastExportAt = Date.now();
+    } catch (err) {
+      this.repo.log(0, Date.now(), 'warn', '同步', `导出失败：${(err as Error).message}`);
+    }
+  }
+
+  /** 读目录里其它设备的文件，导入本机库。 */
+  private importSync(): void {
+    if (!this.syncDir) return;
+    try {
+      const summary = importRollups(this.repo, this.syncDir, this.device.id);
+      this.lastImport = summary;
+      this.lastImportAt = Date.now();
+      const changed = summary.aggRows + summary.sessionRows;
+      if (changed > 0) this.broadcast('sync_done', { devices: summary.devices.map(d => d.id), rows: changed });
+    } catch (err) {
+      this.repo.log(0, Date.now(), 'warn', '同步', `导入失败：${(err as Error).message}`);
     }
   }
 
@@ -222,13 +269,15 @@ export class ATrackerServer {
           pollMs: this.opts.pollMs
         });
       }
-      if (p === '/api/total') return json(totalPayload(this.repo));
-      if (p === '/api/calendar') return json(calendarPayload(this.repo, q.get('month') ?? new Date().toISOString().slice(0, 7)));
+      if (p === '/api/total') return json(totalPayload(this.repo, q.get('device') ?? undefined));
+      if (p === '/api/calendar') {
+        return json(calendarPayload(this.repo, q.get('month') ?? new Date().toISOString().slice(0, 7), q.get('device') ?? undefined));
+      }
       if (p === '/api/aggregate') {
-        return json(aggregatePayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1'));
+        return json(aggregatePayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', q.get('device') ?? undefined));
       }
       if (p === '/api/matrix') {
-        return json(matrixPayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1'));
+        return json(matrixPayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', q.get('device') ?? undefined));
       }
       if (p === '/api/day') return json(dayPayload(this.repo, q.get('date')));
       if (p === '/api/conversations') {
@@ -250,6 +299,18 @@ export class ATrackerServer {
         }));
       }
       if (p === '/api/scan/batches') return json({ batches: this.repo.recentBatches(50) });
+      if (p === '/api/sync') {
+        return json({
+          dir: this.syncDir,
+          enabled: this.syncDir !== null,
+          pollMs: this.syncPollMs,
+          lastExportAt: this.lastExportAt,
+          lastExportFiles: this.lastExportFiles,
+          lastImportAt: this.lastImportAt,
+          lastImport: this.lastImport,
+          devices: this.repo.devices()
+        });
+      }
       if (p === '/api/devices') {
         return json({
           local: this.device,
