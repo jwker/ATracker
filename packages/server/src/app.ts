@@ -340,7 +340,14 @@ export class ATrackerServer {
           lastExportFiles: this.lastExportFiles,
           lastImportAt: this.lastImportAt,
           lastImport: this.lastImport,
-          devices: this.repo.devices().map((d: any) => ({ ...d, local: d.id === this.device.id }))
+          // 每台设备在本机库里占多少 token：排查「数字翻倍」时一眼能看出是哪台
+          devices: this.repo.devices().map((d: any) => ({
+            ...d,
+            local: d.id === this.device.id,
+            tokens: (this.repo.db.prepare(
+              'SELECT COALESCE(SUM(tokens),0) t FROM agg_day_agent WHERE device = ?'
+            ).get(d.id) as any).t
+          }))
         });
       }
       if (p === '/api/devices') {

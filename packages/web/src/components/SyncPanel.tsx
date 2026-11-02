@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import type { SyncPayload } from '../types.ts';
 import { api } from '../api.ts';
+import { fmtTok } from '../format.ts';
 
 interface SyncPanelProps {
   sync: SyncPayload | null;
@@ -114,6 +115,7 @@ export function SyncPanel({ sync, onChanged }: SyncPanelProps) {
             )}
           </span>
           <span className="id">{d.id.slice(0, 8)}</span>
+          <span className="v">{d.tokens !== undefined ? fmtTok(d.tokens, 'zh') : ''}</span>
           <span className="v">{when(d.last_seen)}</span>
           {d.local && renaming !== d.id && (
             <button

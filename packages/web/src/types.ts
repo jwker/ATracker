@@ -203,6 +203,8 @@ export interface DeviceRow extends DeviceInfo {
   ignored: number;
   /** 是否本机（/api/sync 会填） */
   local?: boolean;
+  /** 这台设备在本机库里占用的 token（/api/sync 会填） */
+  tokens?: number;
 }
 
 export interface SyncPayload {
