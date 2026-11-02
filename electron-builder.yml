@@ -32,12 +32,13 @@ mac:
   target:
     - dmg
     - zip
-  artifactName: ATracker-${version}-${arch}.${ext}
+  # 文件名带提交哈希：0.1.1 这一版可以打很多次包而不互相覆盖
+  artifactName: ATracker-${version}-${env.BUILD_STAMP}-${arch}.${ext}
 
 win:
   target:
     - nsis
-  artifactName: ATracker-${version}-setup.${ext}
+  artifactName: ATracker-${version}-${env.BUILD_STAMP}-setup.${ext}
 
 nsis:
   oneClick: false
