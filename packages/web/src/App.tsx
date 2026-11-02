@@ -8,7 +8,7 @@ import { MonthView } from './views/MonthView.tsx';
 import { TodayView } from './views/TodayView.tsx';
 import { ConversationsView } from './views/ConversationsView.tsx';
 import { LogsView } from './views/LogsView.tsx';
-import { CardView } from './views/CardView.tsx';
+import { ShareCardDialog, type ShareTarget } from './components/ShareCardDialog.tsx';
 import { dayOf, monthRange, shiftMonth } from './format.ts';
 import { navigate, useRoute, type Params } from './router.ts';
 import type {
@@ -51,7 +51,6 @@ function viewOf(path: string): View {
   if (path === '/month' || path.startsWith('/month/')) return 'month';
   if (path === '/conversations') return 'conv';
   if (path === '/logs') return 'log';
-  if (path === '/card') return 'card';
   return 'home';
 }
 
@@ -208,6 +207,7 @@ export function App() {
   const [devices, setDevices] = useState<DevicesPayload | null>(null);
   const [sync, setSync] = useState<SyncPayload | null>(null);
   const [build, setBuild] = useState<BuildInfo | null>(null);
+  const [share, setShare] = useState<ShareTarget | null>(null);
   const [day, setDay] = useState<DayPayload | null>(null);
 
   const [error, setError] = useState<string | null>(null);
@@ -439,21 +439,20 @@ export function App() {
   /* ---------- 导航 ---------- */
 
   /**
-   * 打开分享卡片页。卡片跟着来源页走：
-   *   总账 → 全期范围卡（最早一天到今天）
-   *   月度 → 本月或选中区间的范围卡
-   *   今日 → 只有今天卡
+   * 打开分享卡片弹窗。只出一张卡，跟着来源页走：
+   *   总账 → 全期卡（按月画柱子）
+   *   月度 → 本月或选区的范围卡
+   *   今日 → 今天卡
    */
   function openCard(kind: 'all' | 'month' | 'today'): void {
-    const from = kind === 'all' ? total?.firstDay ?? range.from : range.from;
-    const to = kind === 'all' ? total?.lastDay ?? range.to : range.to;
-    navigate('/card', [
-      ['kind', kind],
-      ['from', from],
-      ['to', to],
-      ['date', dayDate],
-      ['device', showAll ? 'all' : deviceParam]
-    ]);
+    setShare({
+      kind,
+      from: kind === 'all' ? total?.firstDay ?? range.from : range.from,
+      to: kind === 'all' ? total?.lastDay ?? range.to : range.to,
+      date: dayDate,
+      device: showAll ? 'all' : deviceParam,
+      version: build?.version ?? 'dev'
+    });
   }
 
   /** 切设备。只改 URL 里的 device 参数，当前页和选区都保留。 */
@@ -651,19 +650,6 @@ export function App() {
       />
       );
     }
-  } else if (view === 'card') {
-    body = (
-      <CardView
-        kind={route.params.get('kind') === 'today' ? 'today' : route.params.get('kind') === 'all' ? 'all' : 'month'}
-        from={route.params.get('from') ?? range.from}
-        to={route.params.get('to') ?? range.to}
-        date={route.params.get('date') ?? dayDate}
-        device={showAll ? 'all' : deviceParam}
-        localDeviceId={devices?.local.id ?? null}
-        version={build?.version ?? 'dev'}
-        onBack={() => history.back()}
-      />
-    );
   } else if (view === 'conv') {
     body = conv ? (
       <ConversationsView
@@ -717,6 +703,7 @@ export function App() {
         />
       )}
       <div className={refreshing ? 'body is-refreshing' : 'body'}>{body}</div>
+      {share && <ShareCardDialog target={share} onClose={() => setShare(null)} />}
     </div>
   );
 }

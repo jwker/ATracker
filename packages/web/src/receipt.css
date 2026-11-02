@@ -71,11 +71,23 @@
   .sharebtn { margin-left: auto; background: none; border: 0; padding: 0; color: var(--accent); font-size: 9px; letter-spacing: .06em; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .sharebtn:hover { color: var(--ink); }
 
-  /* 分享卡片页 */
-  .cardrow { display: flex; gap: 18px; flex-wrap: wrap; }
-  .cardcell { display: flex; flex-direction: column; gap: 6px; }
-  .cardhead { display: flex; align-items: baseline; justify-content: space-between; font-size: 9px; color: var(--muted); letter-spacing: .1em; }
-  .sharecanvas { width: 320px; height: auto; border: 1px solid var(--rule); display: block; }
+  /* 分享卡片弹窗 */
+  .sharemask {
+    position: fixed; inset: 0; background: #00000059; z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .sharemodal {
+    background: var(--paper); border: 1px solid var(--ink);
+    padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 24px 60px #00000040; max-height: calc(100vh - 40px);
+  }
+  .sharehead { display: flex; align-items: baseline; gap: 8px; font-size: 10px; letter-spacing: .12em; }
+  .sharehead .muted { color: var(--muted); font-size: 9px; }
+  .sharehead .sp { flex: 1; }
+  .sharecanvas {
+    display: block; border: 1px solid var(--rule);
+    height: min(72vh, 660px); width: auto;
+  }
 
   /* 版本行：页脚一行小字，两台机器对比版本用 */
   .buildstamp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 18px; padding-top: 8px; border-top: 1px dashed var(--rule); font-size: 8.5px; color: var(--faint); letter-spacing: .04em; }
