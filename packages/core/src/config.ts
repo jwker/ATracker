@@ -44,7 +44,19 @@ export function saveConfig(config: AppConfig): void {
   writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
 }
 
+/** iCloud Drive 的根目录（不是 ATracker 子目录）。没开 iCloud Drive 时它不存在。 */
+export function iCloudRoot(): string | null {
+  if (process.platform === 'darwin') {
+    return join(homedir(), 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+  }
+  if (process.platform === 'win32') {
+    return join(homedir(), 'iCloudDrive');
+  }
+  return null;
+}
+
 /** iCloud 目录是否已经能读写。用来提示「iCloud Drive 没开」。 */
 export function iCloudAvailable(): boolean {
-  return existsSync(join(homedir(), 'Library', 'Mobile Documents', 'com~apple~CloudDocs'));
+  const root = iCloudRoot();
+  return root !== null && existsSync(root);
 }

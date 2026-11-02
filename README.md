@@ -206,10 +206,10 @@ atracker sync import [--dir <目录>]
    - 设备列表里只有这一台，标着「（本机）」
 4. 到 Finder 里打开 iCloud Drive → ATracker，应该能看到 `atracker-<设备id>-<月>.jsonl`，一个月一个文件，每个几十 KB。
 
-**第二台（另一台 Mac 或装了同一个包的 Windows）**
+**第二台（另一台 Mac）**
 
 1. 同样装好、打开。
-2. 同样勾上「多设备同步（iCloud）」。
+2. 同样勾上「多设备同步（iCloud）」。**路径不用填**——勾选时它会算出这台机器自己的 iCloud 路径（`~/Library/Mobile Documents/com~apple~CloudDocs/ATracker`），写到这台机器的 `~/.atracker/config.json` 里。两台机器上的路径字符串不一样，但指的是云端的同一个文件夹。
 3. 等 iCloud 把第一台的文件同步过来（几十秒到几分钟，取决于文件大小和网络），然后等最多 60 秒让 ATracker 对一次表。
 4. 「日志」页的同步面板里会出现两台设备，各自的「最后写入」时间。总账、月度、今日三页的导航下面会出现设备切换条：`全部设备 / 这台（本机）/ 那台`。
 
@@ -225,6 +225,8 @@ atracker sync import [--dir <目录>]
 | 有对方设备但数字不对 | 切到「全部设备」再看；确认两台机器的时区都是 Asia/Shanghai（写死在 `core/time.ts`） |
 | 同一个项目在两台机器上分成两个目录 | 目录按绝对路径归并，`/Users/a/proj` 和 `/Users/b/proj` 就是两条记录，这是设计如此 |
 | 点开对方的会话没有逐轮明细 | 明细不同步，只同步标题、轮次数、四桶和总量 |
+
+**想换一个同步目录**（Syncthing、Dropbox、局域网共享盘）时，桌面版菜单目前只有 iCloud 这一个开关，改不了路径，要么手动编辑 `~/.atracker/config.json` 的 `syncDir` 后重启，要么用下面的命令行方式。
 
 **不开桌面版时**（比如远程登录一台服务器）用命令行，效果一样：
 
