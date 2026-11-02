@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 export interface StoredEvent {
   eventId: string;
@@ -107,6 +107,17 @@ export class Repo {
       if (!cols.includes('ignored')) {
         this.db.exec('ALTER TABLE device ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0;');
       }
+    }
+
+    // 6：清掉 device 为空串的聚合行。加设备维度那次迁移里，重建聚合发生在
+    // 「认领本机」之前，会先按空 device 写一份；认领之后按设备重算只删本机那份，
+    // 空 device 的行就留在库里，导致总量翻倍。
+    if (from < 6) {
+      for (const table of ['agg_day_agent', 'agg_day_dir', 'agg_day_model', 'agg_day_agent_model']) {
+        this.db.prepare(`DELETE FROM ${table} WHERE device = ''`).run();
+      }
+      this.db.prepare("DELETE FROM session_usage WHERE device = ''").run();
+      this.refreshTotal();
     }
 
     // 5：会话汇总补 model / vendor，跨设备会话列表要按模型筛
@@ -242,7 +253,17 @@ export class Repo {
     const events = this.db.prepare("UPDATE usage_event SET device = ? WHERE device = ''").run(deviceId);
     const sessions = this.db.prepare("UPDATE session_title SET device = ? WHERE device = ''").run(deviceId);
     const count = Number(events.changes ?? 0) + Number(sessions.changes ?? 0);
-    if (events.changes) this.rebuildAggregates([]);
+
+    // 认领之前可能已经按空 device 算过一次聚合。重建只删「明细里出现的设备」，
+    // 空 device 不在其中，会一直留着把总量算重。这里直接清掉。
+    let stale = 0;
+    for (const table of ['agg_day_agent', 'agg_day_dir', 'agg_day_model', 'agg_day_agent_model']) {
+      stale += Number(this.db.prepare(`DELETE FROM ${table} WHERE device = ''`).run().changes ?? 0);
+    }
+    stale += Number(this.db.prepare("DELETE FROM session_usage WHERE device = ''").run().changes ?? 0);
+
+    if (events.changes || stale) this.rebuildAggregates([]);
+    if (stale) this.refreshTotal();
     return count;
   }
 
