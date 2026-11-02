@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS device (
   name       TEXT NOT NULL,
   platform   TEXT,
   created_at INTEGER NOT NULL,
-  last_seen  INTEGER
+  last_seen  INTEGER,
+  -- 1 表示本机不想再看到这台设备：不入设备条、导入时跳过，数据行会被删掉
+  ignored    INTEGER NOT NULL DEFAULT 0
 );
 
 -- 用量明细。只追加，修正靠同一个 event_id 覆盖。

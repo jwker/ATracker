@@ -67,6 +67,22 @@
   .unit button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .ghost { border: 1px dashed var(--rule); background: transparent; padding: 3px 8px; font-size: 9px; letter-spacing: .1em; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--ink); border-color: var(--ink); }
+  /* 同步面板 */
+  .sync { border: 1px solid var(--rule); padding: 9px 11px; }
+  .sync .row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 9.5px; }
+  .sync .k { color: var(--muted); width: 82px; flex: none; letter-spacing: .06em; }
+  .sync .v { font-variant-numeric: tabular-nums; word-break: break-all; }
+  .sync .v.ok { color: var(--t3); }
+  .sync .v.warn { color: var(--accent); }
+  .sync .devrow { display: flex; align-items: baseline; gap: 8px; border-top: 1px dotted var(--rule); padding: 5px 0 2px; font-size: 9.5px; }
+  .sync .devrow .nm { flex: 1; }
+  .sync .devrow .id { color: var(--faint); font-size: 8.5px; }
+  .sync .devrow .act { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 9px; }
+  .sync .devrow .act:hover { color: var(--accent); }
+  .sync .devrow .act:disabled { opacity: .5; cursor: default; }
+  .sync .renameinput { border: 0; border-bottom: 1px solid var(--ink); background: transparent; font: inherit; font-size: 9.5px; padding: 0 2px; width: 60%; outline: none; }
+  .sync .note { font-size: 9px; color: var(--muted); line-height: 1.75; }
+
   /* 今日页的口径提示：不是纯本机时说明哪部分数据缺失 */
   .daynote { border-left: 3px solid var(--accent); background: var(--wash); padding: 5px 9px; margin: 8px 0 10px; font-size: 9.5px; color: var(--muted); line-height: 1.65; }
 

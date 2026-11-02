@@ -155,6 +155,8 @@ export interface ImportSummary {
   files: number;
   /** 跳过自己的文件 */
   skippedOwn: number;
+  /** 跳过被忽略的设备的文件 */
+  skippedIgnored: number;
   /** 导入了哪些设备 */
   devices: { id: string; name: string; months: string[] }[];
   aggRows: number;
@@ -168,7 +170,7 @@ export interface ImportSummary {
  * 自己的文件会被跳过——本机数据本来就该从明细重算，导入自己的文件没有意义。
  */
 export function importRollups(repo: Repo, dir: string, localDeviceId: string): ImportSummary {
-  const summary: ImportSummary = { files: 0, skippedOwn: 0, devices: [], aggRows: 0, sessionRows: 0, errors: [] };
+  const summary: ImportSummary = { files: 0, skippedOwn: 0, skippedIgnored: 0, devices: [], aggRows: 0, sessionRows: 0, errors: [] };
 
   let names: string[];
   try {
@@ -179,6 +181,7 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
   }
 
   // 先按设备把文件里的行归拢好，再整块替换，避免边删边插。
+  const ignored = repo.ignoredDevices();
   type PayloadLine = AggLine | SessionLine;
   const perDevice = new Map<string, { name: string; platform: string; months: Map<string, PayloadLine[]> }>();
 
@@ -187,6 +190,10 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
     const fileDevice = name.match(FILE_RE)![1]!;
     if (fileDevice === localDeviceId) {
       summary.skippedOwn++;
+      continue;
+    }
+    if (ignored.has(fileDevice)) {
+      summary.skippedIgnored++;
       continue;
     }
     let text: string;
@@ -213,7 +220,7 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
         continue;
       }
       const deviceId = line.device ?? fileDevice;
-      if (deviceId === localDeviceId) continue;
+      if (deviceId === localDeviceId || ignored.has(deviceId)) continue;
       const entry = perDevice.get(deviceId) ?? { name: deviceId.slice(0, 8), platform: '', months: new Map() };
       const month = line.t === 'session' ? line.month : line.day.slice(0, 7);
       const bucket = entry.months.get(month) ?? [];

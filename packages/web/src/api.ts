@@ -7,6 +7,7 @@ import type {
   ConversationsPayload,
   DayPayload,
   DevicesPayload,
+  SyncPayload,
   DoctorPayload,
   LogsPayload,
   MatrixPayload,
@@ -53,6 +54,31 @@ export const api = {
   }) => request<LogsPayload>('/api/logs', filter),
   doctor: () => request<DoctorPayload>('/api/doctor'),
   devices: () => request<DevicesPayload>('/api/devices'),
+  sync: () => request<SyncPayload>('/api/sync'),
+  ignoreDevice: async (id: string): Promise<void> => {
+    const res = await fetch('/api/sync/ignore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    if (!res.ok) throw new Error(`/api/sync/ignore ${res.status}`);
+  },
+  restoreDevice: async (id: string): Promise<void> => {
+    const res = await fetch('/api/sync/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    if (!res.ok) throw new Error(`/api/sync/restore ${res.status}`);
+  },
+  renameLocal: async (name: string): Promise<void> => {
+    const res = await fetch('/api/device/name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    if (!res.ok) throw new Error(`/api/device/name ${res.status}`);
+  },
   scan: async (): Promise<void> => {
     const res = await fetch('/api/scan', { method: 'POST' });
     if (!res.ok) throw new Error(`/api/scan ${res.status}`);

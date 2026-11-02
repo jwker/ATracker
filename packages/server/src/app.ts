@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
-import { deviceFilePath, loadDevice, type DeviceInfo } from '../../core/src/device.ts';
+import { deviceFilePath, loadDevice, saveDeviceName, type DeviceInfo } from '../../core/src/device.ts';
 import { exportRollup, importRollups, type ImportSummary } from '../../storage/src/sync.ts';
 import {
   aggregatePayload, calendarPayload, conversationsPayload, conversationPayload,
@@ -176,6 +176,24 @@ export class ATrackerServer {
     }
   }
 
+  /** 运行时开关同步。桌面版菜单用它，不用重启进程。 */
+  setSyncDir(dir: string | null): void {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
+    }
+    this.syncDir = dir;
+    if (!dir) return;
+    this.lastImport = null;
+    this.lastImportAt = null;
+    this.lastExportAt = null;
+    this.lastExportFiles = [];
+    this.importSync();
+    this.exportSync();
+    this.syncTimer = setInterval(() => this.importSync(), this.syncPollMs);
+    this.syncTimer.unref?.();
+  }
+
   /** 把本机数据写成 rollup 文件。同步目录没开就什么也不做。 */
   private exportSync(): void {
     if (!this.syncDir) return;
@@ -198,6 +216,18 @@ export class ATrackerServer {
       if (changed > 0) this.broadcast('sync_done', { devices: summary.devices.map(d => d.id), rows: changed });
     } catch (err) {
       this.repo.log(0, Date.now(), 'warn', '同步', `导入失败：${(err as Error).message}`);
+    }
+  }
+
+  /** 读 JSON 请求体。只给几个小的写接口用。 */
+  private async body(req: IncomingMessage): Promise<any> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    if (!chunks.length) return {};
+    try {
+      return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    } catch {
+      return {};
     }
   }
 
@@ -310,7 +340,7 @@ export class ATrackerServer {
           lastExportFiles: this.lastExportFiles,
           lastImportAt: this.lastImportAt,
           lastImport: this.lastImport,
-          devices: this.repo.devices()
+          devices: this.repo.devices().map((d: any) => ({ ...d, local: d.id === this.device.id }))
         });
       }
       if (p === '/api/devices') {
@@ -328,6 +358,31 @@ export class ATrackerServer {
             return { id: c.id, label: c.label, roots, ok };
           })
         });
+      }
+      if (p === '/api/sync/ignore' && req.method === 'POST') {
+        const b = await this.body(req);
+        const id = typeof b.id === 'string' ? b.id : '';
+        if (!id) return json({ error: '缺少 id' }, 400);
+        if (id === this.device.id) return json({ error: '不能忽略本机' }, 400);
+        this.repo.ignoreDevice(id);
+        return json({ ok: true, ignored: true });
+      }
+      if (p === '/api/sync/restore' && req.method === 'POST') {
+        const b = await this.body(req);
+        const id = typeof b.id === 'string' ? b.id : '';
+        if (!id) return json({ error: '缺少 id' }, 400);
+        this.repo.restoreDevice(id);
+        // 立刻尝试导一次，用户不用等下一轮轮询
+        this.importSync();
+        return json({ ok: true, ignored: false });
+      }
+      if (p === '/api/device/name' && req.method === 'POST') {
+        const b = await this.body(req);
+        const name = typeof b.name === 'string' ? b.name.trim() : '';
+        if (!name) return json({ error: '名字不能为空' }, 400);
+        this.device = saveDeviceName(name);
+        this.repo.touchDevice(this.device);
+        return json({ ok: true, device: this.device });
       }
       if (p === '/api/scan' && req.method === 'POST') {
         void this.triggerScan('manual');

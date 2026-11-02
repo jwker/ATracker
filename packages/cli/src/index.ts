@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import { loadDevice } from '../../core/src/device.ts';
+import { iCloudSyncDir, loadConfig } from '../../core/src/config.ts';
 import { exportRollup, importRollups } from '../../storage/src/sync.ts';
 import { localMonth } from '../../core/src/time.ts';
 import { fmtTok } from '../../core/src/units.ts';
@@ -109,7 +110,15 @@ if (cmd === 'scan') {
   const port = Number(arg('port') ?? 4178);
   // 默认监听所有网卡，局域网里的设备可以用本机 IP 打开。
   const host = arg('host') ?? '0.0.0.0';
-  const syncDir = arg('sync-dir') ?? process.env.ATRACKER_SYNC_DIR ?? null;
+  // 同步目录优先级：--sync-dir <路径> > --sync（iCloud 默认目录）> 环境变量 > 配置文件
+  const syncArg = arg('sync-dir');
+  const syncDir = syncArg === 'icloud'
+    ? iCloudSyncDir()
+    : syncArg
+      ? syncArg
+      : process.argv.includes('--sync')
+        ? iCloudSyncDir()
+        : process.env.ATRACKER_SYNC_DIR ?? loadConfig().syncDir;
   const server = new ATrackerServer({
     dbPath: DB,
     port,
@@ -217,6 +226,6 @@ if (cmd === 'scan') {
   atracker stats                                     看累计用量
   atracker sync export|import [--dir <目录>]          多设备同步：导出自己的 rollup / 导入别人的
   atracker reconcile                                 拿各来源的汇总数据对账
-  atracker serve [--port 4178] [--host 0.0.0.0] [--no-watch] [--sync-dir <目录>]   启动本地服务
+  atracker serve [--port 4178] [--host 0.0.0.0] [--no-watch] [--sync] [--sync-dir <目录>]   启动本地服务
   atracker doctor                                    看各来源是否可读`);
 }

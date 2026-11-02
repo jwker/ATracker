@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 export interface StoredEvent {
   eventId: string;
@@ -101,6 +101,14 @@ export class Repo {
       this.rebuildAggregates([]);
     }
 
+    // 4：设备加 ignored 标记（忽略某台设备后不再导入、不在设备条里出现）
+    if (from < 4) {
+      const cols = (this.db.prepare('PRAGMA table_info(device)').all() as any[]).map(c => c.name);
+      if (!cols.includes('ignored')) {
+        this.db.exec('ALTER TABLE device ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0;');
+      }
+    }
+
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 
@@ -181,6 +189,41 @@ export class Repo {
 
   devices(): any[] {
     return this.db.prepare('SELECT * FROM device ORDER BY last_seen DESC').all() as any[];
+  }
+
+  device(id: string): any {
+    return this.db.prepare('SELECT * FROM device WHERE id = ?').get(id) ?? null;
+  }
+
+  /**
+   * 忽略一台设备：删掉它在本机库里的所有行（聚合、会话），并打标记，
+   * 之后同步导入会跳过它。只动本机库，不碰同步目录里对方写的文件。
+   */
+  ignoreDevice(deviceId: string): void {
+    this.db.exec('BEGIN');
+    try {
+      for (const table of ['agg_day_agent', 'agg_day_dir', 'agg_day_model', 'agg_day_agent_model']) {
+        this.db.prepare(`DELETE FROM ${table} WHERE device = ?`).run(deviceId);
+      }
+      this.db.prepare('DELETE FROM session_usage WHERE device = ?').run(deviceId);
+      this.db.prepare('UPDATE device SET ignored = 1 WHERE id = ?').run(deviceId);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    this.refreshTotal();
+  }
+
+  /** 取消忽略。数据行不补，等下一次同步导入。 */
+  restoreDevice(deviceId: string): void {
+    this.db.prepare('UPDATE device SET ignored = 0 WHERE id = ?').run(deviceId);
+  }
+
+  /** 被忽略的设备 id 集合，导入时跳过。 */
+  ignoredDevices(): Set<string> {
+    const rows = this.db.prepare('SELECT id FROM device WHERE ignored = 1').all() as any[];
+    return new Set(rows.map(r => r.id as string));
   }
 
   /**

@@ -52,6 +52,20 @@ export function loadDevice(): DeviceInfo {
   return info;
 }
 
+/** 改本机设备名，写回 device.json。返回更新后的身份。 */
+export function saveDeviceName(name: string): DeviceInfo {
+  const current = loadDevice();
+  const next: DeviceInfo = { ...current, name };
+  try {
+    const file = deviceFile();
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+  } catch {
+    // 写不了就只改内存里的，下次启动会退回旧名字
+  }
+  return next;
+}
+
 /** 设备文件的位置，界面上用来提示「身份存在哪」。 */
 export function deviceFilePath(): string {
   return deviceFile();

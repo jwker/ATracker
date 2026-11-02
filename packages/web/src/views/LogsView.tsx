@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { DevicesPayload, DoctorPayload, LogsPayload } from '../types.ts';
+import type { DevicesPayload, DoctorPayload, LogsPayload, SyncPayload } from '../types.ts';
+import { SyncPanel } from '../components/SyncPanel.tsx';
 import type { LogFilter } from '../state.ts';
 import { fmtTime, full } from '../format.ts';
 
@@ -7,6 +8,8 @@ interface LogsViewProps {
   logs: LogsPayload;
   doctor: DoctorPayload | null;
   devices: DevicesPayload | null;
+  sync: SyncPayload | null;
+  onSyncChanged: () => void;
   filter: LogFilter;
   onFilter: (patch: Partial<LogFilter>) => void;
   onClear: () => void;
@@ -186,6 +189,15 @@ export function LogsView(props: LogsViewProps) {
             <b>库里的设备</b> {props.devices?.devices.length ?? 0} 台
           </span>
         </div>
+      </div>
+
+      <div className="sec">
+        <div className="sec-h">
+          <b>多设备同步</b>
+          <span>SYNC</span>
+          <span className="r">每 {Math.round((props.sync?.pollMs ?? 60000) / 1000)} 秒对一次</span>
+        </div>
+        <SyncPanel sync={props.sync} onChanged={props.onSyncChanged} />
       </div>
 
       <div className="sec">

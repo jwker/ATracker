@@ -193,6 +193,28 @@ export interface DeviceInfo {
 export interface DeviceRow extends DeviceInfo {
   created_at: number;
   last_seen: number | null;
+  ignored: number;
+  /** 是否本机（/api/sync 会填） */
+  local?: boolean;
+}
+
+export interface SyncPayload {
+  dir: string | null;
+  enabled: boolean;
+  pollMs: number;
+  lastExportAt: number | null;
+  lastExportFiles: string[];
+  lastImportAt: number | null;
+  lastImport: {
+    files: number;
+    skippedOwn: number;
+    skippedIgnored: number;
+    aggRows: number;
+    sessionRows: number;
+    errors: string[];
+    devices: { id: string; name: string; months: string[] }[];
+  } | null;
+  devices: DeviceRow[];
 }
 
 export interface DevicesPayload {

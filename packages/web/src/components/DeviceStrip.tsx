@@ -11,7 +11,9 @@ interface DeviceStripProps {
 }
 
 export function DeviceStrip({ devices, active, onSelect }: DeviceStripProps) {
-  if (devices.devices.length < 2) return null;
+  // 被忽略的设备不出现在切换条里，否则「忽略」等于没效果
+  const visible = devices.devices.filter(d => !d.ignored);
+  if (visible.length < 2) return null;
 
   return (
     <div className="devstrip">
@@ -23,7 +25,7 @@ export function DeviceStrip({ devices, active, onSelect }: DeviceStripProps) {
       >
         全部设备
       </button>
-      {devices.devices.map(d => (
+      {visible.map(d => (
         <button
           key={d.id}
           className={'chip' + (active === d.id ? ' on' : '')}

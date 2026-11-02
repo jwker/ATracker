@@ -6,10 +6,11 @@
 
 import { app, BrowserWindow, dialog, Menu, screen, shell, type MenuItemConstructorOptions } from 'electron';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ATrackerServer } from '../../server/src/app.ts';
+import { iCloudAvailable, iCloudSyncDir, loadConfig, saveConfig } from '../../core/src/config.ts';
 
 /** 打包后是 .../Resources/app.asar，开发时是仓库根目录。 */
 const ROOT = app.getAppPath();
@@ -129,6 +130,48 @@ function warnIfDuplicateInstall(): void {
 }
 
 /**
+ * 开关多设备同步。iCloud 目录不可用时给提示并把勾去掉，不写配置文件。
+ * 同步状态存在 ~/.atracker/config.json 的 syncDir 字段里。
+ */
+async function toggleSync(on: boolean): Promise<void> {
+  if (!on) {
+    server?.setSyncDir(null);
+    saveConfig({ syncDir: null });
+    buildMenu();
+    return;
+  }
+
+  const dir = iCloudSyncDir();
+  if (!iCloudAvailable()) {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      message: 'iCloud Drive 目录不可用',
+      detail: `找不到 ${dir}。先在「系统设置 → Apple 账户 → iCloud」里打开 iCloud Drive，再来开这个开关。`,
+      buttons: ['好']
+    });
+    buildMenu();
+    return;
+  }
+
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      message: '建不了同步目录',
+      detail: `${dir}\n${(err as Error).message}`,
+      buttons: ['好']
+    });
+    buildMenu();
+    return;
+  }
+
+  server?.setSyncDir(dir);
+  saveConfig({ syncDir: dir });
+  buildMenu();
+}
+
+/**
  * 应用菜单。自己写一份，因为默认菜单里没有「重新扫描」这种本应用的常用动作。
  * 角色项（role）交给系统翻译，自定义项用中文。
  */
@@ -164,6 +207,13 @@ function buildMenu(): void {
         {
           label: '打开数据目录',
           click: () => { void shell.openPath(app.getPath('userData')); }
+        },
+        { type: 'separator' },
+        {
+          label: '多设备同步（iCloud）',
+          type: 'checkbox',
+          checked: loadConfig().syncDir !== null,
+          click: (item) => { void toggleSync(item.checked); }
         },
         { type: 'separator' },
         isMac
@@ -224,12 +274,15 @@ function buildMenu(): void {
 }
 
 async function openWindow(): Promise<void> {
+  const config = loadConfig();
   const instance = new ATrackerServer({
     dbPath: databasePath(),
     webDir: WEB_DIR,
     // 只监听本机回环，端口交给系统分配，避免和已经在跑的 serve 抢 4178。
     host: '127.0.0.1',
-    port: 0
+    port: 0,
+    // 同步开关记在 ~/.atracker/config.json，命令行和桌面版共用
+    syncDir: config.syncDir
   });
   server = instance;
   const addr = await instance.start();
