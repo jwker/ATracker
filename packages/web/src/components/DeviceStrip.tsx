@@ -17,7 +17,6 @@ export function DeviceStrip({ devices, active, onSelect }: DeviceStripProps) {
 
   return (
     <div className="devstrip">
-      <span className="cap">设备</span>
       <button
         className={'chip' + (active === null ? ' on' : '')}
         onClick={() => onSelect(null)}

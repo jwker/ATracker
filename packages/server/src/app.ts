@@ -219,6 +219,16 @@ export class ATrackerServer {
     }
   }
 
+  /**
+   * 设备过滤参数。URL 里没带就是本机；`device=all` 是全部设备；
+   * 其它值是具体的设备 id。
+   */
+  private deviceFilter(q: URLSearchParams): string | undefined {
+    const v = q.get('device');
+    if (v === 'all') return undefined;
+    return v || this.device.id;
+  }
+
   /** 读 JSON 请求体。只给几个小的写接口用。 */
   private async body(req: IncomingMessage): Promise<any> {
     const chunks: Buffer[] = [];
@@ -299,18 +309,18 @@ export class ATrackerServer {
           pollMs: this.opts.pollMs
         });
       }
-      if (p === '/api/total') return json(totalPayload(this.repo, q.get('device') ?? undefined));
+      if (p === '/api/total') return json(totalPayload(this.repo, this.deviceFilter(q)));
       if (p === '/api/calendar') {
-        return json(calendarPayload(this.repo, q.get('month') ?? new Date().toISOString().slice(0, 7), q.get('device') ?? undefined));
+        return json(calendarPayload(this.repo, q.get('month') ?? new Date().toISOString().slice(0, 7), this.deviceFilter(q)));
       }
       if (p === '/api/aggregate') {
-        return json(aggregatePayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', q.get('device') ?? undefined));
+        return json(aggregatePayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', this.deviceFilter(q)));
       }
       if (p === '/api/matrix') {
-        return json(matrixPayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', q.get('device') ?? undefined));
+        return json(matrixPayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', this.deviceFilter(q)));
       }
       if (p === '/api/day') {
-        return json(dayPayload(this.repo, q.get('date'), q.get('device') ?? undefined, this.device.id));
+        return json(dayPayload(this.repo, q.get('date'), this.deviceFilter(q), this.device.id));
       }
       if (p === '/api/conversations') {
         return json(conversationsPayload(this.repo, {

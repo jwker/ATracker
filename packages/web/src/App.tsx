@@ -166,8 +166,14 @@ export function App() {
   const dayMatch = route.path.match(/^\/today\/(.+)$/);
   const dayDate = dayMatch && DAY_RE.test(dayMatch[1]) ? dayMatch[1] : todayDate();
 
-  // 设备筛选。跟着 URL 的 ?device= 走，只影响总账和月度。
-  const device = route.params.get('device');
+  // 设备筛选。URL 不带 device 就是本机，device=all 是全部设备，其它值是具体设备 id。
+  const deviceParam = route.params.get('device');
+  const showAll = deviceParam === 'all';
+  /**
+   * 传给接口的值：不带参数服务端按本机算，所以「全部设备」要显式传 'all'，
+   * 具体设备传它的 id。
+   */
+  const device = showAll ? 'all' : deviceParam;
 
   // 会话页的状态。
   const convFilter: ConversationFilter = {
@@ -421,15 +427,18 @@ export function App() {
 
   /** 切设备。只改 URL 里的 device 参数，当前页和选区都保留。 */
   function selectDevice(deviceId: string | null) {
+    // null 表示全部设备，写成 device=all；具体设备写 id；本机也写 id，
+    // 这样切回来的时候 URL 是明确的。
+    const param = deviceId ?? 'all';
     if (view === 'home') {
-      navigate('/', [['device', deviceId]], { replace: true });
+      navigate('/', [['device', param]], { replace: true });
     } else if (view === 'month') {
       const path = month === currentMonth() ? '/month' : `/month/${month}`;
-      navigate(path, [['from', sel?.a], ['to', sel?.b], ['device', deviceId]], { replace: true });
+      navigate(path, [['from', sel?.a], ['to', sel?.b], ['device', param]], { replace: true });
     } else if (view === 'today') {
-      navigate(dayMatch ? `/today/${dayDate}` : '/today', [['device', deviceId]], { replace: true });
+      navigate(dayMatch ? `/today/${dayDate}` : '/today', [['device', param]], { replace: true });
     } else {
-      navigate(route.path, [['device', deviceId]], { replace: true });
+      navigate(route.path, [['device', param]], { replace: true });
     }
   }
 
@@ -551,7 +560,7 @@ export function App() {
       body = (
       <LedgerView
         total={total}
-        deviceName={device ? devices?.devices.find(d => d.id === device)?.name ?? null : null}
+        deviceName={showAll ? null : devices?.devices.find(d => d.id === deviceParam)?.name ?? devices?.local.name ?? null}
         agg={agg}
         matrix={matrix}
         unit={unit}
@@ -653,7 +662,11 @@ export function App() {
       />
       <div className="loadtrack">{refreshing && <i />}</div>
       {(view === 'home' || view === 'month' || view === 'today') && devices && (
-        <DeviceStrip devices={devices} active={device} onSelect={selectDevice} />
+        <DeviceStrip
+          devices={devices}
+          active={showAll ? null : deviceParam ?? devices.local.id}
+          onSelect={selectDevice}
+        />
       )}
       <div className={refreshing ? 'body is-refreshing' : 'body'}>{body}</div>
     </div>

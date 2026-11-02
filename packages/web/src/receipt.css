@@ -91,7 +91,6 @@
 
   /* 设备切换条：只在多设备时出现 */
   .devstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; padding-bottom: 7px; border-bottom: 1px dashed var(--rule); }
-  .devstrip .cap { font-size: 9px; color: var(--muted); letter-spacing: .18em; }
   .devstrip .chip { border: 1px solid var(--rule); background: transparent; padding: 2px 8px; font-size: 9.5px; color: var(--muted); cursor: pointer; letter-spacing: .02em; }
   .devstrip .chip:hover { border-color: var(--ink); color: var(--ink); }
   .devstrip .chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
