@@ -1,17 +1,19 @@
 // ATracker 命令行。
 //   atracker scan [--source codex] [--trigger manual]
 //   atracker stats
+//   atracker sync export|import [--dir <目录>]
 //   atracker doctor
 
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { networkInterfaces } from 'node:os';
+import { homedir, networkInterfaces } from 'node:os';
 import { execFileSync } from 'node:child_process';
 
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
 import { loadDevice } from '../../core/src/device.ts';
+import { exportRollup, importRollups } from '../../storage/src/sync.ts';
 import { localMonth } from '../../core/src/time.ts';
 import { fmtTok } from '../../core/src/units.ts';
 import { reconcile } from './reconcile.ts';
@@ -135,6 +137,26 @@ if (cmd === 'scan') {
   const shutdown = async () => { console.log('\n正在退出…'); await server.close(); process.exit(0); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+} else if (cmd === 'sync') {
+  const sub = process.argv[3] ?? 'import';
+  const dir = arg('dir') ?? process.env.ATRACKER_SYNC_DIR ?? join(homedir(), '.atracker', 'sync');
+  const repo = openRepo();
+  const device = loadDevice();
+  repo.touchDevice(device);
+
+  if (sub === 'export') {
+    const files = exportRollup(repo, device, dir);
+    console.log(`已导出 ${files.length} 个文件到 ${dir}`);
+    for (const f of files) console.log(`  ${f}`);
+  } else if (sub === 'import') {
+    const s = importRollups(repo, dir, device.id);
+    console.log(`读取 ${s.files} 个文件，跳过自己的 ${s.skippedOwn} 个；导入 ${s.aggRows} 条聚合、${s.sessionRows} 条会话`);
+    for (const d of s.devices) console.log(`  ${d.name}（${d.id.slice(0, 8)}）：${d.months.join(', ') || '无月份'}`);
+    for (const e of s.errors) console.log(`  错误：${e}`);
+  } else {
+    console.log('用法：atracker sync export|import [--dir <目录>]');
+  }
+  repo.close();
 } else if (cmd === 'reconcile') {
   const repo = openRepo();
   console.log('对账：拿各来源自带的汇总数据核对我们采到的数\n');
@@ -190,6 +212,7 @@ if (cmd === 'scan') {
 
   atracker scan [--source codex] [--trigger manual]   扫描本机 agent 的用量日志
   atracker stats                                     看累计用量
+  atracker sync export|import [--dir <目录>]          多设备同步：导出自己的 rollup / 导入别人的
   atracker reconcile                                 拿各来源的汇总数据对账
   atracker serve [--port 4178] [--host 0.0.0.0] [--no-watch]   启动本地服务
   atracker doctor                                    看各来源是否可读`);

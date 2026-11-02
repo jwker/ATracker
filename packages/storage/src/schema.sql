@@ -74,6 +74,25 @@ CREATE TABLE IF NOT EXISTS session_title (
   PRIMARY KEY (agent, session_id)
 );
 
+-- 会话汇总。本机和同步进来的远端设备都写这里，会话页按 device 展示。
+CREATE TABLE IF NOT EXISTS session_usage (
+  device      TEXT NOT NULL,
+  agent       TEXT NOT NULL,
+  session_id  TEXT NOT NULL,
+  month       TEXT NOT NULL,
+  title       TEXT,
+  dir         TEXT,
+  events      INTEGER NOT NULL DEFAULT 0,
+  tokens      INTEGER NOT NULL DEFAULT 0,
+  input       INTEGER NOT NULL DEFAULT 0,
+  output      INTEGER NOT NULL DEFAULT 0,
+  cache_read  INTEGER NOT NULL DEFAULT 0,
+  cache_write INTEGER NOT NULL DEFAULT 0,
+  first_ts    INTEGER,
+  last_ts     INTEGER,
+  PRIMARY KEY (device, agent, session_id)
+);
+
 -- 一次扫描一个批次。
 CREATE TABLE IF NOT EXISTS scan_batch (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

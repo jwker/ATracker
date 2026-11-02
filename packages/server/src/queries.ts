@@ -88,7 +88,7 @@ export function totalPayload(repo: Repo) {
       input: t.input, output: t.output, cacheRead: t.cache_read,
       cacheWrite: t.cache_write, reasoning: t.reasoning
     },
-    days: (repo.db.prepare('SELECT COUNT(DISTINCT local_day) n FROM usage_event').get() as any).n,
+    days: repo.dayCount(),
     firstDay: repo.dayBounds().first,
     lastDay: repo.dayBounds().last,
     updatedAt: t.updated_at

@@ -325,13 +325,22 @@ export class Repo {
                  SUM(cache_read_tokens) AS cache_read, SUM(cache_write_tokens) AS cache_write,
                  SUM(reasoning_tokens) AS reasoning,
                  SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens`;
+    // 只有本机设备有明细（usage_event）；同步进来的远端设备只有聚合行，
+    // 所以重算时必须按设备限定，否则会把远端的行一起删掉。
+    const localDevices = (this.db.prepare('SELECT DISTINCT device FROM usage_event').all() as any[])
+      .map(r => r.device as string);
+
     this.db.exec('BEGIN');
     try {
       for (const day of scope) {
-        this.db.prepare('DELETE FROM agg_day_agent WHERE day = ?').run(day);
-        this.db.prepare('DELETE FROM agg_day_dir WHERE day = ?').run(day);
-        this.db.prepare('DELETE FROM agg_day_model WHERE day = ?').run(day);
-        this.db.prepare('DELETE FROM agg_day_agent_model WHERE day = ?').run(day);
+        for (const d of localDevices) {
+          this.db.prepare('DELETE FROM agg_day_agent WHERE day = ? AND device = ?').run(day, d);
+          this.db.prepare('DELETE FROM agg_day_dir WHERE day = ? AND device = ?').run(day, d);
+          this.db.prepare('DELETE FROM agg_day_model WHERE day = ? AND device = ?').run(day, d);
+          this.db.prepare('DELETE FROM agg_day_agent_model WHERE day = ? AND device = ?').run(day, d);
+        }
+      }
+      for (const day of scope) {
 
         this.db.prepare(
           `INSERT INTO agg_day_agent (day, device, agent, ${COLS}) SELECT local_day AS day, device, agent, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, device, agent`
@@ -349,12 +358,41 @@ export class Repo {
           `INSERT INTO agg_day_agent_model (day, device, agent, model, vendor, ${COLS}) SELECT local_day AS day, device, agent, model, COALESCE(provider, '') AS vendor, ${AGG} FROM usage_event WHERE local_day = ? GROUP BY day, device, agent, model, vendor`
         ).run(day);
       }
+
+      // 本机的会话汇总也跟着重算（远端设备的行由导入维护，不动）
+      const months = new Set(scope.map(d => d.slice(0, 7)));
+      for (const d of localDevices) {
+        for (const m of months) this.rebuildSessionUsage(d, m);
+      }
+
       this.refreshTotal();
       this.db.exec('COMMIT');
     } catch (err) {
       this.db.exec('ROLLBACK');
       throw err;
     }
+  }
+
+  /** 重算某个设备某个月的会话汇总。远端设备的会话由 sync import 直接写入。 */
+  rebuildSessionUsage(device: string, month: string): void {
+    this.db.prepare('DELETE FROM session_usage WHERE device = ? AND month = ?').run(device, month);
+    this.db.prepare(
+      `INSERT INTO session_usage
+         (device, agent, session_id, month, title, dir, events, tokens, input, output, cache_read, cache_write, first_ts, last_ts)
+       SELECT e.device, e.agent, e.session_id,
+              substr(MAX(e.local_day), 1, 7),
+              s.title,
+              COALESCE(s.cwd, MIN(e.cwd)),
+              COUNT(*),
+              SUM(e.input_tokens + e.output_tokens + e.cache_read_tokens + e.cache_write_tokens),
+              SUM(e.input_tokens), SUM(e.output_tokens), SUM(e.cache_read_tokens), SUM(e.cache_write_tokens),
+              MIN(e.ts), MAX(e.ts)
+       FROM usage_event e
+       LEFT JOIN session_title s
+         ON s.device = e.device AND s.agent = e.agent AND s.session_id = e.session_id
+       WHERE e.device = ? AND substr(e.local_day, 1, 7) = ?
+       GROUP BY e.device, e.agent, e.session_id`
+    ).run(device, month);
   }
 
   /** 重算累计。聚合表很小，直接全量重算比增量更不容易出错。 */
@@ -385,10 +423,19 @@ export class Repo {
     return this.db.prepare('SELECT * FROM agg_total WHERE id = 1').get() ?? null;
   }
 
-  /** 库里最早和最晚的一天。总账页的「全期」用它，不用另算区间。 */
+  /**
+   * 库里最早和最晚的一天。总账页的「全期」用它。
+   * 读聚合表而不是明细：同步进来的远端设备只有聚合行。
+   */
   dayBounds(): { first: string | null; last: string | null } {
-    const r = this.db.prepare('SELECT MIN(local_day) first, MAX(local_day) last FROM usage_event').get() as any;
+    const r = this.db.prepare('SELECT MIN(day) first, MAX(day) last FROM agg_day_agent').get() as any;
     return { first: r?.first ?? null, last: r?.last ?? null };
+  }
+
+  /** 有数据的自然日数量，按聚合表算（含远端设备）。 */
+  dayCount(): number {
+    const r = this.db.prepare('SELECT COUNT(DISTINCT day) n FROM agg_day_agent').get() as any;
+    return r?.n ?? 0;
   }
 
   /** 某个月每天的用量和按目录的拆分。 */
