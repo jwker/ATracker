@@ -31,9 +31,12 @@ export function monthsBetween(from: string, to: string): string[] {
 
 export function dayList(from: string, to: string): string[] {
   const out: string[] = [];
-  const t0 = Date.parse(from + 'T00:00:00+08:00');
-  const t1 = Date.parse(to + 'T00:00:00+08:00');
-  for (let t = t0; t <= t1; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  // 用 UTC 构造再取 UTC 日期，避开本地时区：按 +08:00 解析再用 toISOString 会整体退一天
+  const start = Date.UTC(fy!, fm! - 1, fd!);
+  const end = Date.UTC(ty!, tm! - 1, td!);
+  for (let t = start; t <= end; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
   return out;
 }
 
