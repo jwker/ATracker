@@ -27,6 +27,7 @@ interface MonthViewProps {
   onSelectDay: (day: string) => void;
   onClearSelection: () => void;
   onOpenDay: (day: string) => void;
+  onShare: () => void;
   onOpenDir: (path: string) => void;
   onOpenCell: (agent: string, model: string, vendor: string | null) => void;
 }
@@ -45,6 +46,7 @@ export function MonthView(props: MonthViewProps) {
         month={month}
         onClear={props.onClearSelection}
         onOpenDay={props.onOpenDay}
+        onShare={props.onShare}
       />
 
       <div className="total-line">

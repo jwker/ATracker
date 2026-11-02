@@ -438,11 +438,19 @@ export function App() {
 
   /* ---------- 导航 ---------- */
 
-  /** 打开分享卡片页。带上当前的范围、日期和设备，卡片跟页面保持一致。 */
-  function openCard(): void {
+  /**
+   * 打开分享卡片页。卡片跟着来源页走：
+   *   总账 → 全期范围卡（最早一天到今天）
+   *   月度 → 本月或选中区间的范围卡
+   *   今日 → 只有今天卡
+   */
+  function openCard(kind: 'all' | 'month' | 'today'): void {
+    const from = kind === 'all' ? total?.firstDay ?? range.from : range.from;
+    const to = kind === 'all' ? total?.lastDay ?? range.to : range.to;
     navigate('/card', [
-      ['from', range.from],
-      ['to', range.to],
+      ['kind', kind],
+      ['from', from],
+      ['to', to],
       ['date', dayDate],
       ['device', showAll ? 'all' : deviceParam]
     ]);
@@ -584,7 +592,7 @@ export function App() {
       <LedgerView
         total={total}
         deviceName={showAll ? null : devices?.devices.find(d => d.id === deviceParam)?.name ?? devices?.local.name ?? null}
-        onShare={openCard}
+        onShare={() => openCard('all')}
         agg={agg}
         matrix={matrix}
         unit={unit}
@@ -617,6 +625,7 @@ export function App() {
         onSelectDay={selectDay}
         onClearSelection={clearSelection}
         onOpenDay={gotoDay}
+        onShare={() => openCard('month')}
         onOpenDir={dir => navigate('/conversations', [['dir', dir]])}
         onOpenCell={(agent, model, vendor) =>
           navigate('/conversations', [['agent', agent], ['model', model], ['vendor', vendor]])}
@@ -630,7 +639,7 @@ export function App() {
       refreshing = day.date !== dayDate;
       body = (
       <TodayView
-        onShare={openCard}
+        onShare={() => openCard('today')}
         day={day}
         unit={unit}
         onPrevDay={prevDay}
@@ -645,9 +654,10 @@ export function App() {
   } else if (view === 'card') {
     body = (
       <CardView
-        from={range.from}
-        to={range.to}
-        date={dayDate}
+        kind={route.params.get('kind') === 'today' ? 'today' : route.params.get('kind') === 'all' ? 'all' : 'month'}
+        from={route.params.get('from') ?? range.from}
+        to={route.params.get('to') ?? range.to}
+        date={route.params.get('date') ?? dayDate}
         device={showAll ? 'all' : deviceParam}
         localDeviceId={devices?.local.id ?? null}
         version={build?.version ?? 'dev'}

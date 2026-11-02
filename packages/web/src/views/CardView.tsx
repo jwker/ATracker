@@ -9,6 +9,8 @@ import { drawCard, cardTok, type CardBar, type CardData } from '../card/render.t
 import { fmtPct, modelLabel } from '../format.ts';
 
 interface CardViewProps {
+  /** 卡片来源：总账=全期，月度=本月/区间，今日=只有今天卡 */
+  kind: 'all' | 'month' | 'today';
   /** 时间范围（范围卡用） */
   from: string;
   to: string;
@@ -91,14 +93,25 @@ export function CardView(props: CardViewProps) {
     const days = dayList(props.from, props.to);
     const totals = new Map<string, number>();
     for (const c of cal) for (const d of c.days) totals.set(d.day, d.total);
-    const max = Math.max(1, ...[...totals.values()]);
-    const bars: CardBar[] = days.map(d => {
-      const v = totals.get(d) ?? 0;
-      return { v: v / max, empty: v === 0, hot: false };
-    });
-    const peakDay = days.reduce((best, d) => ((totals.get(d) ?? 0) > (totals.get(best) ?? 0) ? d : best), days[0]!);
-    const peakIdx = days.indexOf(peakDay);
-    if (peakIdx >= 0 && (totals.get(peakDay) ?? 0) > 0) bars[peakIdx]!.hot = true;
+
+    // 全期是几个月的数据，按天画 145 根柱子既看不清也没意义，改成按月
+    const byMonth = props.kind === 'all';
+    const buckets: { key: string; label: string; total: number }[] = byMonth
+      ? monthsBetween(props.from, props.to).map(m => ({
+          key: m,
+          label: m.slice(5),
+          total: [...totals.entries()].filter(([d]) => d.startsWith(m)).reduce((a, [, v]) => a + v, 0)
+        }))
+      : days.map(d => ({ key: d, label: d.slice(5), total: totals.get(d) ?? 0 }));
+
+    const max = Math.max(1, ...buckets.map(b => b.total));
+    const peak = buckets.reduce((a, b) => (b.total > a.total ? b : a), buckets[0]!);
+    const bars: CardBar[] = buckets.map(b => ({
+      v: b.total / max,
+      empty: b.total === 0,
+      hot: b.key === peak.key && b.total > 0
+    }));
+    const barCount = buckets.length;
 
     const v = splitValue(agg.total);
     const b = agg.buckets;
@@ -110,17 +123,22 @@ export function CardView(props: CardViewProps) {
     ];
     return {
       metaLeft: `${props.from} → ${props.to.slice(5)}`,
-      metaRight: `${days.length} 天`,
+      metaRight: `${props.kind === 'all' ? '全期' : props.kind === 'month' ? (props.from === props.to ? '某天' : '区间') : ''} · ${byMonth ? monthsBetween(props.from, props.to).length + ' 个月' : days.length + ' 天'}`,
       bigLabel: 'TOKEN 总量',
       bigValue: v.value,
       bigUnit: v.unit,
       buckets: (counted !== null ? `${counted} 次调用 · ` : '') + bucketBits.join(' · '),
       hitRate: hitRate(b.input, b.cacheRead),
-      chartTitle: '按天',
+      chartTitle: byMonth ? '按月' : '按天',
       bars,
-      axisLabels: [props.from.slice(5), days[Math.floor(days.length / 2)]!.slice(5), props.to.slice(5)],
-      chartNoteLeft: `高峰 ${peakDay.slice(5)} · ${cardTok(totals.get(peakDay) ?? 0)}`,
-      chartNoteRight: `有记录 ${[...totals.values()].filter(x => x > 0).length} 天`,
+      axisLabels: byMonth
+        ? [buckets[0]!.label, buckets[Math.floor(barCount / 2)]!.label, buckets[barCount - 1]!.label]
+        : [props.from.slice(5), days[Math.floor(days.length / 2)]!.slice(5), props.to.slice(5)],
+      chartNoteLeft: `高峰 ${peak.label}${byMonth ? ' 月' : ''} · ${cardTok(peak.total)}`,
+      chartNoteRight: byMonth
+        ? `有记录 ${buckets.filter(b => b.total > 0).length} 个月`
+        : `有记录 ${buckets.filter(b => b.total > 0).length} 天`,
+      modelsTitle: props.kind === 'all' ? '占全期' : '占区间',
       models: agg.byModel
         .map(m => ({ label: modelLabel(m.model, m.vendor), pct: (m.tokens / (agg.total || 1)) * 100 }))
         .filter(m => m.pct >= 0.05)
@@ -157,6 +175,7 @@ export function CardView(props: CardViewProps) {
       axisLabels: ['00', '06', '12', '18', '23'],
       chartNoteLeft: `高峰 ${String(peakH).padStart(2, '0')}:00 · ${cardTok(hourly[peakH] ?? 0)}`,
       chartNoteRight: `活跃 ${active} 小时`,
+      modelsTitle: '占今天',
       models: day.byModel
         .map(m => ({ label: modelLabel(m.model, m.vendor), pct: (m.tokens / (t.tokens || 1)) * 100 }))
         .filter(m => m.pct >= 0.05)
@@ -201,15 +220,17 @@ export function CardView(props: CardViewProps) {
         </span>
       </div>
       <div className="cardrow">
+        {props.kind !== 'today' && (
         <div className="cardcell">
           <div className="cardhead">
-            <span>范围 · 按天</span>
+            <span>{props.kind === 'all' ? '全期 · 按天' : '范围 · 按天'}</span>
             <button className="ghost" onClick={() => save(rangeRef, `atracker-${props.from}-${props.to}.png`)}>
               {saving ? '导出中…' : '保存这张'}
             </button>
           </div>
           <canvas ref={rangeRef} className="sharecanvas" />
         </div>
+        )}
         <div className="cardcell">
           <div className="cardhead">
             <span>今天 · 按小时</span>

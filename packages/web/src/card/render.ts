@@ -41,6 +41,8 @@ export interface CardData {
   chartNoteLeft: string;
   chartNoteRight: string;
   models: CardModelRow[];
+  /** TOP 模型右侧的说明，例如「占区间」「占今天」 */
+  modelsTitle: string;
   version: string;
 }
 
@@ -251,8 +253,9 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
 
   // 柱子
   const n = Math.max(1, data.bars.length);
-  const gap = n > 24 ? 6 : 9;
-  const bw = (CONTENT_W - gap * (n - 1)) / n;
+  // 柱子越多间隔越小，而且要保证每根至少 2px，否则会算出负宽度
+  const gap = n > 60 ? 0 : n > 30 ? 2 : n > 12 ? 4 : 9;
+  const bw = Math.max(2, (CONTENT_W - gap * (n - 1)) / n);
   const baseY = y + h.chart;
   for (let i = 0; i < n; i++) {
     const b = data.bars[i]!;
@@ -304,7 +307,7 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   ctx.letterSpacing = '0px';
   ctx.textAlign = 'right';
   ctx.fillStyle = C.muted;
-  ctx.fillText(data.chartTitle.indexOf('小时') >= 0 ? '占今天' : '占区间', x + CONTENT_W, y + 30);
+  ctx.fillText(data.modelsTitle, x + CONTENT_W, y + 30);
   ctx.textAlign = 'left';
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 3;

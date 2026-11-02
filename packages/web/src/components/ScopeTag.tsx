@@ -10,9 +10,11 @@ interface ScopeTagProps {
   month: string;
   onClear: () => void;
   onOpenDay: (day: string) => void;
+  onShare: () => void;
 }
 
-export function ScopeTag({ sel, month, onClear, onOpenDay }: ScopeTagProps) {
+export function ScopeTag(props: ScopeTagProps) {
+  const { sel, month, onClear, onOpenDay } = props;
   const meta = monthMeta(month);
 
   const days = !sel
@@ -45,6 +47,7 @@ export function ScopeTag({ sel, month, onClear, onOpenDay }: ScopeTagProps) {
       {sel && sel.a === sel.b && (
         <button className="go" onClick={() => onOpenDay(sel.a)}>查看这天的明细 →</button>
       )}
+      <button className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
     </div>
   );
 }
