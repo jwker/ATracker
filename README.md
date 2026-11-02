@@ -11,6 +11,10 @@
 
 ![总账页](docs/images/ledger.png)
 
+| 月度：日历与选区 | 分享卡片：一键导出 1080×1920 |
+| --- | --- |
+| ![月度页](docs/images/month.png) | ![分享卡片](docs/images/share-card.png) |
+
 ## 它解决什么问题
 
 同时用 codex、Claude Code、pi、opencode、DeepSeek Harness 的人会碰到同一件事：每个 agent 都把用量记在自己家目录里，彼此不通，加起来是多少没人知道。
