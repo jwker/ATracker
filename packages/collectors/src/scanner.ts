@@ -63,8 +63,11 @@ export async function runScan(
   let curSource = 'unknown';
   const affectedDays = new Set<string>();
   let filesScanned = 0;
-  /** 这一批真正解析过的文件路径。sessions() 和 scan() 会各问一次 shouldParse，用 Set 去重 */
-  const parsedPaths = new Set<string>();
+  /**
+   * 这一批「看过」的文件：不管指纹有没有变都算。
+   * sessions() 和 scan() 会各问一次 shouldParse，用 Set 去重。
+   */
+  const seenPaths = new Set<string>();
   let eventsRead = 0;
   let eventsWritten = 0;
   let errors = 0;
@@ -128,7 +131,7 @@ export async function runScan(
         return { parse: false, offset: 0, reason: '文件不存在' };
       }
       const mark = (r: { parse: boolean; offset: number; reason: string }) => {
-        if (r.parse) parsedPaths.add(path);
+        seenPaths.add(path);
         return r;
       };
       const cur = repo.getCursor(path);
@@ -220,8 +223,9 @@ export async function runScan(
     if (collected.length) eventsWritten += repo.upsertEvents(collected);
   }
 
-  // 「文件」这一列统计这一批解析过的文件数，和有没有写出新事件无关
-  filesScanned = parsedPaths.size;
+  // 「文件」这一列统计这一批看过多少文件，和有没有新事件无关。
+  // 以前只在写出事件时才 +1，没新数据的批次永远显示 0。
+  filesScanned = seenPaths.size;
 
   // 没有变化就不重算聚合
   if (affectedDays.size) repo.rebuildAggregates([...affectedDays]);

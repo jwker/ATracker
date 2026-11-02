@@ -11,6 +11,7 @@
 //
 // 口径：tokens.input 不含缓存，cache.read / cache.write 分开报。
 
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
@@ -104,11 +105,19 @@ export const opencodeCollector: Collector = {
 
   async *scan(ctx: ScanContext): AsyncGenerator<UsageEvent> {
     const file = this.roots()[0];
+    // 没装 opencode 的机器上这个文件不存在，那是正常状态，不该记成错误——
+    // 否则每次扫描都会在页面上留一条红字，把真正的问题淹掉。
+    if (!existsSync(file)) {
+      ctx.log('info', 'opencode', '数据库不存在（这个 agent 可能没装），跳过');
+      return;
+    }
+
     let db: DatabaseSync;
     try {
       db = new DatabaseSync(file, { readOnly: true });
     } catch (err) {
-      ctx.log('err', 'opencode', `打开数据库失败：${(err as Error).message}`);
+      // 文件在但打不开（被锁、权限不对）才是警告；opencode 正在写的时候可能短暂出现
+      ctx.log('warn', 'opencode', `打开数据库失败：${(err as Error).message}`);
       return;
     }
 
