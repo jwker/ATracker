@@ -6,3 +6,6 @@ packages/web/dist/
 
 # 桌面打包产物
 release/
+
+# 打包时生成的构建信息，不进版本库
+build/buildinfo.json
