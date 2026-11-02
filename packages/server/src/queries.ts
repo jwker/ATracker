@@ -333,8 +333,27 @@ export function conversationPayload(repo: Repo, id: string, limit = 200) {
 }
 
 export function logPayload(repo: Repo, filter: { batch?: number | null; level?: string | null; source?: string | null; q?: string | null }) {
+  const batches = repo.recentBatches(20);
+
+  // 每批的警告/错误数从 scan_log 现算，不能数「当前过滤后的日志列表」——
+  // 点了某一批之后接口只返回那一批的日志，别的批次会被数成 0。
+  const ids = batches.map((b: any) => b.id as number);
+  const counts = new Map<number, { warn: number; err: number }>();
+  if (ids.length) {
+    const rows = repo.db.prepare(
+      `SELECT batch_id, SUM(level = 'warn') warn, SUM(level = 'err') err
+       FROM scan_log WHERE batch_id IN (${ids.map(() => '?').join(',')})
+       GROUP BY batch_id`
+    ).all(...ids) as any[];
+    for (const r of rows) counts.set(r.batch_id, { warn: r.warn ?? 0, err: r.err ?? 0 });
+  }
+
   return {
-    batches: repo.recentBatches(20),
+    batches: batches.map((b: any) => ({
+      ...b,
+      warn: counts.get(b.id)?.warn ?? 0,
+      err: counts.get(b.id)?.err ?? 0
+    })),
     logs: repo.queryLogs({
       batch: filter.batch ?? undefined,
       level: filter.level ?? undefined,

@@ -63,6 +63,8 @@ export async function runScan(
   let curSource = 'unknown';
   const affectedDays = new Set<string>();
   let filesScanned = 0;
+  /** 这一批真正解析过的文件路径。sessions() 和 scan() 会各问一次 shouldParse，用 Set 去重 */
+  const parsedPaths = new Set<string>();
   let eventsRead = 0;
   let eventsWritten = 0;
   let errors = 0;
@@ -125,22 +127,26 @@ export async function runScan(
       } catch {
         return { parse: false, offset: 0, reason: '文件不存在' };
       }
+      const mark = (r: { parse: boolean; offset: number; reason: string }) => {
+        if (r.parse) parsedPaths.add(path);
+        return r;
+      };
       const cur = repo.getCursor(path);
-      if (!cur) return { parse: true, offset: 0, reason: '新文件' };
+      if (!cur) return mark({ parse: true, offset: 0, reason: '新文件' });
 
       // 解析规则变了，这个来源的文件全部重扫
-      if (cur.source !== curSource) return { parse: true, offset: 0, reason: '解析规则已更新' };
+      if (cur.source !== curSource) return mark({ parse: true, offset: 0, reason: '解析规则已更新' });
 
       // 指纹没变，整个文件跳过
       if (cur.size === st.size && cur.mtimeMs === Math.floor(st.mtimeMs) && cur.inode === st.ino) {
-        return { parse: false, offset: cur.offset, reason: '指纹未变' };
+        return mark({ parse: false, offset: cur.offset, reason: '指纹未变' });
       }
       // 文件被重写或替换了，从头读
       if (st.size < cur.size || cur.inode !== st.ino) {
-        return { parse: true, offset: 0, reason: '文件被重写' };
+        return mark({ parse: true, offset: 0, reason: '文件被重写' });
       }
       // 变大了：纯文本可以从上次偏移继续
-      return { parse: true, offset: cur.offset, reason: '文件变大' };
+      return mark({ parse: true, offset: cur.offset, reason: '文件变大' });
     },
 
     commitFile(path, offset, complete) {
@@ -211,11 +217,11 @@ export async function runScan(
       repo.log(batchId, Date.now(), 'err', collector.id, `采集失败：${(err as Error).message}`);
     }
 
-    if (collected.length) {
-      eventsWritten += repo.upsertEvents(collected);
-      filesScanned++;
-    }
+    if (collected.length) eventsWritten += repo.upsertEvents(collected);
   }
+
+  // 「文件」这一列统计这一批解析过的文件数，和有没有写出新事件无关
+  filesScanned = parsedPaths.size;
 
   // 没有变化就不重算聚合
   if (affectedDays.size) repo.rebuildAggregates([...affectedDays]);

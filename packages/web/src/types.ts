@@ -173,6 +173,9 @@ export interface ScanBatch {
   events_written: number;
   errors: number;
   trigger: string;
+  /** 这批里 warn / err 级别的日志条数（接口按 scan_log 聚合） */
+  warn?: number;
+  err?: number;
 }
 
 export interface ScanLog {

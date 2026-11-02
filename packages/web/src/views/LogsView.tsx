@@ -40,7 +40,6 @@ export function LogsView(props: LogsViewProps) {
   const [rescanning, setRescanning] = useState(false);
 
   const batches = logs.batches.map(b => {
-    const rows = logs.logs.filter(l => l.batch_id === b.id);
     const started = b.started_at ?? 0;
     return {
       id: b.id,
@@ -51,8 +50,9 @@ export function LogsView(props: LogsViewProps) {
       events: b.events_written ?? 0,
       dup: Math.max(0, (b.events_read ?? 0) - (b.events_written ?? 0)),
       skipped: Math.max(0, (b.files_total ?? 0) - (b.files_scanned ?? 0)),
-      warn: rows.filter(l => l.level === 'warn').length,
-      err: rows.filter(l => l.level === 'err').length
+      // 计数由接口按 scan_log 聚合好，和当前过滤条件无关
+      warn: b.warn ?? 0,
+      err: b.err ?? 0
     };
   });
 
