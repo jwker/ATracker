@@ -394,7 +394,7 @@ export function App() {
   useEffect(() => {
     if (view !== 'today') return;
     let alive = true;
-    api.day(dayDate)
+    api.day(dayDate, device)
       .then(data => {
         if (!alive) return;
         setDay(data);
@@ -404,7 +404,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, dayDate, refreshToken]);
+  }, [view, dayDate, refreshToken, device]);
 
   // 扫描完成后刷新所有数据
   useEffect(() => {
@@ -422,6 +422,8 @@ export function App() {
     } else if (view === 'month') {
       const path = month === currentMonth() ? '/month' : `/month/${month}`;
       navigate(path, [['from', sel?.a], ['to', sel?.b], ['device', deviceId]], { replace: true });
+    } else if (view === 'today') {
+      navigate(dayMatch ? `/today/${dayDate}` : '/today', [['device', deviceId]], { replace: true });
     } else {
       navigate(route.path, [['device', deviceId]], { replace: true });
     }
@@ -640,7 +642,7 @@ export function App() {
         onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
       />
       <div className="loadtrack">{refreshing && <i />}</div>
-      {(view === 'home' || view === 'month') && devices && (
+      {(view === 'home' || view === 'month' || view === 'today') && devices && (
         <DeviceStrip devices={devices} active={device} onSelect={selectDevice} />
       )}
       <div className={refreshing ? 'body is-refreshing' : 'body'}>{body}</div>

@@ -218,7 +218,8 @@ export interface DoctorPayload {
 /* ---------- 单日详情 ---------- */
 
 export interface DayTotals {
-  events: number;
+  /** 调用次数。远端设备只有聚合，没有次数，这里是 null */
+  events: number | null;
   tokens: number;
   buckets: TokenBuckets;
 }
@@ -258,6 +259,10 @@ export interface DayPayload {
   date: string;
   weekday: string;
   isToday: boolean;
+  /** local=本机，remote=别的设备，all=全部设备 */
+  scope: 'local' | 'remote' | 'all';
+  /** 能不能给出小时图和逐轮明细（只有含本机明细时才行） */
+  canDetail: boolean;
   cutoff: string;
   today: DayTotals;
   prev: DayTotals;

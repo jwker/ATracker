@@ -279,7 +279,9 @@ export class ATrackerServer {
       if (p === '/api/matrix') {
         return json(matrixPayload(this.repo, q.get('from'), q.get('to'), q.get('all') === '1', q.get('device') ?? undefined));
       }
-      if (p === '/api/day') return json(dayPayload(this.repo, q.get('date')));
+      if (p === '/api/day') {
+        return json(dayPayload(this.repo, q.get('date'), q.get('device') ?? undefined, this.device.id));
+      }
       if (p === '/api/conversations') {
         return json(conversationsPayload(this.repo, {
           dir: q.get('dir'), agent: q.get('agent'), model: q.get('model'),

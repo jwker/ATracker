@@ -307,10 +307,18 @@ export function logPayload(repo: Repo, filter: { batch?: number | null; level?: 
  * 单日详情。date 是本机时区的自然日，今天的数据截至此刻。
  * 和前一天比较时两边截到同一时刻，否则拿半天比一整天会夸大差距。
  */
-export function dayPayload(repo: Repo, dateQ?: string | null) {
+export function dayPayload(repo: Repo, dateQ?: string | null, device?: string, localDeviceId?: string) {
   const today = localDay(Date.now());
   const date = dateQ && /^\d{4}-\d{2}-\d{2}$/.test(dateQ) ? dateQ : today;
   const isToday = date === today;
+
+  // scope 决定这一页能给出多少东西：
+  //   local  —— 本机设备，和以前一样有小时图和逐轮明细
+  //   remote —— 别的设备，只有同步过来的聚合和会话汇总
+  //   all    —— 全部设备，合计是准的，但小时图和明细只有本机的份
+  const scope: 'local' | 'remote' | 'all' =
+    device === undefined ? 'all' : device === localDeviceId ? 'local' : 'remote';
+  const canDetail = scope !== 'remote';
 
   // 截止时刻。今天取现在，其他天取当天最后一条事件的时间。
   const lastTs = (repo.db.prepare(
@@ -322,7 +330,7 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
   const prevCutoff = cutoff - 86400000;
 
   const shape = (t: any) => ({
-    events: t.events,
+    events: t.events ?? null,
     tokens: t.tokens,
     buckets: {
       input: t.input,
@@ -333,9 +341,15 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
     }
   });
 
-  const bd = repo.breakdown(date, date);
+  // 本机走明细（有调用次数），全部/远端走聚合（次数未知，给 null）
+  const dayShape = (day: string, c?: number) => {
+    if (scope === 'local') return shape(repo.dayTotals(day, c));
+    return shape(repo.dayBuckets(day, device));
+  };
+
+  const bd = repo.breakdown(date, date, device);
   const colors = repo.dirColors();
-  const sessions = repo.daySessions(date);
+  const sessions = repo.sessionsOnDay(date, device);
   const titles = repo.sessionTitles();
   const sessionsPerDir = new Map<string, number>();
   for (const s of sessions) {
@@ -349,7 +363,7 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
   const rowTotal: Record<string, number> = {};
   const modelRows = new Map<string, { id: string; model: string; vendor: string | null; tokens: number }>();
   let maxCell = 1;
-  for (const row of repo.dayMatrix(date)) {
+  for (const row of repo.dayMatrix(date, device)) {
     if (!cells[row.agent]) cells[row.agent] = {};
     const key = modelKey(row.vendor, row.model);
     cells[row.agent][key] = row.tokens;
@@ -375,13 +389,15 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
     weekday: weekdayOf(date),
     isToday,
     cutoff: hourFmt.format(new Date(cutoff)),
-    today: shape(repo.dayTotals(date, cutoff)),
-    prev: shape(repo.dayTotals(prevDate, prevCutoff)),
-    prevFull: shape(repo.dayTotals(prevDate)),
-    hourly: repo.hourly(date).map((h: any) => ({
+    scope,
+    canDetail,
+    today: dayShape(date, cutoff),
+    prev: scope === 'local' ? shape(repo.dayTotals(prevDate, prevCutoff)) : shape(repo.dayBuckets(prevDate, device)),
+    prevFull: scope === 'local' ? shape(repo.dayTotals(prevDate)) : shape(repo.dayBuckets(prevDate, device)),
+    hourly: canDetail ? repo.hourly(date).map((h: any) => ({
       hour: h.hour, events: h.events, tokens: h.tokens
-    })),
-    byAgent: repo.byAgent(date, date).map((a: any) => ({
+    })) : [],
+    byAgent: repo.byAgent(date, date, device).map((a: any) => ({
       agent: a.agent, tokens: a.tokens
     })),
     byModel: bd.byModel.map((m: any) => ({
@@ -399,7 +415,8 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
       id: `${s.agent}:${s.session_id}`,
       agent: s.agent,
       sessionId: s.session_id,
-      title: titles.get(`${s.agent}:${s.session_id}`)?.title ?? null,
+      // 远端会话的标题在 session_usage 里，本机的在 session_title 里
+      title: s.title ?? titles.get(`${s.agent}:${s.session_id}`)?.title ?? null,
       dir: s.cwd,
       dirName: dirName(s.cwd),
       color: colors.get(s.cwd) ?? dirColor(s.cwd),
@@ -408,7 +425,7 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
       firstTs: s.first_ts,
       lastTs: s.last_ts
     })),
-    topCalls: repo.dayTopCalls(date, 8).map((e: any) => ({
+    topCalls: (canDetail ? repo.dayTopCalls(date, 8) : []).map((e: any) => ({
       ts: e.ts,
       time: hourFmt.format(new Date(e.ts)),
       agent: e.agent,
@@ -418,6 +435,6 @@ export function dayPayload(repo: Repo, dateQ?: string | null) {
       dirName: dirName(e.cwd),
       tokens: e.tokens
     })),
-    batches: repo.dayBatches(date)
+    batches: canDetail ? repo.dayBatches(date) : { count: 0, errors: 0, events_written: 0 }
   };
 }

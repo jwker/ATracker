@@ -51,6 +51,13 @@ export function TodayView(props: TodayViewProps) {
   return (
     <>
       <div className="sec" style={{ marginTop: 4 }}>
+        {day.scope !== 'local' && (
+          <div className="daynote">
+            {day.scope === 'remote'
+              ? '这台设备只同步了汇总：小时图、逐轮明细、扫描记录都只有本机才有。'
+              : '合计包含所有设备；小时图和「最大的几次调用」只有本机的明细。'}
+          </div>
+        )}
         <div className="daybar">
           <button className="ghost" onClick={props.onPrevDay}>前一天</button>
           <button className="ghost" onClick={props.onNextDay}>后一天</button>
@@ -64,7 +71,7 @@ export function TodayView(props: TodayViewProps) {
             <div className="lab">当日 TOKENS / {day.isToday ? '今天' : day.date}</div>
             <div className="val">{tok(t.tokens)}</div>
             <div className="tiny">
-              {t.events} 次调用 / 四桶合计
+              {t.events === null ? '四桶合计' : `${t.events} 次调用 / 四桶合计`}
             </div>
           </div>
           <div className="side">
@@ -159,6 +166,7 @@ export function TodayView(props: TodayViewProps) {
         </table>
       </div>
 
+      {props.day.canDetail && (
       <div className="sec">
         <div className="sec-h">
           <b>一天之内</b>
@@ -187,6 +195,7 @@ export function TodayView(props: TodayViewProps) {
           <span>{peak.events} 次调用</span>
         </div>
       </div>
+      )}
 
       <div className="sec">
         <div className="sec-h">
@@ -291,6 +300,7 @@ export function TodayView(props: TodayViewProps) {
         )}
       </div>
 
+      {props.day.canDetail && (
       <div className="sec">
         <div className="sec-h">
           <b>最大的几次调用</b>
@@ -320,7 +330,9 @@ export function TodayView(props: TodayViewProps) {
           </tbody>
         </table>
       </div>
+      )}
 
+      {props.day.canDetail && (
       <div className="sec">
         <div className="sec-h">
           <b>采集状态</b>
@@ -342,11 +354,12 @@ export function TodayView(props: TodayViewProps) {
             </tr>
             <tr>
               <td className="l">子 agent 用量</td>
-              <td>{day.today.events > 0 ? fmtTok(t.buckets.reasoning, unit) + ' 推理 token' : '无'}</td>
+              <td>{(day.today.events ?? 0) > 0 ? fmtTok(t.buckets.reasoning, unit) + ' 推理 token' : '无'}</td>
             </tr>
           </tbody>
         </table>
       </div>
+      )}
     </>
   );
 }

@@ -36,7 +36,7 @@ export const api = {
   matrix: (from: string, to: string, device?: string | null) =>
     request<MatrixPayload>('/api/matrix', { from, to, device }),
   matrixAll: (device?: string | null) => request<MatrixPayload>('/api/matrix', { all: 1, device }),
-  day: (date: string) => request<DayPayload>('/api/day', { date }),
+  day: (date: string, device?: string | null) => request<DayPayload>('/api/day', { date, device }),
   conversations: (filter: {
     dir?: string | null;
     agent?: string | null;

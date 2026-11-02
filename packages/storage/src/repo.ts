@@ -582,6 +582,59 @@ export class Repo {
     };
   }
 
+  /**
+   * 某天（或某设备）的四桶，读聚合表。远端设备只有聚合，没有调用次数，
+   * 所以这里不返回 events。
+   */
+  dayBuckets(day: string, device?: string): {
+    input: number; output: number; cacheRead: number; cacheWrite: number; reasoning: number; tokens: number;
+  } {
+    const dev = device ? ' AND device = ?' : '';
+    const r = this.db.prepare(
+      `SELECT COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
+              COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
+              COALESCE(SUM(reasoning),0) reasoning, COALESCE(SUM(tokens),0) tokens
+       FROM agg_day_agent WHERE day = ?${dev}`
+    ).get(day, ...(device ? [device] : [])) as any;
+    return {
+      input: r.input, output: r.output, cacheRead: r.cache_read,
+      cacheWrite: r.cache_write, reasoning: r.reasoning, tokens: r.tokens
+    };
+  }
+
+  /**
+   * 某一天的会话列表，本机和远端合在一起。
+   * 本机从明细汇总，远端只有 session_usage 里的会话汇总（按首末时间判断是否落在这一天）。
+   */
+  sessionsOnDay(day: string, device?: string): any[] {
+    const dayStart = Date.parse(`${day}T00:00:00+08:00`);
+    const dayEnd = dayStart + 86400000 - 1;
+    const devFilter = device ? ' AND device = ?' : '';
+    const args = device ? [device] : [];
+
+    return this.db.prepare(
+      `SELECT * FROM (
+         SELECT e.device, e.agent, e.session_id, MIN(e.cwd) cwd, COUNT(*) events,
+                SUM(e.input_tokens + e.output_tokens + e.cache_read_tokens + e.cache_write_tokens) tokens,
+                MIN(e.ts) first_ts, MAX(e.ts) last_ts, NULL AS title, 'local' AS src
+         FROM usage_event e
+         WHERE e.local_day = ?${devFilter}
+         GROUP BY e.device, e.agent, e.session_id
+
+         UNION ALL
+
+         SELECT s.device, s.agent, s.session_id, s.dir AS cwd, s.events, s.tokens,
+                s.first_ts, s.last_ts, s.title, 'remote' AS src
+         FROM session_usage s
+         WHERE s.device != '' AND s.first_ts <= ? AND s.last_ts >= ?
+           AND NOT EXISTS (
+             SELECT 1 FROM usage_event e2
+             WHERE e2.device = s.device AND e2.agent = s.agent AND e2.session_id = s.session_id
+           )${device ? ' AND s.device = ?' : ''}
+       ) ORDER BY tokens DESC`
+    ).all(day, ...args, dayEnd, dayStart, ...args);
+  }
+
   /** 某一天按小时的用量。小时按本机时区折算。 */
   hourly(day: string): any[] {
     return this.db.prepare(
@@ -594,12 +647,13 @@ export class Repo {
   }
 
   /** 某一天的来源 × 模型交叉表。 */
-  dayMatrix(day: string): any[] {
+  dayMatrix(day: string, device?: string): any[] {
+    const dev = device ? ' AND device = ?' : '';
     return this.db.prepare(
       `SELECT agent, model, vendor, SUM(tokens) tokens
-       FROM agg_day_agent_model WHERE day = ?
+       FROM agg_day_agent_model WHERE day = ?${dev}
        GROUP BY agent, model, vendor`
-    ).all(day);
+    ).all(day, ...(device ? [device] : []));
   }
 
   /** 某一天的会话列表，按 token 降序。 */
