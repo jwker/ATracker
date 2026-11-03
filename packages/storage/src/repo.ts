@@ -338,6 +338,24 @@ export class Repo {
 
   /* ---------- 目录配色 ---------- */
 
+  /**
+   * 用量出现过的目录。给了天数就只取那几天的，不给就取全部。
+   *
+   * 扫描每轮都会调这个函数，全表 SELECT DISTINCT 在事件表涨到几十万行之后
+   * 就是主要的开销，而大多数轮次其实只涉及一两天。
+   */
+  dirsOf(days?: string[]): string[] {
+    if (days?.length) {
+      const ph = days.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT DISTINCT cwd FROM usage_event WHERE local_day IN (${ph})`
+      ).all(...days) as any[];
+      return rows.map(r => r.cwd as string);
+    }
+    const rows = this.db.prepare('SELECT DISTINCT cwd FROM usage_event').all() as any[];
+    return rows.map(r => r.cwd as string);
+  }
+
   dirColors(): Map<string, string> {
     const rows = this.db.prepare('SELECT path, color FROM dir_color').all() as any[];
     return new Map(rows.map(r => [r.path, r.color]));

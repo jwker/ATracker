@@ -21,6 +21,12 @@
     --t0:#ecebe4; --t1:#c9c8bf; --t2:#a3a29a; --t3:#7f7e76; --t4:#5e5d57; --t5:#45453f;
   }
   * { box-sizing: border-box; }
+
+  /* 键盘焦点要看得见。输入框原来写了 outline: none，键盘用户就找不到焦点了。 */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
   html, body { margin: 0; min-height: 100%; }
   body {
     background: var(--desk);
@@ -71,6 +77,21 @@
   .sharebtn { margin-left: auto; background: none; border: 0; padding: 0; color: var(--accent); font-size: 9px; letter-spacing: .06em; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .sharebtn:hover { color: var(--ink); }
 
+  /* 目录条形列表里的行现在是真按钮，按钮的默认样式要复位 */
+  .bars button.row {
+    display: block; width: 100%; border: 0; background: transparent;
+    color: inherit; font: inherit; text-align: left; padding: 0; cursor: pointer;
+  }
+
+  /* 出错时的兜底页面 */
+  .crash { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .crashcard {
+    background: var(--paper); border: 1px solid var(--ink); padding: 24px 28px;
+    max-width: 520px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .crashcard h1 { margin: 0; font-size: 18px; letter-spacing: .04em; }
+  .crashcard .errmsg { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--accent); word-break: break-all; }
+
   /* 分享卡片弹窗 */
   .sharemask {
     position: fixed; inset: 0; background: #00000059; z-index: 50;
@@ -108,7 +129,7 @@
   .sync .devrow .act { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 9px; }
   .sync .devrow .act:hover { color: var(--accent); }
   .sync .devrow .act:disabled { opacity: .5; cursor: default; }
-  .sync .renameinput { border: 0; border-bottom: 1px solid var(--ink); background: transparent; font: inherit; font-size: 9.5px; padding: 0 2px; width: 60%; outline: none; }
+  .sync .renameinput { border: 0; border-bottom: 1px solid var(--ink); background: transparent; font: inherit; font-size: 9.5px; padding: 0 2px; width: 60%; }
   .sync .note { font-size: 9px; color: var(--muted); line-height: 1.75; }
 
   /* 今日页的口径提示：不是纯本机时说明哪部分数据缺失 */
@@ -238,7 +259,7 @@
   .filterline { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 7px 0; font-size: 9px; color: var(--muted); }
   .pill { border: 1px solid var(--rule); padding: 0 5px; font-size: 8.5px; color: var(--ink); }
   .clear { background: none; border: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 9px; padding: 0; }
-  .search { width: 100%; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 6px 2px; outline: none; font-size: 10.5px; }
+  .search { width: 100%; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 6px 2px; font-size: 10.5px; }
   .search:focus { border-bottom-color: var(--accent); }
   .detail-title { font-size: 19px; line-height: 1.35; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 3px; }
   .detail-meta { font-size: 9.5px; color: var(--muted); }

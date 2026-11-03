@@ -36,7 +36,7 @@ export function LedgerView(props: LedgerViewProps) {
           {props.deviceName ? `${props.deviceName} · ` : ''}
           {total.firstDay ? `覆盖 ${total.days} 天 · ${total.firstDay} → ${total.lastDay}` : '还没有记录'}
         </span>
-        <button className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
+        <button type="button" className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
       </div>
 
       <div className="total-line">

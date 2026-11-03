@@ -60,13 +60,13 @@ export function TodayView(props: TodayViewProps) {
           </div>
         )}
         <div className="daybar">
-          <button className="ghost" onClick={props.onPrevDay}>前一天</button>
-          <button className="ghost" onClick={props.onNextDay}>后一天</button>
-          <button className="ghost" onClick={props.onToday}>今天</button>
+          <button type="button" className="ghost" onClick={props.onPrevDay}>前一天</button>
+          <button type="button" className="ghost" onClick={props.onNextDay}>后一天</button>
+          <button type="button" className="ghost" onClick={props.onToday}>今天</button>
           <span className="scope">
             {day.date} {day.weekday} / 截至 {day.cutoff}
           </span>
-          <button className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
+          <button type="button" className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
         </div>
         <div className="total-line">
           <div>

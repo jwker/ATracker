@@ -118,7 +118,7 @@ export function SyncPanel({ sync, onChanged }: SyncPanelProps) {
           <span className="v">{d.tokens !== undefined ? fmtTok(d.tokens, 'zh') : ''}</span>
           <span className="v">{when(d.last_seen)}</span>
           {d.local && renaming !== d.id && (
-            <button
+            <button type="button"
               className="act"
               onClick={() => { setRenaming(d.id); setDraft(d.name); }}
             >
@@ -126,7 +126,7 @@ export function SyncPanel({ sync, onChanged }: SyncPanelProps) {
             </button>
           )}
           {!d.local && !d.ignored && (
-            <button
+            <button type="button"
               className="act"
               disabled={busy === d.id}
               onClick={() => void run(d.id, () => api.ignoreDevice(d.id))}
@@ -135,7 +135,7 @@ export function SyncPanel({ sync, onChanged }: SyncPanelProps) {
             </button>
           )}
           {!d.local && !!d.ignored && (
-            <button
+            <button type="button"
               className="act"
               disabled={busy === d.id}
               onClick={() => void run(d.id, () => api.restoreDevice(d.id))}

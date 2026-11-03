@@ -23,12 +23,12 @@ export function DirBars({ dirs, total, unit, onOpenDir }: DirBarsProps) {
   return (
     <div className="bars">
       {keep.map(d => (
-        <div
+        <button
+          type="button"
           className="row"
           key={d.path}
           data-dir={d.path}
           onClick={() => onOpenDir(d.path)}
-          style={{ cursor: 'pointer' }}
         >
           <div className="top">
             <span>
@@ -48,7 +48,7 @@ export function DirBars({ dirs, total, unit, onOpenDir }: DirBarsProps) {
               }}
             />
           </div>
-        </div>
+        </button>
       ))}
       {rest.length > 0 && (
         <div className="row">

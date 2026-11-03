@@ -17,7 +17,7 @@ export function DeviceStrip({ devices, active, onSelect }: DeviceStripProps) {
 
   return (
     <div className="devstrip">
-      <button
+      <button type="button"
         className={'chip' + (active === null ? ' on' : '')}
         onClick={() => onSelect(null)}
         aria-pressed={active === null}
@@ -25,7 +25,7 @@ export function DeviceStrip({ devices, active, onSelect }: DeviceStripProps) {
         全部设备
       </button>
       {visible.map(d => (
-        <button
+        <button type="button"
           key={d.id}
           className={'chip' + (active === d.id ? ' on' : '')}
           onClick={() => onSelect(d.id)}

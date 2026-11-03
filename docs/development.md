@@ -51,6 +51,7 @@ packages/
 npm run scan         # 扫一次本机日志
 npm run stats        # 打印累计用量
 npm run typecheck    # 服务端和前端各跑一遍 tsc
+npm test             # 跑单元测试（Node 自带的 test runner，不引依赖）
 npm run serve        # 构建前端并起服务，默认 http://127.0.0.1:4178
 npm run dev:web      # 只起 Vite 开发服务器，/api 代理到 4178
 ```
@@ -85,4 +86,12 @@ npm run dev:web      # 只起 Vite 开发服务器，/api 代理到 4178
 
 ## 测试
 
-`npm run typecheck` 是 CI 会跑的硬门槛。采集器部分靠 `reconcile` 对账：拿各来源自己在日志末尾写的汇总，和采集出来的结果逐项比。改采集逻辑之后一定要跑一遍，不一致就说明口径错了。
+`npm run typecheck` 和 `npm test` 是 CI 会跑的硬门槛。
+
+测试用 Node 自带的 `node --test`，不引测试框架。采集游标的那几个用例在
+`packages/collectors/src/scanner.test.ts`，覆盖的是「文件被追加、内容被改写、
+行写到一半」这几种情况——游标推进方式不对，内容不是延迟一轮读到，是再也读不到，
+所以这几个用例要钉住。
+
+采集器部分靠 `reconcile` 对账：拿各来源自己在日志末尾写的汇总，和采集出来的
+结果逐项比。改采集逻辑之后一定要跑一遍，不一致就说明口径错了。

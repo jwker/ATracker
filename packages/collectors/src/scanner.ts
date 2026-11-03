@@ -7,8 +7,9 @@ import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 
 import type { DeviceInfo } from '../../core/src/device.ts';
-import type { Collector, ScanContext, LogLevel } from './types.ts';
+import type { Collector, ScanContext, LogLevel, SessionMeta } from './types.ts';
 import type { UsageEvent } from '../../core/src/types.ts';
+import type { StoredEvent } from '../../storage/src/repo.ts';
 import { resolveVendor } from '../../core/src/catalog.ts';
 import { assignColors } from '../../core/src/palette.ts';
 import { localDay, localMonth } from '../../core/src/time.ts';
@@ -72,6 +73,8 @@ export async function runScan(
   let eventsRead = 0;
   let eventsWritten = 0;
   let errors = 0;
+  /** 目录枚举失败的个数。 */
+  let dirErrors = 0;
 
   const ctx: ScanContext = {
     async files(root, filter) {
@@ -80,7 +83,11 @@ export async function runScan(
         let entries;
         try {
           entries = await readdir(dir, { withFileTypes: true });
-        } catch {
+        } catch (err) {
+          // 目录读不到（权限、正在被删、软链接断了）不能当成「这里没有文件」。
+          // 静默吞掉的话，缺数据很难排查。
+          repo.log(batchId, Date.now(), 'warn', curSource, `目录读不到：${dir}（${(err as Error).message}）`);
+          dirErrors++;
           return;
         }
         for (const e of entries) {
@@ -218,18 +225,21 @@ export async function runScan(
     // 会话元信息要先读。scan 跑完会把文件游标推进到新位置，
     // 之后同一个文件再问 shouldParse 就是「指纹没变」，元信息会被整个跳过。
     if (collector.sessions) {
-      const sessionRows: any[] = [];
+      const sessionRows: SessionMeta[] = [];
       try {
         for await (const meta of collector.sessions(ctx)) {
           sessionRows.push(meta);
         }
       } catch (err) {
+        // 这条路的元信息是缺的，要计入错误数，否则批次摘要显示「全部成功」，
+        // 实际有一路的会话标题没拿到。
+        errors++;
         repo.log(batchId, Date.now(), 'warn', collector.id, `会话信息读取失败：${(err as Error).message}`);
       }
       if (sessionRows.length) repo.upsertSessions(sessionRows.map(r => ({ ...r, device: device.id })));
     }
 
-    const collected: any[] = [];
+    const collected: StoredEvent[] = [];
     try {
       for await (const ev of collector.scan(ctx)) {
         eventsRead++;
@@ -267,22 +277,32 @@ export async function runScan(
   // 「文件」这一列统计这一批看过多少文件，和有没有新事件无关。
   // 以前只在写出事件时才 +1，没新数据的批次永远显示 0。
   filesScanned = seenPaths.size;
+  errors += dirErrors;
 
-  // 没有变化就不重算聚合
-  if (affectedDays.size) repo.rebuildAggregates([...affectedDays]);
+  // 收尾的几步放进 try/finally：任何一处抛错都要保证 finishBatch 被调用，
+  // 否则 scan_batch 里会留下一条永远「在跑」的批次。
+  try {
+    // 没有变化就不重算聚合
+    if (affectedDays.size) repo.rebuildAggregates([...affectedDays]);
 
-  // 给这批出现的目录分配颜色，已经有的保持不变
-  const paths = repo.db.prepare('SELECT DISTINCT cwd FROM usage_event').all().map((r: any) => r.cwd);
-  const assigned = assignColors(repo.dirColors(), paths);
-  repo.setDirColors(assigned);
-  repo.finishBatch(batchId, {
-    finishedAt: Date.now(),
-    filesTotal: filesScanned,
-    filesScanned,
-    eventsRead,
-    eventsWritten,
-    errors
-  });
+    // 给这批出现的目录分配颜色，已经有的保持不变。
+    // 只看这批涉及的目录，不扫全表。
+    const paths = repo.dirsOf(affectedDays.size ? [...affectedDays] : undefined);
+    const assigned = assignColors(repo.dirColors(), paths);
+    repo.setDirColors(assigned);
+  } catch (err) {
+    errors++;
+    repo.log(batchId, Date.now(), 'err', curSource, `收尾失败：${(err as Error).message}`);
+  } finally {
+    repo.finishBatch(batchId, {
+      finishedAt: Date.now(),
+      filesTotal: filesScanned,
+      filesScanned,
+      eventsRead,
+      eventsWritten,
+      errors
+    });
+  }
 
   return { batchId, filesScanned, eventsRead, eventsWritten, errors, days: [...affectedDays] };
 }

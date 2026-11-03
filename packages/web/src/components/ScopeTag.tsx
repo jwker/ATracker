@@ -42,12 +42,12 @@ export function ScopeTag(props: ScopeTagProps) {
           ))}
         </span>
         <span className="scope-badge">{days} 天</span>
-        {sel && <button className="scope-x" onClick={onClear}>清除</button>}
+        {sel && <button type="button" className="scope-x" onClick={onClear}>清除</button>}
       </span>
       {sel && sel.a === sel.b && (
-        <button className="go" onClick={() => onOpenDay(sel.a)}>查看这天的明细 →</button>
+        <button type="button" className="go" onClick={() => onOpenDay(sel.a)}>查看这天的明细 →</button>
       )}
-      <button className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
+      <button type="button" className="sharebtn" onClick={props.onShare}>分享卡片 →</button>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 export type View = 'home' | 'month' | 'today' | 'conv' | 'log' | 'card';
-export type Unit = 'zh' | 'abbr' | 'full';
+import type { UnitId } from '../../core/src/units.ts';
+
+export type Unit = UnitId;
 export type Theme = 'light' | 'dark';
 
 export interface Selection {

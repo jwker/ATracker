@@ -1,42 +1,9 @@
-// 显示层格式化。口径与 packages/core/src/units.ts、time.ts 保持一致。
-// 数字换算只在这里做，组件不自己拼单位。
+// 显示层格式化。数字换算直接用 core 的 units.ts，不在这里再写一份——
+// 两份实现迟早会漂移，漂移的表现是同一个数字在两个页面显示得不一样。
 
 import type { Unit } from './state.ts';
 
-export const UNITS: { id: Unit; label: string }[] = [
-  { id: 'zh', label: '中文' },
-  { id: 'abbr', label: '缩写' },
-  { id: 'full', label: '千分位' }
-];
-
-export function zh(n: number): string {
-  const a = Math.abs(n);
-  if (a >= 1e8) return (n / 1e8).toFixed(2) + ' 亿';
-  if (a >= 1e4) return (n / 1e4).toFixed(1) + ' 万';
-  return Math.round(n).toLocaleString('en-US');
-}
-
-export function abbr(n: number): string {
-  const a = Math.abs(n);
-  if (a >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-  if (a >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (a >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(Math.round(n));
-}
-
-export function full(n: number): string {
-  return Math.round(n).toLocaleString('en-US');
-}
-
-export function fmtTok(n: number, unit: Unit): string {
-  if (unit === 'abbr') return abbr(n);
-  if (unit === 'full') return full(n);
-  return zh(n);
-}
-
-export function fmtPct(ratio: number): string {
-  return (ratio * 100).toFixed(1) + '%';
-}
+export { UNITS, zh, abbr, full, fmtTok, fmtPct } from '../../core/src/units.ts';
 
 /**
  * 模型的显示名：厂商/模型。

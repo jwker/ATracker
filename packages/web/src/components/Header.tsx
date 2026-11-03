@@ -34,7 +34,7 @@ export function Header(props: HeaderProps) {
       </div>
       <div className="navrow">
         {VIEWS.map(v => (
-          <button
+          <button type="button"
             key={v.id}
             data-nav={v.id}
             className="tab"
@@ -47,7 +47,7 @@ export function Header(props: HeaderProps) {
         <span className="sp" />
         <div className="unit">
           {UNITS.map(u => (
-            <button
+            <button type="button"
               key={u.id}
               data-unit={u.id}
               onClick={() => props.onUnit(u.id)}
@@ -57,7 +57,7 @@ export function Header(props: HeaderProps) {
             </button>
           ))}
         </div>
-        <button className="ghost" onClick={props.onToggleTheme}>
+        <button type="button" className="ghost" onClick={props.onToggleTheme}>
           {props.theme === 'light' ? '夜间小票' : '日间小票'}
         </button>
       </div>

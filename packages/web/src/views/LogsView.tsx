@@ -136,7 +136,7 @@ export function LogsView(props: LogsViewProps) {
         <div className="f-label">级别</div>
         <div className="chips">
           {LEVELS.map(l => (
-            <button
+            <button type="button"
               key={l.id}
               className="chip"
               data-lvl={l.id}
@@ -150,7 +150,7 @@ export function LogsView(props: LogsViewProps) {
         <div className="f-label">来源</div>
         <div className="chips">
           {srcs.map(x => (
-            <button
+            <button type="button"
               key={x}
               className="chip"
               data-src={x}
@@ -168,8 +168,8 @@ export function LogsView(props: LogsViewProps) {
           onChange={e => props.onFilter({ q: e.target.value })}
         />
         <div style={{ marginTop: 8 }}>
-          <button className="ghost" onClick={props.onClear}>清除筛选</button>{' '}
-          <button className="ghost" onClick={rescan}>
+          <button type="button" className="ghost" onClick={props.onClear}>清除筛选</button>{' '}
+          <button type="button" className="ghost" onClick={rescan}>
             {rescanning ? '已触发 / 排队中' : '重新扫描'}
           </button>
         </div>

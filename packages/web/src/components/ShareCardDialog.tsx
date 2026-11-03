@@ -87,10 +87,10 @@ export function ShareCardDialog({ target, onClose }: { target: ShareTarget; onCl
           <span>{TITLES[target.kind]}</span>
           <span className="muted">1080 × 1920</span>
           <span className="sp" />
-          <button className="ghost" onClick={save} disabled={!data}>
+          <button type="button" className="ghost" onClick={save} disabled={!data}>
             {saving ? '导出中…' : '保存图片'}
           </button>
-          <button className="ghost" onClick={onClose}>关闭</button>
+          <button type="button" className="ghost" onClick={onClose}>关闭</button>
         </div>
         {error ? (
           <div className="placeholder">生成失败：{error}</div>

@@ -129,7 +129,7 @@ function FirstRun() {
         扫描器只读各 agent 的本地日志，不加钩子、不改 agent 行为。
       </div>
       <div className="placeholder">
-        <button className="ghost" onClick={() => api.scan()}>重新扫描</button>
+        <button type="button" className="ghost" onClick={() => api.scan()}>重新扫描</button>
         <div style={{ marginTop: 10 }}>
           各来源是否可读：<b>node packages/cli/src/index.ts doctor</b>
         </div>

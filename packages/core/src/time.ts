@@ -11,31 +11,39 @@ export const TIME_ZONE = TZ;
  */
 export const TZ_SQL_OFFSET = "'+8 hours'";
 
+/**
+ * 格式化器只建一次。
+ *
+ * Intl.DateTimeFormat 的构造比格式化本身还贵，localDay 每条事件都要调一次，
+ * 每次新建一个格式化器在事件量大的时候是明显的开销。
+ */
+const dayFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit'
+});
+const timeFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false
+});
+const monthFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit'
+});
+
 /** 本机时区下的 YYYY-MM-DD。 */
 export function localDay(ts: number): string {
-  const d = new Date(ts);
-  // 取本机时区（这里用固定的 Asia/Shanghai，和配置一致）。
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date(ts));
+  const parts = dayFmt.formatToParts(new Date(ts));
   const get = (t: string) => parts.find(p => p.type === t)!.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 /** 本机时区下的 HH:MM。 */
 export function localTime(ts: number): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false
-  }).formatToParts(new Date(ts));
+  const parts = timeFmt.formatToParts(new Date(ts));
   const get = (t: string) => parts.find(p => p.type === t)!.value;
   return `${get('hour')}:${get('minute')}`;
 }
 
 /** 本机时区下的 YYYY 年 M 月。 */
 export function localMonth(ts: number): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit'
-  }).formatToParts(new Date(ts));
+  const parts = monthFmt.formatToParts(new Date(ts));
   const get = (t: string) => parts.find(p => p.type === t)!.value;
   return `${get('year')} 年 ${Number(get('month'))} 月`;
 }

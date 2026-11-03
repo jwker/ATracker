@@ -48,7 +48,7 @@ export function ConversationsView(props: ConversationsViewProps) {
       {filter.agent && <span className="pill">{filter.agent}</span>}
       {filter.model && <span className="pill">{modelLabel(filter.model, filter.vendor)}</span>}
       {(filter.agent || filter.model) && (
-        <button className="clear" onClick={props.onClear}>清除筛选</button>
+        <button type="button" className="clear" onClick={props.onClear}>清除筛选</button>
       )}
     </div>
   );
@@ -56,7 +56,7 @@ export function ConversationsView(props: ConversationsViewProps) {
   // 一级菜单：目录
   const dirLevel = (
     <div className="dirlvl">
-      <button
+      <button type="button"
         className={'d' + (props.dirPath === null ? ' on' : '')}
         onClick={() => props.onSelectDir(null)}
       >
@@ -66,7 +66,7 @@ export function ConversationsView(props: ConversationsViewProps) {
       </button>
       {groups.map(g => {
         return (
-          <button
+          <button type="button"
             key={g.dir.path}
             className={'d' + (g.dir.path === props.dirPath ? ' on' : '')}
             onClick={() => props.onSelectDir(g.dir.path)}
@@ -106,7 +106,7 @@ export function ConversationsView(props: ConversationsViewProps) {
       </div>
       <div className="pick">
         {list.map(cv => (
-          <button
+          <button type="button"
             key={cv.id}
             className="stub"
             data-cv={cv.id}
@@ -165,7 +165,7 @@ export function ConversationsView(props: ConversationsViewProps) {
       </div>
       <div style={{ marginTop: 8 }}>
         {date !== '—' && (
-          <button className="ghost" onClick={() => props.onGoDay(date)}>
+          <button type="button" className="ghost" onClick={() => props.onGoDay(date)}>
             在日历中查看这天
           </button>
         )}

@@ -5,9 +5,19 @@ on:
     branches: [main]
   pull_request:
 
+# 只读代码就够。PR（包括来自 fork 的不可信代码）会在这个工作流里跑，
+# 令牌权限越小越安全。
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,4 +26,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build:web

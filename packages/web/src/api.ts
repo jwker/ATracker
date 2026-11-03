@@ -15,6 +15,9 @@ import type {
   TotalPayload
 } from './types.ts';
 
+/** 请求超时。服务端卡住时页面不能一直转圈。 */
+const TIMEOUT_MS = 15_000;
+
 async function request<T>(
   path: string,
   params?: Record<string, string | number | null | undefined>
@@ -23,8 +26,28 @@ async function request<T>(
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== null && v !== undefined && v !== '') url.searchParams.set(k, String(v));
   }
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${path} ${res.status}`);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: ctrl.signal });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw new Error(`${path} 请求超时`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    // 服务端有时会用 200 返回 { error }，那种要单独挑出来。
+    let msg = `${path} ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body.error === 'string') msg = body.error;
+    } catch {
+      // 响应不是 JSON，用状态码
+    }
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
