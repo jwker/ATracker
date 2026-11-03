@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
 import { parseRecord, parseTimestamp } from '../parse.ts';
+import { eventId } from '../../../core/src/types.ts';
 
 /** 从文件名取版本号：session.v4.jsonl.zstd → 4，session.jsonl.zstd → 0。 */
 function versionOf(name: string): number {
@@ -79,7 +80,7 @@ export const dshCollector: Collector = {
         }
 
         yield {
-          eventId: `dsh:${sessionId}:${rec.seq ?? read}`,
+          eventId: eventId('dsh', sessionId, rec.seq ?? read),
           agent: 'dsh',
           sessionId,
           parentSessionId: null,

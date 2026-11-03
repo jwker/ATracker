@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
 import { parseRecord, parseTimestamp } from '../parse.ts';
+import { eventId } from '../../../core/src/types.ts';
 
 export const claudeCodeCollector: Collector = {
   id: 'claude-code',
@@ -61,8 +62,15 @@ export const claudeCodeCollector: Collector = {
         const sessionId = rec.sessionId ?? rec.session_id ?? '';
         const isChild = rec.isSidechain === true || isSub;
 
-        // 同一条消息的多行只算一次
-        const messageId = msg.id ?? rec.uuid ?? `${sessionId}:${read}`;
+        // 同一条消息的多行只算一次。
+        // message.id 和 uuid 都是内容里的稳定标识，两个都缺就跳过这条：
+        // 用扫描序号兜底的话，断点续扫之后同一个事件会拿到不同的 id，
+        // 库里就会多出一份。
+        const messageId = msg.id ?? rec.uuid;
+        if (!messageId) {
+          ctx.log('warn', 'claude-code', `一条记录没有 message.id，已跳过（会话 ${sessionId}）`);
+          continue;
+        }
         const key = `${sessionId}:${messageId}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -75,7 +83,7 @@ export const claudeCodeCollector: Collector = {
         }
 
         yield {
-          eventId: `claude-code:${key}`,
+          eventId: eventId('claude-code', key),
           agent: 'claude-code',
           sessionId,
           parentSessionId: isChild ? sessionId : null,

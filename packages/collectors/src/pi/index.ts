@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
 import { parseRecord, parseTimestamp } from '../parse.ts';
+import { eventId } from '../../../core/src/types.ts';
 
 /**
  * 读会话头。cwd 和会话 id 只写在文件第一行的 session 记录里，
@@ -83,8 +84,16 @@ export const piCollector: Collector = {
           continue;
         }
 
+        // 没有稳定 id 就跳过这条。库里 event_id 是主键，靠它去重；
+        // 用扫描序号兜底的话，断点续扫之后同一个事件会拿到不同的 id，
+        // 库里就会多出一份，token 直接翻倍。
+        if (!rec.id) {
+          ctx.log('warn', 'pi', `一条记录没有 id，已跳过（会话 ${sessionId}）`);
+          continue;
+        }
+
         yield {
-          eventId: `pi:${rec.id ?? `${sessionId}:${read}`}`,
+          eventId: eventId('pi', rec.id),
           agent: 'pi',
           sessionId,
           parentSessionId: null,

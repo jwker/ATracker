@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
 import { parseRecord, parseTimestamp } from '../parse.ts';
+import { eventId } from '../../../core/src/types.ts';
 
 interface CodexUsage {
   input_tokens?: number;
@@ -99,7 +100,7 @@ export const codexCollector: Collector = {
         }
 
         yield {
-          eventId: `codex:${sessionId}:${ordinal}`,
+          eventId: eventId('codex', sessionId, ordinal),
           agent: 'codex',
           sessionId,
           parentSessionId: null,

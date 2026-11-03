@@ -18,6 +18,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
 import { parseRecord, parseTimestamp } from '../parse.ts';
+import { eventId } from '../../../core/src/types.ts';
 
 interface OpencodeSession {
   id: string;
@@ -169,7 +170,7 @@ export const opencodeCollector: Collector = {
           perSession.set(row.session_id, acc);
 
           yield {
-            eventId: `opencode:${row.id}`,
+            eventId: eventId('opencode', row.id),
             agent: 'opencode',
             sessionId: row.session_id,
             parentSessionId: session && session.id !== row.session_id ? session.id : null,
@@ -217,7 +218,7 @@ export const opencodeCollector: Collector = {
           perSession.set(row.session_id, acc);
 
           yield {
-            eventId: `opencode:${row.id}`,
+            eventId: eventId('opencode', row.id),
             agent: 'opencode',
             sessionId: row.session_id,
             parentSessionId: null,
@@ -258,7 +259,7 @@ export const opencodeCollector: Collector = {
           continue;
         }
         yield {
-          eventId: `opencode:gap:${sid}`,
+          eventId: eventId('opencode', 'gap', sid),
           agent: 'opencode',
           sessionId: sid,
           parentSessionId: null,
