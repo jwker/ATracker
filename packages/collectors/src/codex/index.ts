@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
+import { parseRecord, parseTimestamp } from '../parse.ts';
 
 interface CodexUsage {
   input_tokens?: number;
@@ -43,12 +44,8 @@ export const codexCollector: Collector = {
       let ordinal = 0;
 
       for await (const { line } of ctx.zstdLines(path)) {
-        let rec: any;
-        try {
-          rec = JSON.parse(line);
-        } catch {
-          continue; // 坏行跳过，不影响整批
-        }
+        const rec = parseRecord(line);
+        if (!rec) continue; // 坏行跳过，不影响整批
         read++;
 
         if (rec.type === 'session_meta') {
@@ -88,8 +85,15 @@ export const codexCollector: Collector = {
         const output = scale(cum.output_tokens);
         const reasoning = scale(cum.reasoning_output_tokens);
 
-        ts = Date.parse(rec.timestamp ?? '');
+        ts = parseTimestamp(rec.timestamp) ?? 0;
         ordinal = rec.ordinal ?? ordinal + 1;
+
+        // 时间解析不出来就跳过这条，不兜底成「现在」——
+        // 兜底会把历史用量记到扫描那一天。
+        if (ts === 0) {
+          ctx.log('warn', 'codex', `一条记录的时间无法解析，已跳过（会话 ${sessionId}）`);
+          continue;
+        }
 
         yield {
           eventId: `codex:${sessionId}:${ordinal}`,
@@ -97,7 +101,7 @@ export const codexCollector: Collector = {
           sessionId,
           parentSessionId: null,
           isChild: false,
-          ts: ts || Date.now(),
+          ts,
           cwd,
           model,
           provider,

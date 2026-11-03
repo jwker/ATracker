@@ -488,14 +488,15 @@ export class Repo {
 
   /** 重算累计。聚合表很小，直接全量重算比增量更不容易出错。 */
   refreshTotal(): void {
+    // 四个桶和推理 token 都从聚合表取。聚合表里有同步进来的远端设备，
+    // 而 usage_event 只有本机明细，两边混着算会对不上。
     const t = this.db.prepare(
       `SELECT COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
               COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
-              COALESCE(SUM(tokens),0) tokens
+              COALESCE(SUM(reasoning),0) reasoning, COALESCE(SUM(tokens),0) tokens
        FROM agg_day_agent`
     ).get() as any;
-
-    const reasoning = this.db.prepare('SELECT COALESCE(SUM(reasoning_tokens),0) r FROM usage_event').get() as any;
+    const reasoning = { r: t.reasoning };
 
     this.db.prepare(
       `INSERT INTO agg_total (id, input, output, cache_read, cache_write, reasoning, tokens, updated_at)

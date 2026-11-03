@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
+import { parseRecord, parseTimestamp } from '../parse.ts';
 
 /**
  * 读会话头。cwd 和会话 id 只写在文件第一行的 session 记录里，
@@ -14,8 +15,7 @@ import type { UsageEvent } from '../../../core/src/types.ts';
  */
 async function readHeader(ctx: ScanContext, path: string): Promise<{ sessionId: string; cwd: string }> {
   for await (const { line } of ctx.lines(path, 0)) {
-    let rec: any;
-    try { rec = JSON.parse(line); } catch { rec = null; }
+    const rec = parseRecord(line);
     if (rec?.type === 'session') {
       return { sessionId: rec.id ?? '', cwd: rec.cwd ?? '' };
     }
@@ -46,14 +46,15 @@ export const piCollector: Collector = {
       let cwd = header.cwd;
       let offset = st.offset;
 
-      for await (const { line, endOffset } of ctx.lines(path, st.offset)) {
-        offset = endOffset;
-        let rec: any;
-        try {
-          rec = JSON.parse(line);
-        } catch {
+      for await (const { line, endOffset, partial } of ctx.lines(path, st.offset)) {
+        const rec = parseRecord(line);
+        if (!rec) {
+          // 完整落盘的坏行直接跳过，不卡住后面的行；
+          // 末尾写到一半的行不推进 offset，等写完下次重读。
+          if (!partial) offset = endOffset;
           continue;
         }
+        offset = endOffset;
         read++;
 
         if (rec.type === 'session') {
@@ -74,13 +75,21 @@ export const piCollector: Collector = {
         const cacheWrite = u.cacheWrite ?? 0;
         if (!input && !output && !cacheRead && !cacheWrite) continue;
 
+        // 时间解析不出来就跳过这条，不兜底成「现在」——
+        // 兜底会把历史用量记到扫描那一天。
+        const ts = parseTimestamp(rec.timestamp ?? msg.timestamp);
+        if (ts === null) {
+          ctx.log('warn', 'pi', `一条记录的时间无法解析，已跳过（会话 ${sessionId}）`);
+          continue;
+        }
+
         yield {
           eventId: `pi:${rec.id ?? `${sessionId}:${read}`}`,
           agent: 'pi',
           sessionId,
           parentSessionId: null,
           isChild: false,
-          ts: Date.parse(rec.timestamp ?? msg.timestamp ?? '') || Date.now(),
+          ts,
           cwd,
           model: msg.model ?? '',
           provider: msg.provider ?? null,
@@ -114,10 +123,10 @@ export const piCollector: Collector = {
       let lastTs: number | null = null;
 
       for await (const { line } of ctx.lines(path, 0)) {
-        let rec: any;
-        try { rec = JSON.parse(line); } catch { continue; }
-        const ts = Date.parse(rec.timestamp ?? '') || null;
-        if (ts) {
+        const rec = parseRecord(line);
+        if (!rec) continue;
+        const ts = parseTimestamp(rec.timestamp);
+        if (ts !== null) {
           if (firstTs === null || ts < firstTs) firstTs = ts;
           if (lastTs === null || ts > lastTs) lastTs = ts;
         }

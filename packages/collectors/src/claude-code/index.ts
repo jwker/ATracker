@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
+import { parseRecord, parseTimestamp } from '../parse.ts';
 
 export const claudeCodeCollector: Collector = {
   id: 'claude-code',
@@ -33,14 +34,15 @@ export const claudeCodeCollector: Collector = {
       if (isSub) childFiles++;
 
       let offset = st.offset;
-      for await (const { line, endOffset } of ctx.lines(path, st.offset)) {
-        offset = endOffset;
-        let rec: any;
-        try {
-          rec = JSON.parse(line);
-        } catch {
+      for await (const { line, endOffset, partial } of ctx.lines(path, st.offset)) {
+        const rec = parseRecord(line);
+        if (!rec) {
+          // 完整落盘的坏行直接跳过，不卡住后面的行；
+          // 末尾写到一半的行不推进 offset，等写完下次重读。
+          if (!partial) offset = endOffset;
           continue;
         }
+        offset = endOffset;
         read++;
         if (rec.type !== 'assistant') continue;
 
@@ -62,13 +64,20 @@ export const claudeCodeCollector: Collector = {
         if (seen.has(key)) continue;
         seen.add(key);
 
+        // 时间解析不出来就跳过这条，不兜底成「现在」
+        const ts = parseTimestamp(rec.timestamp);
+        if (ts === null) {
+          ctx.log('warn', 'claude-code', `一条记录的时间无法解析，已跳过（会话 ${sessionId}）`);
+          continue;
+        }
+
         yield {
           eventId: `claude-code:${key}`,
           agent: 'claude-code',
           sessionId,
           parentSessionId: isChild ? sessionId : null,
           isChild,
-          ts: Date.parse(rec.timestamp ?? '') || Date.now(),
+          ts,
           cwd: rec.cwd ?? '',
           model: msg.model ?? '',
           provider: null, // 由 catalog 按模型名推断
@@ -102,9 +111,9 @@ export const claudeCodeCollector: Collector = {
       let lastTs: number | null = null;
 
       for await (const { line } of ctx.lines(path, 0)) {
-        let rec: any;
-        try { rec = JSON.parse(line); } catch { continue; }
-        const ts = Date.parse(rec.timestamp ?? '') || null;
+        const rec = parseRecord(line);
+        if (!rec) continue;
+        const ts = parseTimestamp(rec.timestamp);
         if (ts) {
           if (firstTs === null || ts < firstTs) firstTs = ts;
           if (lastTs === null || ts > lastTs) lastTs = ts;

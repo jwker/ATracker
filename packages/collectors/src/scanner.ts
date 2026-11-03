@@ -4,7 +4,6 @@ import { readdir } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import { statSync } from 'node:fs';
 import { createReadStream } from 'node:fs';
-import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 
 import type { DeviceInfo } from '../../core/src/device.ts';
@@ -68,6 +67,8 @@ export async function runScan(
    * sessions() 和 scan() 会各问一次 shouldParse，用 Set 去重。
    */
   const seenPaths = new Set<string>();
+  /** 读取时观察到的文件指纹。 */
+  const preRead = new Map<string, { size: number; mtimeMs: number; inode: number }>();
   let eventsRead = 0;
   let eventsWritten = 0;
   let errors = 0;
@@ -92,13 +93,43 @@ export async function runScan(
       return out.sort();
     },
 
+    /**
+     * 逐行读纯文本，从 fromOffset 开始。
+     *
+     * 自己按字节切行，不走 readline：readline 吃掉了行尾的 \r\n，
+     * 按「字符数 + 1」算偏移在 CRLF 文件上会每行少算一个字节，误差逐行累积。
+     * 这里数的是实际消耗的字节数，LF 和 CRLF 都算得对。
+     *
+     * partial 标记末尾那一行：它后面没有换行符，可能是写到一半的行。
+     * 采集器遇到解析失败的 partial 行时不推进 offset，等写完下次重读；
+     * 完整落盘的坏行直接跳过，不卡住后面的行。
+     */
     async *lines(path, fromOffset) {
-      const stream = createReadStream(path, { start: fromOffset, encoding: 'utf8' });
+      const stream = createReadStream(path, { start: fromOffset });
       let consumed = fromOffset;
-      const rl = createInterface({ input: stream, crlfDelay: Infinity });
-      for await (const line of rl) {
-        consumed += Buffer.byteLength(line, 'utf8') + 1;
-        yield { line, endOffset: consumed };
+      let pending: Buffer = Buffer.alloc(0);
+      for await (const chunk of stream) {
+        const buf = chunk as Buffer;
+        pending = pending.length ? Buffer.concat([pending, buf]) : buf;
+        let nl: number;
+        while ((nl = pending.indexOf(0x0a)) !== -1) {
+          // 行尾是 \r\n 的话，\r 不算行内容，但算消耗的字节。
+          const body = pending[0] === 0x0d ? pending.subarray(1, nl) : pending.subarray(0, nl);
+          consumed += nl + 1;
+          pending = pending.subarray(nl + 1);
+          yield { line: body.toString('utf8'), endOffset: consumed, partial: false };
+        }
+      }
+      if (pending.length) {
+        // 末尾的半行：可能是还没写完，也可能就是最后一行没有换行符。
+        // 字节不完整（多字节字符被截断）时不交，避免解出半个字符。
+        try {
+          new TextDecoder('utf-8', { fatal: true }).decode(pending);
+        } catch {
+          return;
+        }
+        consumed += pending.length;
+        yield { line: pending.toString('utf8'), endOffset: consumed, partial: true };
       }
     },
 
@@ -134,6 +165,9 @@ export async function runScan(
         seenPaths.add(path);
         return r;
       };
+      // 读取时观察到的指纹。commitFile 提交这个值而不是提交时重新 stat 的值，
+      // 否则文件在读取期间被追加，下一轮会误判「指纹未变」而跳过新追加的内容。
+      preRead.set(path, { size: st.size, mtimeMs: Math.floor(st.mtimeMs), inode: st.ino });
       const cur = repo.getCursor(path);
       if (!cur) return mark({ parse: true, offset: 0, reason: '新文件' });
 
@@ -148,19 +182,26 @@ export async function runScan(
       if (st.size < cur.size || cur.inode !== st.ino) {
         return mark({ parse: true, offset: 0, reason: '文件被重写' });
       }
+      // 大小没变但 mtime 变了：内容被原地改写，旧偏移已经失效，从头读。
+      // 不加这条的话会落到下面「从上次偏移继续」，而那个偏移在文件末尾，读到 0 行。
+      if (st.size === cur.size) {
+        return mark({ parse: true, offset: 0, reason: '文件被原地改写' });
+      }
       // 变大了：纯文本可以从上次偏移继续
       return mark({ parse: true, offset: cur.offset, reason: '文件变大' });
     },
 
     commitFile(path, offset, complete) {
       try {
-        const st = statSync(path);
+        // 用读取时观察到的指纹，不是提交时的最新值
+        const seen = preRead.get(path);
+        const st = seen ?? { size: statSync(path).size, mtimeMs: Math.floor(statSync(path).mtimeMs), inode: statSync(path).ino };
         repo.setCursor({
           path,
           source: curSource,
           size: st.size,
-          mtimeMs: Math.floor(st.mtimeMs),
-          inode: st.ino,
+          mtimeMs: st.mtimeMs,
+          inode: st.inode,
           offset,
           complete: complete ? 1 : 0,
           lastScanAt: Date.now()

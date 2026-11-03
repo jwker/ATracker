@@ -7,7 +7,7 @@ export interface ScanContext {
   /** 列出根目录下的文件（递归）。 */
   files(root: string, filter?: (path: string) => boolean): Promise<string[]>;
   /** 读纯文本文件，从 offset 开始逐行。offset 是字节位置。 */
-  lines(path: string, fromOffset: number): AsyncGenerator<{ line: string; endOffset: number }>;
+  lines(path: string, fromOffset: number): AsyncGenerator<{ line: string; endOffset: number; partial: boolean }>;
   /** 读 zstd 文件，逐帧逐行。压缩文件不支持断点续读，整读一遍。 */
   zstdLines(path: string): AsyncGenerator<{ line: string }>;
   /** 记一条日志。 */

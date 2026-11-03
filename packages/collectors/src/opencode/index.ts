@@ -17,6 +17,7 @@ import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
+import { parseRecord, parseTimestamp } from '../parse.ts';
 
 interface OpencodeSession {
   id: string;
@@ -142,12 +143,8 @@ export const opencodeCollector: Collector = {
         ).all() as any[];
 
         for (const row of rows) {
-          let rec: any;
-          try {
-            rec = JSON.parse(row.data);
-          } catch {
-            continue;
-          }
+          const rec = parseRecord(row.data);
+          if (!rec) continue;
           read++;
 
           const t = rec.tokens ?? {};
@@ -159,6 +156,14 @@ export const opencodeCollector: Collector = {
 
           const session = sessions.get(row.session_id);
 
+          // 时间解析不出来就跳过这条，不兜底成「现在」——
+          // 兜底会把历史用量记到扫描那一天。
+          const ts = parseTimestamp(rec.time?.created ?? rec.timeCreated) ?? parseTimestamp(session?.timeCreated);
+          if (ts === null || ts === undefined) {
+            ctx.log('warn', 'opencode', `一条记录的时间无法解析，已跳过（会话 ${row.session_id}）`);
+            continue;
+          }
+
           const acc = perSession.get(row.session_id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
           acc.input += input; acc.output += output; acc.cacheRead += cacheRead; acc.cacheWrite += cacheWrite;
           perSession.set(row.session_id, acc);
@@ -169,7 +174,7 @@ export const opencodeCollector: Collector = {
             sessionId: row.session_id,
             parentSessionId: session && session.id !== row.session_id ? session.id : null,
             isChild: false,
-            ts: rec.time?.created ?? rec.timeCreated ?? Date.now(),
+            ts,
             cwd: session?.directory ?? '',
             model: rec.model?.id ?? session?.model?.id ?? '',
             provider: rec.model?.providerID ?? session?.model?.providerID ?? null,
@@ -186,12 +191,8 @@ export const opencodeCollector: Collector = {
       } else {
         const rows = db.prepare('SELECT id, session_id, data FROM message ORDER BY time_created ASC').all() as any[];
         for (const row of rows) {
-          let rec: any;
-          try {
-            rec = JSON.parse(row.data);
-          } catch {
-            continue;
-          }
+          const rec = parseRecord(row.data);
+          if (!rec) continue;
           read++;
           if (rec.role !== 'assistant') continue;
 
@@ -204,6 +205,13 @@ export const opencodeCollector: Collector = {
 
           const session = sessions.get(row.session_id);
 
+          // 时间解析不出来就跳过这条，不兜底成「现在」
+          const ts = parseTimestamp(rec.time?.created) ?? parseTimestamp(session?.timeCreated);
+          if (ts === null || ts === undefined) {
+            ctx.log('warn', 'opencode', `一条记录的时间无法解析，已跳过（会话 ${row.session_id}）`);
+            continue;
+          }
+
           const acc = perSession.get(row.session_id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
           acc.input += input; acc.output += output; acc.cacheRead += cacheRead; acc.cacheWrite += cacheWrite;
           perSession.set(row.session_id, acc);
@@ -214,7 +222,7 @@ export const opencodeCollector: Collector = {
             sessionId: row.session_id,
             parentSessionId: null,
             isChild: false,
-            ts: rec.time?.created ?? Date.now(),
+            ts,
             cwd: rec.path?.cwd ?? session?.directory ?? '',
             model: rec.modelID ?? session?.model?.id ?? '',
             provider: rec.providerID ?? null,
@@ -243,13 +251,19 @@ export const opencodeCollector: Collector = {
         const dCw = session.buckets.cacheWrite - acc.cacheWrite;
         if (dIn <= 0 && dOut <= 0 && dCr <= 0 && dCw <= 0) continue;
         gaps++;
+        // 补出来的量要归到某一天，时间取不到就不知道归哪天，跳过并记日志
+        const gapTs = parseTimestamp(session.timeUpdated ?? session.timeCreated);
+        if (gapTs === null) {
+          ctx.log('warn', 'opencode', `会话 ${sid} 缺时间信息，补出来的 ${dIn + dOut + dCr + dCw} token 没有归到具体日期，已跳过`);
+          continue;
+        }
         yield {
           eventId: `opencode:gap:${sid}`,
           agent: 'opencode',
           sessionId: sid,
           parentSessionId: null,
           isChild: false,
-          ts: session.timeUpdated || session.timeCreated || Date.now(),
+          ts: gapTs,
           cwd: session.directory,
           model: session.model?.id ?? '',
           provider: session.model?.providerID ?? null,

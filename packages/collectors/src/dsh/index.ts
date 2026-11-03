@@ -10,6 +10,7 @@ import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import type { Collector, ScanContext, SessionMeta } from '../types.ts';
 import type { UsageEvent } from '../../../core/src/types.ts';
+import { parseRecord, parseTimestamp } from '../parse.ts';
 
 /** 从文件名取版本号：session.v4.jsonl.zstd → 4，session.jsonl.zstd → 0。 */
 function versionOf(name: string): number {
@@ -45,12 +46,8 @@ export const dshCollector: Collector = {
       let prevCum = 0;
 
       for await (const { line } of ctx.zstdLines(path)) {
-        let rec: any;
-        try {
-          rec = JSON.parse(line);
-        } catch {
-          continue;
-        }
+        const rec = parseRecord(line);
+        if (!rec) continue;
         read++;
 
         if (rec.type === 'session') {
@@ -71,13 +68,20 @@ export const dshCollector: Collector = {
 
         const source = rec.data?.message?.source ?? {};
 
+        // 时间解析不出来就跳过这条，不兜底成「现在」
+        const ts = parseTimestamp(rec.time);
+        if (ts === null) {
+          ctx.log('warn', 'dsh', `一条记录的时间无法解析，已跳过（会话 ${sessionId}）`);
+          continue;
+        }
+
         yield {
           eventId: `dsh:${sessionId}:${rec.seq ?? read}`,
           agent: 'dsh',
           sessionId,
           parentSessionId: null,
           isChild: false,
-          ts: rec.time ?? Date.now(),
+          ts,
           cwd,
           model: source.model ?? '',
           provider: source.provider ?? null,
@@ -118,8 +122,8 @@ export const dshCollector: Collector = {
       let lastTs: number | null = null;
 
       for await (const { line } of ctx.zstdLines(path)) {
-        let rec: any;
-        try { rec = JSON.parse(line); } catch { continue; }
+        const rec = parseRecord(line);
+        if (!rec) continue;
         if (rec.type === 'session') {
           sessionId = rec.id ?? sessionId;
           cwd = rec.cwd ?? cwd;
