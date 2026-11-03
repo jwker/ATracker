@@ -48,9 +48,12 @@ export function buildHash(path: string, params: Params = []): string {
  * 旧版 URL 留在 query string 里的参数。
  */
 export function navigate(path: string, params: Params = [], opts: { replace?: boolean } = {}): void {
-  // 用 location.href 而不是 location.pathname：后者不含 query string，
-  // 旧版留在 ?foo=bar 里的参数就清不掉了。
-  const url = location.href.split('?')[0] + buildHash(path, params);
+  // 底地址要同时去掉 hash 和 query string：
+  // - hash 不去掉的话，新的 #/path 会接在旧的 hash 后面，越点越长
+  //   （#/#/today#/#/month），路径解析出来始终是 '/'，页面就点不动了
+  // - query string 不去掉的话，旧版 URL 留在 ?foo=bar 里的参数清不掉
+  const base = location.href.split('#')[0]!.split('?')[0]!;
+  const url = base + buildHash(path, params);
   if (location.href === url) return;
   if (opts.replace) history.replaceState(null, '', url);
   else history.pushState(null, '', url);
