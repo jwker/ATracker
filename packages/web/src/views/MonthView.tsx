@@ -39,6 +39,11 @@ export function MonthView(props: MonthViewProps) {
   const b = agg.buckets;
   const hitRate = b.input + b.cacheRead > 0 ? b.cacheRead / (b.input + b.cacheRead) : 0;
 
+  // 日历的月份和当前月份对不上时（正在刷新，或者刚翻月），agg 还是上一次的
+  // 数据。目录排名和总量要一起清掉，不然会出现「空月历 + 旧目录排名 +
+  // 旧 token 数字」的组合。
+  const calMatches = !!cal && cal.month === month;
+
   return (
     <>
       <ScopeTag
@@ -81,8 +86,8 @@ export function MonthView(props: MonthViewProps) {
           month={month}
           sel={sel}
           unit={unit}
-          dirs={agg.byDir}
-          total={agg.total}
+          dirs={calMatches ? agg.byDir : []}
+          total={calMatches ? agg.total : 0}
           onPrevMonth={props.onPrevMonth}
           onNextMonth={props.onNextMonth}
           onThisMonth={props.onThisMonth}

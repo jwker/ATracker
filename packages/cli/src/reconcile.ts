@@ -34,13 +34,22 @@ function oursTotal(repo: Repo, agent: string): number {
 }
 
 /* ---------- codex：threads.tokens_used ---------- */
-function checkCodex(): Line {
+function checkCodex(): Line | null {
   const dbPath = join(home, '.codex', 'state_5.sqlite');
-  if (!existsSync(dbPath)) return { name: 'codex', ours: 0, theirs: 0, note: '没有 state_5.sqlite', ok: false };
-  const db = new DatabaseSync(dbPath, { readOnly: true });
-  const r = db.prepare('SELECT COALESCE(SUM(tokens_used),0) t FROM threads').get() as any;
-  db.close();
-  return { name: 'codex', ours: 0, theirs: r.t, note: 'threads.tokens_used 全量合计', ok: true };
+  if (!existsSync(dbPath)) return null;
+  try {
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    try {
+      const r = db.prepare('SELECT COALESCE(SUM(tokens_used),0) t FROM threads').get() as any;
+      return { name: 'codex', ours: 0, theirs: r.t, note: 'threads.tokens_used 全量合计', ok: true };
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    // 文件被占用、坏了、或者旧版 schema 没有 tokens_used 列。
+    // 抛出去会把整次对账打断，前面算好的来源全白跑。
+    return null;
+  }
 }
 
 /* ---------- Claude Code：cost-state ---------- */
@@ -68,7 +77,12 @@ function checkClaudeCode(repo: Repo): { matched: number; mismatched: number; act
   };
 
   for (const file of walk(root)) {
-    const text = readFileSync(file, 'utf8');
+    let text: string;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      continue; // 读不了就跳过这一个会话，不影响别的
+    }
     const models = new Set<string>();
     const seen = new Set<string>();
     let usageTotal = 0;
@@ -83,6 +97,8 @@ function checkClaudeCode(repo: Repo): { matched: number; mismatched: number; act
         if (u) {
           // 同一条消息按内容块写成多行，usage 重复，按 message.id 去重
           const key = m.id ?? d.uuid;
+          // 两个 id 都缺的时候 key 是 undefined，所有这类行会算成同一条
+          if (key === undefined) continue;
           if (!seen.has(key)) {
             seen.add(key);
             usageTotal += (u.input_tokens ?? 0) + (u.output_tokens ?? 0) +
@@ -97,13 +113,14 @@ function checkClaudeCode(repo: Repo): { matched: number; mismatched: number; act
     if (!costState) continue;
     const usage = costState.modelUsage ?? {};
     const costModels = Object.keys(usage).map(k => k.replace(/\[[^\]]*\]$/, ''));
-    // 模型对不上说明这个 cost-state 是别的会话留下来的，不拿来比
-    if (!costModels.some(m => models.has(m))) continue;
+    // 模型对不上说明这个 cost-state 是别的会话留下来的，不拿来比。
+    // 要全部对上才算：只对上任意一个的话，一个从别的会话继承来的多模型
+    // cost-state 只要碰巧有一个模型相同就会被拿来比，结果是假的不一致。
+    if (costModels.length === 0 || !costModels.every(m => models.has(m))) continue;
 
     const theirTotal = Object.values(usage).reduce((s: number, m: any) =>
       s + (m.inputTokens ?? 0) + (m.outputTokens ?? 0) +
       (m.cacheReadInputTokens ?? 0) + (m.cacheCreationInputTokens ?? 0), 0);
-    const sessionId = Object.keys(ours)[0] ? '' : '';
     if (Math.abs(theirTotal - usageTotal) <= Math.max(3, usageTotal * 0.001)) {
       matched++;
     } else if (Date.now() - statSync(file).mtimeMs < 2 * 3600_000) {
@@ -119,7 +136,7 @@ function checkClaudeCode(repo: Repo): { matched: number; mismatched: number; act
 }
 
 /* ---------- pi：meta.json ---------- */
-function checkPi(repo: Repo): { matched: number; stale: number; detail: string[] } {
+function checkPi(repo: Repo): { matched: number; stale: number; missing: number; detail: string[] } {
   const root = join(home, '.pi', 'agent', 'sessions');
   const ours = oursBySession(repo, 'pi');
   let matched = 0;
@@ -137,54 +154,78 @@ function checkPi(repo: Repo): { matched: number; stale: number; detail: string[]
     return out;
   };
 
+  let missing = 0;
   for (const file of walk(root)) {
-    const meta = JSON.parse(readFileSync(file, 'utf8'));
+    // meta.json 是会话运行中实时写的，被截断或写坏时 JSON.parse 会抛。
+    // 抛出去整次对账都中断，别的来源的结果也一起丢掉。
+    let meta: any;
+    try {
+      meta = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      continue;
+    }
     const uuid = basename(file).replace('.meta.json', '').split('_').pop()!;
     const sid = meta.sessionId ?? uuid;
     const theirs = (meta.tokensIn ?? 0) + (meta.tokensOut ?? 0) +
       (meta.cacheRead ?? 0) + (meta.cacheWrite ?? 0);
     const mine = ours.get(sid);
-    if (mine === undefined) continue;
+    // 对方有、我们没有：这是我们要查的（漏采），不能直接跳过
+    if (mine === undefined) { missing++; continue; }
     if (Math.abs(mine - theirs) <= Math.max(3, theirs * 0.001)) matched++;
     else {
       stale++;
       detail.push(`    会话 ${sid.slice(0, 12)}：meta ${theirs.toLocaleString()}，我们 ${mine.toLocaleString()}（meta 是会话中途的快照）`);
     }
   }
-  return { matched, stale, detail };
+  return { matched, stale, missing, detail };
 }
 
 /* ---------- opencode：session 表 ---------- */
 function checkOpencode(): Line | null {
   const dbPath = join(home, '.local', 'share', 'opencode', 'opencode.db');
   if (!existsSync(dbPath)) return null;
-  const db = new DatabaseSync(dbPath, { readOnly: true });
-  // 桌面端用新表，旧表是迁移前的副本，两边不能相加
-  const v2 = !!(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session_v2'").get());
-  const r = v2
-    ? db.prepare(
-      `SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t
-       FROM session_v2`
-    ).get() as any
-    : db.prepare(
-      `SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t
-       FROM session`
-    ).get() as any;
-  db.close();
-  return { name: 'opencode', ours: 0, theirs: r.t, note: v2 ? 'session_v2 汇总列' : 'session 表汇总列（旧格式）', ok: true };
+  let db: DatabaseSync;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+  } catch {
+    return null; // 被占用或打不开，这个源算「不可用」
+  }
+  try {
+    // 桌面端用新表，旧表是迁移前的副本，两边不能相加
+    const v2 = !!(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session_v2'").get());
+    const sql = v2
+      ? `SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t
+         FROM session_v2`
+      : `SELECT COALESCE(SUM(tokens_input + tokens_output + COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)),0) t
+         FROM session`;
+    const r = db.prepare(sql).get() as any;
+    return { name: 'opencode', ours: 0, theirs: r.t, note: v2 ? 'session_v2 汇总列' : 'session 表汇总列（旧格式）', ok: true };
+  } catch {
+    // 旧版 schema 里没有这些列。抛出去会打断整次对账。
+    return null;
+  } finally {
+    try { db.close(); } catch { /* 关不上就算了 */ }
+  }
 }
 
 /* ---------- DeepSeek Harness：session_projcache ---------- */
-function checkDsh(repo: Repo): { matched: number; missing: number; extra: number; theirTotal: number } {
+function checkDsh(repo: Repo): { matched: number; missing: number; extra: number; mismatched: number; theirTotal: number; unavailable: boolean } {
   const path = join(home, '.dsh', 'storages', 'session_projcache.json');
   const ours = oursBySession(repo, 'dsh');
-  const empty = { matched: 0, missing: 0, extra: 0, theirTotal: 0 };
+  const empty = { matched: 0, missing: 0, extra: 0, mismatched: 0, theirTotal: 0, unavailable: false };
   if (!existsSync(path)) return empty;
-  const data = JSON.parse(readFileSync(path, 'utf8'));
+  let data: any;
+  try {
+    data = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    // 缓存文件可能被写坏或截断。降级成「这个源不可用」，不是整次对账失败。
+    return { ...empty, unavailable: true };
+  }
   const sessions = data?.tables?.sessions ?? {};
 
   let matched = 0;
   let missing = 0;
+  let mismatched = 0;
   let theirTotal = 0;
   for (const [sid, rec] of Object.entries<any>(sessions)) {
     const t = rec?.rows?.tokenUsage?.val?.totals;
@@ -196,23 +237,39 @@ function checkDsh(repo: Repo): { matched: number; missing: number; extra: number
     const mine = ours.get(sid);
     if (mine === undefined) { missing++; continue; }
     if (Math.abs(mine - theirs) <= Math.max(3, theirs * 0.001)) matched++;
+    // 两侧都有但数值对不上：这是最需要暴露的不一致，不能静默丢掉
+    else mismatched++;
   }
-  return { matched, missing, extra: [...ours.keys()].filter(k => !sessions[k]).length, theirTotal };
+  return {
+    matched, missing, mismatched,
+    extra: [...ours.keys()].filter(k => !sessions[k]).length,
+    theirTotal,
+    unavailable: false
+  };
 }
 
 export function reconcile(repo: Repo): string {
   const lines: string[] = [];
 
   const codex = checkCodex();
-  const ourCodex = oursTotal(repo, 'codex');
-  lines.push(`codex        对方 ${codex.theirs.toLocaleString().padStart(14)}  我们 ${ourCodex.toLocaleString().padStart(14)}  差 ${(ourCodex - codex.theirs).toLocaleString().padStart(10)}  ${Math.abs(ourCodex - codex.theirs) <= 3 ? '✓' : '✗'}`);
+  if (codex) {
+    const ourCodex = oursTotal(repo, 'codex');
+    // 容差跟逐会话比较用同一套（相对容差）。原来总量用固定的 ±3，
+    // codex 的量通常在百万级，±3 形同虚设，任何舍入都会被判成不一致。
+    const diff = Math.abs(ourCodex - codex.theirs);
+    const tol = Math.max(3, codex.theirs * 0.001);
+    lines.push(`codex        对方 ${codex.theirs.toLocaleString().padStart(14)}  我们 ${ourCodex.toLocaleString().padStart(14)}  差 ${(ourCodex - codex.theirs).toLocaleString().padStart(10)}  ${diff <= tol ? '✓' : '✗'}`);
+  } else {
+    // 对方不可用时不能说「对方 = 0」，那会把「没装 codex」误报成「我们多采了几十万 token」
+    lines.push(`codex        对方数据不可用（没有 state_5.sqlite，或读不了），不比较`);
+  }
 
   const cc = checkClaudeCode(repo);
   lines.push(`claude-code  可比的会话 ${cc.matched} 个一致，${cc.active} 个进行中，${cc.mismatched} 个不一致（cost-state 常是别的会话继承来的，不计入）`);
   cc.detail.forEach(d => lines.push(d));
 
   const pi = checkPi(repo);
-  lines.push(`pi           可比的会话 ${pi.matched} 个一致，${pi.stale} 个 meta 已过期（meta 是会话中途的快照）`);
+  lines.push(`pi           可比的会话 ${pi.matched} 个一致，${pi.stale} 个 meta 已过期（meta 是会话中途的快照），${pi.missing} 个我们没采到`);
   pi.detail.forEach(d => lines.push(d));
 
   const oc = checkOpencode();
@@ -222,9 +279,13 @@ export function reconcile(repo: Repo): string {
   }
 
   const dsh = checkDsh(repo);
-  const ourDsh = oursTotal(repo, 'dsh');
-  lines.push(`dsh          对方 ${dsh.theirTotal.toLocaleString().padStart(14)}  我们 ${ourDsh.toLocaleString().padStart(14)}  可比会话 ${dsh.matched} 个一致`);
-  lines.push(`             我们多采到 ${dsh.extra} 个 projcache 没记的会话，projcache 多记 ${dsh.missing} 个我们没有的会话`);
+  if (dsh.unavailable) {
+    lines.push('dsh          对方数据不可用（projcache 读不了），不比较');
+  } else {
+    const ourDsh = oursTotal(repo, 'dsh');
+    lines.push(`dsh          对方 ${dsh.theirTotal.toLocaleString().padStart(14)}  我们 ${ourDsh.toLocaleString().padStart(14)}  可比会话 ${dsh.matched} 个一致，${dsh.mismatched} 个不一致`);
+    lines.push(`             我们多采到 ${dsh.extra} 个 projcache 没记的会话，projcache 多记 ${dsh.missing} 个我们没有的会话`);
+  }
 
   return lines.join('\n');
 }
