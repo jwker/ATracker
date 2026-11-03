@@ -705,20 +705,26 @@ export class Repo {
   breakdown(from: string, to: string, device?: string): { byModel: any[]; byDir: any[]; totals: any } {
     const dev = device ? ' AND device = ?' : '';
     const devArgs = device ? [device] : [];
+    // 推理 token 也要取。聚合表里存了 reasoning 列，查询不取的话，
+    // 「思考 token」在聚合页被静默丢掉，前端只能补 0，页面恒显示 0%，
+    // 和总账页的口径不一致。
     const byModel = this.db.prepare(
       `SELECT model, vendor, SUM(tokens) tokens,
-              SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
+              SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write,
+              SUM(reasoning) reasoning
        FROM agg_day_model WHERE day >= ? AND day <= ?${dev} GROUP BY model, vendor ORDER BY tokens DESC`
     ).all(from, to, ...devArgs);
     const byDir = this.db.prepare(
       `SELECT dir, SUM(tokens) tokens,
-              SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write
+              SUM(input) input, SUM(output) output, SUM(cache_read) cache_read, SUM(cache_write) cache_write,
+              SUM(reasoning) reasoning
        FROM agg_day_dir WHERE day >= ? AND day <= ?${dev} GROUP BY dir ORDER BY tokens DESC`
     ).all(from, to, ...devArgs);
     const totals = this.db.prepare(
       `SELECT COALESCE(SUM(tokens),0) tokens,
               COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output,
               COALESCE(SUM(cache_read),0) cache_read, COALESCE(SUM(cache_write),0) cache_write,
+              COALESCE(SUM(reasoning),0) reasoning,
               COUNT(DISTINCT day) days
        FROM agg_day_agent WHERE day >= ? AND day <= ?${dev}`
     ).get(from, to, ...devArgs) as any;

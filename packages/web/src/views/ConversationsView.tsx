@@ -1,6 +1,7 @@
 import type { ConversationDetail, ConversationsPayload } from '../types.ts';
 import type { ConversationFilter, Unit } from '../state.ts';
 import { dayOf, fmtPct, fmtTok, hhmm, modelLabel } from '../format.ts';
+import { LeadRow } from '../components/LeadRow.tsx';
 
 interface ConversationsViewProps {
   conv: ConversationsPayload;
@@ -16,16 +17,6 @@ interface ConversationsViewProps {
   onSearch: (q: string) => void;
   onClear: () => void;
   onGoDay: (day: string) => void;
-}
-
-function LeadRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="leadrow">
-      <span className="nm">{label}</span>
-      <span className="dots" />
-      <span className="v">{value}</span>
-    </div>
-  );
 }
 
 export function ConversationsView(props: ConversationsViewProps) {

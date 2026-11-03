@@ -8,5 +8,20 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-[*.md]
+# 二进制和生成目录不参与格式化。对它们做 insert_final_newline /
+# trim_trailing_whitespace 有破坏文件尾部数据的风险。
+[*.{png,jpg,jpeg,gif,webp,ico,icns,pdf,zip,dmg,exe,dll,node,wasm,woff,woff2,ttf,mp3,mp4}]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[node_modules/**]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[packages/web/dist/**]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[release/**]
+insert_final_newline = false
 trim_trailing_whitespace = false

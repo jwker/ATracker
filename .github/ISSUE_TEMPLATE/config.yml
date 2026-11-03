@@ -1,1 +1,4 @@
-blank_issues_enabled: true
+# 不开空白 issue：bug 报告模板里的版本号、来源、doctor 输出是排查的必需信息，
+# 允许空白提 issue 就绕开了这些字段，报告没法分流也没法核对。
+# 想自由提问的，去 Discussions。
+blank_issues_enabled: false

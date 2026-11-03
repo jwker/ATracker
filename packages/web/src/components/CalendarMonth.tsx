@@ -51,7 +51,10 @@ export function CalendarMonth(props: CalendarMonthProps) {
     if (day < range.a || day > range.b) return [];
     const dayTotal = rec.total || 1;
     const items = topDirs
-      .map(d => ({ path: d.path, color: d.color, v: rec.byDir[d.path] ?? 0 }))
+      // 用 hasOwn 取值：目录路径要是恰好等于 constructor / toString 这类
+      // 原型属性名，直接 rec.byDir[path] 会取到继承来的函数，
+      // ?? 0 兜不住（函数不是 nullish），图上就变成 NaN。
+      .map(d => ({ path: d.path, color: d.color, v: Object.hasOwn(rec.byDir, d.path) ? rec.byDir[d.path] : 0 }))
       .filter(x => x.v > 0);
     const rest = dayTotal - items.reduce((s, x) => s + x.v, 0);
     if (rest > 0) items.push({ path: OTHER_KEY, color: OTHER_COLOR, v: rest });

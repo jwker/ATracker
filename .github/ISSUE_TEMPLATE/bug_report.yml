@@ -5,7 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        数字对不上时请先跑一遍 `node packages/cli/src/index.ts doctor` 和 `reconcile`，把输出贴上来。
+        数字对不上时请先跑一遍 `node packages/cli/src/index.ts doctor` 和 `reconcile`，
+        把输出贴到最后一个框里。那两个命令的输出比描述更能定位问题。
 
   - type: textarea
     id: what
@@ -34,7 +35,8 @@ body:
     id: agent
     attributes:
       label: 跟哪个来源有关
-      multiple: true
+      description: 选一个。不确定就选「不确定」，别多选
+      multiple: false
       options:
         - codex
         - Claude Code
@@ -47,6 +49,7 @@ body:
     id: run
     attributes:
       label: 怎么跑的
+      multiple: false
       options:
         - 桌面应用
         - npm run serve
@@ -56,8 +59,14 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: doctor / reconcile 输出
+      label: doctor / reconcile 的输出
+      description: |
+        跑这两条的输出贴在这里：
+        node packages/cli/src/index.ts doctor
+        node packages/cli/src/index.ts reconcile
       render: text
+    validations:
+      required: true
 
   - type: textarea
     id: extra

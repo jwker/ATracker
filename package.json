@@ -45,7 +45,8 @@
     "icon": "electron packages/desktop/scripts/render-icon.mjs",
     "dist:mac:unsigned": "node scripts/dist.mjs --mac --unsigned",
     "pack:mac": "node scripts/dist.mjs --mac --dir --unsigned",
-    "buildinfo": "node scripts/buildinfo.mjs"
+    "buildinfo": "node scripts/buildinfo.mjs",
+    "third-party-notices": "node scripts/third-party-notices.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

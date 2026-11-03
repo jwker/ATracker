@@ -4,9 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ATracker · 本机 token 小票</title>
+<!-- 在样式生效前设好明暗模式，避免先闪一下白底。同步执行，所以不用 defer。 -->
+<script src="/theme.js"></script>
+<style>
+/* 模块脚本加载失败（构建产物 hash 变了但旧 index.html 被缓存、静态文件 404），
+   或者用户禁用 JS 时，页面不能是一片空白。给个最低限度的提示。 */
+#app:empty::before {
+  content: "ATracker 正在加载…如果一直停在这里，多半是前端构建产物过期了，刷新一下（Ctrl+Shift+R）试试。";
+  display: block;
+  max-width: 32rem;
+  margin: 18vh auto 0;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid #c9cbc4;
+  background: #f6f5f0;
+  color: #6c6e69;
+  font: 13px/1.7 "Courier New", "SF Mono", Menlo, monospace;
+}
+</style>
 </head>
 <body>
 <div id="app"></div>
+<noscript>
+  <div style="max-width:32rem;margin:18vh auto 0;padding:1.2rem 1.4rem;border:1px solid #c9cbc4;background:#f6f5f0;color:#6c6e69;font:13px/1.7 'Courier New',Menlo,monospace">
+    ATracker 需要 JavaScript 才能运行。本机服务照常在采集数据，浏览器这边只是没画界面。
+  </div>
+</noscript>
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

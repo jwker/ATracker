@@ -12,16 +12,26 @@ export interface TokenBuckets {
 export interface TotalPayload {
   total: number;
   buckets: TokenBuckets;
-  days: number;
+  /**
+   * 覆盖天数。库里还没有 agg_total 行时这几个字段整个缺失（undefined），
+   * 消费方要用 `!= null` 判断，不能用 `!== null`。
+   */
+  days?: number;
   /** 库里最早的一天，总账页的「覆盖 N 天」用它 */
-  firstDay: string | null;
-  lastDay: string | null;
+  firstDay?: string | null;
+  lastDay?: string | null;
   updatedAt: number;
 }
 
 export interface CalendarDay {
   day: string;
   total: number;
+  /**
+   * 目录 → 当天用量。键是目录的绝对路径。
+   *
+   * 取值要用 Object.hasOwn：键要是恰好等于 constructor / toString 这类
+   * 原型属性名，直接下标会取到继承来的函数。
+   */
   byDir: Record<string, number>;
 }
 
@@ -61,13 +71,20 @@ export interface AggregatePayload {
   to: string;
   days: number;
   total: number;
-  buckets: Omit<TokenBuckets, 'reasoning'>;
+  buckets: TokenBuckets;
   byDir: DirAggregate[];
   byModel: ModelAggregate[];
   byAgent: AgentAggregate[];
+  /**
+   * 聚合键：厂商/模型。cells 里也用它做键。
+   *
+   * 复合键的格式是「厂商/模型」，厂商名或模型名自己带 / 时会拼出同一个键
+   * 互相覆盖（vendor=a + model=b/c 和 vendor=a/b + model=c 都得到 a/b/c）。
+   * 服务端另外返回了原始的 vendor / model 字段可以校验。
+   */
   byAgentModel: Record<string, Record<string, number>>;
   /** 调用次数；远端设备没有明细，为 null */
-  events?: number | null;
+  events: number | null;
 }
 
 export interface MatrixAgent {
@@ -145,6 +162,12 @@ export interface ConversationEvent {
 }
 
 export interface ConversationStats {
+  /**
+   * 四个桶 + 推理。
+   *
+   * 远端会话（detail=false）的 reasoning 没有来源：session_usage 表里
+   * 没有这一列，服务端补 0。读的时候按 0 处理。
+   */
   buckets: TokenBuckets;
   total: number;
   byDay: Record<string, number>;
@@ -231,13 +254,14 @@ export interface SyncPayload {
   devices: DeviceRow[];
 }
 
-export interface BuildInfo {
-  version: string;
-  commit: string;
-  dirty: boolean;
-  branch: string;
-  builtAt: string;
-}
+/**
+ * 和 packages/core/src/build.ts 里的 BuildInfo 一一对应。
+ *
+ * 直接复用 core 的类型：web 包为浏览器构建不引 core 的运行时，
+ * 但类型是编译期的东西，import type 不会打进产物。
+ * 手抄一份的话 core 那边加字段这边不会有任何编译错误，两边会悄悄漂移。
+ */
+export type { BuildInfo } from '../../core/src/build.ts';
 
 export interface DevicesPayload {
   /** 本机身份 */
@@ -305,7 +329,13 @@ export interface DayPayload {
   isToday: boolean;
   /** local=本机，remote=别的设备，all=全部设备 */
   scope: 'local' | 'remote' | 'all';
-  /** 能不能给出小时图和逐轮明细（只有含本机明细时才行） */
+  /**
+   * 能不能给出小时图和逐轮明细。
+   *
+   * 意思是「本机有明细可展示」，不代表明细覆盖了范围里的所有设备。
+   * scope='all' 时 canDetail 为 true，但 hourly / topCalls 只来自本机，
+   * 而 today / prev 汇总的是全部设备。
+   */
   canDetail: boolean;
   cutoff: string;
   today: DayTotals;

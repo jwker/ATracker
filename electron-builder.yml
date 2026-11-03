@@ -13,6 +13,11 @@ electronDist: node_modules/electron/dist
 
 files:
   - package.json
+  # MIT 要求「副本或实质部分必须保留本声明」。包里带的是完整源码，
+  # 属于实质部分，所以 LICENSE 要显式打进去，不能依赖 electron-builder
+  # 的隐式复制。
+  - LICENSE
+  - THIRD_PARTY_NOTICES.txt
   - build/buildinfo.json
   - packages/desktop/src/**
   - packages/core/src/**
