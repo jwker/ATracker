@@ -108,8 +108,9 @@ if (cmd === 'scan') {
   repo.close();
 } else if (cmd === 'serve') {
   const port = Number(arg('port') ?? 4178);
-  // 默认监听所有网卡，局域网里的设备可以用本机 IP 打开。
-  const host = arg('host') ?? '0.0.0.0';
+  // 默认只监听本机。服务没有鉴权，接口里有本机的用量、会话标题和目录绝对路径，
+  // 对外开必须显式说一声。
+  const host = arg('host') ?? (process.argv.includes('--lan') ? '0.0.0.0' : '127.0.0.1');
   // 同步目录优先级：--sync-dir <路径> > --sync（iCloud 默认目录）> 环境变量 > 配置文件
   const syncArg = arg('sync-dir');
   const syncDir = syncArg === 'icloud'
@@ -144,7 +145,7 @@ if (cmd === 'scan') {
   console.log(`  数据库 ${DB}`);
   console.log(syncDir ? `  多设备同步 ${syncDir}` : '  多设备同步 关闭（--sync-dir <目录> 打开）');
   console.log(`  监听文件变化自动扫描，关掉用 --no-watch`);
-  console.log(`  只给本机访问用 --host 127.0.0.1`);
+  console.log(`  局域网访问用 --lan（或 --host 0.0.0.0）`);
   console.log('  Ctrl-C 退出');
   const shutdown = async () => { console.log('\n正在退出…'); await server.close(); process.exit(0); };
   process.on('SIGINT', shutdown);
@@ -226,6 +227,7 @@ if (cmd === 'scan') {
   atracker stats                                     看累计用量
   atracker sync export|import [--dir <目录>]          多设备同步：导出自己的 rollup / 导入别人的
   atracker reconcile                                 拿各来源的汇总数据对账
-  atracker serve [--port 4178] [--host 0.0.0.0] [--no-watch] [--sync] [--sync-dir <目录>]   启动本地服务
+  atracker serve [--port 4178] [--lan] [--host <地址>] [--no-watch] [--sync] [--sync-dir <目录>]   启动本地服务
+                                                                                                   默认只监听本机，--lan 才对外开
   atracker doctor                                    看各来源是否可读`);
 }

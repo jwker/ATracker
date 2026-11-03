@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { watch, type FSWatcher } from 'node:fs';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { join, dirname, extname, normalize } from 'node:path';
+import { join, dirname, extname, normalize, relative, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +38,21 @@ export interface ServerOptions {
 interface Client {
   res: ServerResponse;
 }
+
+/** 写接口的请求体上限。写接口只传一个 id 或一个设备名，几 KB 就够。 */
+const MAX_BODY_BYTES = 64 * 1024;
+
+/** 每个响应都带的安全头。页面里有本机用量，XSS 的后果比一般站点大。 */
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy':
+    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+};
+
+/** 会改数据的接口。只有这几个需要检查请求来源。 */
+const WRITE_PATHS = new Set(['/api/scan', '/api/sync/ignore', '/api/sync/restore', '/api/device/name']);
 
 export class ATrackerServer {
   private repo: Repo;
@@ -81,7 +96,17 @@ export class ATrackerServer {
 
   /** 启动服务。返回实际监听的地址和端口（传 port: 0 时端口是系统分配的）。 */
   async start(): Promise<{ url: string; host: string; port: number }> {
-    this.server.on('request', (req, res) => { void this.handle(req, res); });
+    // 请求处理里的异常不能变成 unhandled rejection（进程会挂）。
+    this.server.on('request', (req, res) => {
+      this.handle(req, res).catch(err => {
+        this.repo.log(0, Date.now(), 'err', 'server', `请求处理失败：${(err as Error).message}`);
+        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: '服务器内部错误' }));
+      });
+    });
+    this.server.on('error', err => {
+      this.repo.log(0, Date.now(), 'err', 'server', `HTTP 服务出错：${(err as Error).message}`);
+    });
     if (this.opts.watch) this.startWatchers();
     if (this.opts.pollMs > 0) {
       // 兜底轮询：监听可能丢事件，周期性全量对一遍指纹
@@ -230,10 +255,35 @@ export class ATrackerServer {
     return v || this.device.id;
   }
 
+  /**
+   * 请求来源是否允许。
+   *
+   * 有 Origin 就必须和 Host 同源（协议、主机、端口全一样）。
+   * 没有 Origin 的（curl、桌面版自己的请求）一律放行。
+   */
+  private originAllowed(req: IncomingMessage): boolean {
+    const origin = req.headers.origin;
+    if (!origin) return true;
+    const host = req.headers.host;
+    if (!host) return false;
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
+  }
+
   /** 读 JSON 请求体。只给几个小的写接口用。 */
   private async body(req: IncomingMessage): Promise<any> {
     const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
+    let size = 0;
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length;
+      // 写接口只传一个 id 或一个设备名，几 KB 就够。
+      // 不限制的话一个请求就能把内存吃光。
+      if (size > MAX_BODY_BYTES) throw new Error('请求体太大');
+      chunks.push(chunk as Buffer);
+    }
     if (!chunks.length) return {};
     try {
       return JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -247,7 +297,10 @@ export class ATrackerServer {
     if (p.startsWith('/api/')) return false;
     const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
     const target = join(this.webDir, normalize(rel));
-    if (!target.startsWith(this.webDir)) return false;
+    // 判断是不是在 webDir 里面。用 relative() 而不是 startsWith()：
+    // 前缀匹配会把 /data/web/dist-evil 也算进来。
+    const inside = relative(this.webDir, target);
+    if (inside.startsWith('..') || isAbsolute(inside)) return false;
     if (!existsSync(target) || !statSync(target).isFile()) return false;
 
     const types: Record<string, string> = {
@@ -261,7 +314,12 @@ export class ATrackerServer {
     };
     const body = await readFile(target);
     const type = types[extname(target)] ?? 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Content-Length': body.length, 'Cache-Control': 'no-cache' });
+    res.writeHead(200, {
+      'Content-Type': type,
+      'Content-Length': body.length,
+      'Cache-Control': 'no-cache',
+      ...SECURITY_HEADERS
+    });
     res.end(body);
     return true;
   }
@@ -272,6 +330,16 @@ export class ATrackerServer {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const p = url.pathname;
     const q = url.searchParams;
+
+    // 写接口检查请求来源。浏览器发的请求带 Origin，同源才放行；
+    // 命令行工具（curl 等）不带 Origin，也放行。
+    // 没有这一步的话，任意网页都能用简单跨站 POST 改本机的数据：
+    // 「简单请求」不触发 CORS 预检，响应读不到但副作用已经产生。
+    if (WRITE_PATHS.has(p) && !this.originAllowed(req)) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: '请求来源不被允许' }));
+      return;
+    }
 
     // SSE
     if (p === '/api/events') {
@@ -292,7 +360,8 @@ export class ATrackerServer {
       res.writeHead(code, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Content-Length': Buffer.byteLength(body)
+        'Content-Length': Buffer.byteLength(body),
+        ...SECURITY_HEADERS
       });
       res.end(body);
     };
@@ -419,7 +488,9 @@ export class ATrackerServer {
       if (served) return;
       return json({ error: '没有这个接口', path: p }, 404);
     } catch (err) {
-      return json({ error: (err as Error).message }, 500);
+      const msg = (err as Error).message;
+      // 请求体超限是客户端的问题，返回 413 而不是 500
+      return json({ error: msg }, msg === '请求体太大' ? 413 : 500);
     }
   }
 }

@@ -312,6 +312,16 @@ function buildMenu(): void {
   }
 }
 
+/** 只放行 http/https。别的协议（file、smb、tel、自定义协议）不交给系统打开。 */
+function isWebUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 async function openWindow(): Promise<void> {
   const config = loadConfig();
   const instance = new ATrackerServer({
@@ -351,9 +361,19 @@ async function openWindow(): Promise<void> {
   win.on('closed', () => { win = null; });
 
   // 页面里的外链交给系统浏览器，不在应用窗口里开新窗口。
+  // 只放行 http/https：其它协议（file、smb、tel，以及系统里注册过的自定义协议）
+  // 会让系统用别的程序打开，可能泄露凭据或者直接执行东西。
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (!isWebUrl(url)) return { action: 'deny' };
     void shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // 页面内跳转也一样：只允许留在本地服务上。
+  // 少了这一条，页面里的 target=_self 链接或 302 重定向会把窗口带到外部网站，
+  // 而窗口还在应用的菜单和 webContents 上下文里。
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(addr.url)) event.preventDefault();
   });
 
   win.once('ready-to-show', () => {

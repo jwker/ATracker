@@ -72,8 +72,15 @@ export function* zstdFrames(buf: Buffer): Generator<Buffer> {
 
     let piece: Buffer;
     try {
-      piece = zstdDecompressSync(buf.subarray(off, end));
-    } catch {
+      // maxOutputLength 让解压在分配内存之前就停下来。
+      // 不加的话，高压缩比的帧会先分配完内存再被后面的检查拦下，
+      // 一个几百 KB 的输入就能吃掉几个 GB。
+      piece = zstdDecompressSync(buf.subarray(off, end), { maxOutputLength: MAX_FRAME_BYTES });
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'ERR_BUFFER_TOO_LARGE') {
+        throw new Error(`单帧解压输出超过上限 ${MAX_FRAME_BYTES} 字节`);
+      }
       return; // 帧坏了（文件被截断），停在这里
     }
     if (piece.length > MAX_FRAME_BYTES) {

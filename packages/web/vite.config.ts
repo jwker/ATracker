@@ -10,8 +10,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // 监听所有网卡，局域网里的设备可以用本机 IP 打开开发页。
-    host: true,
+    // 默认只监听本机。开发服务器带 /api 代理，连着后端一起，
+    // 对外开就把本机的用量数据也一起开出去了。要给局域网看用 --host 0.0.0.0。
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:4178',
