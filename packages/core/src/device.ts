@@ -6,9 +6,11 @@
 // 环境变量 ATRACKER_DEVICE_FILE 可以改文件位置（测试用）。
 
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { hostname, homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+
+import { writeFileAtomic } from './atomic.ts';
 
 export interface DeviceInfo {
   /** 稳定 uuid，首次运行时生成，之后不再变 */
@@ -20,46 +22,63 @@ export interface DeviceInfo {
 }
 
 function deviceFile(): string {
-  return process.env.ATRACKER_DEVICE_FILE ?? join(homedir(), '.atracker', 'device.json');
+  // 空字符串也要当没设置：环境变量写成 ATRACKER_DEVICE_FILE= 时，
+  // 路径会变成空串，dirname('') 拿到的是 '.'
+  const env = process.env.ATRACKER_DEVICE_FILE;
+  return env && env.trim() ? env : join(homedir(), '.atracker', 'device.json');
 }
 
 /**
- * 读本机身份，没有就生成一份。文件坏了或读不了时退回内存里的临时身份，
- * 不阻塞采集——这时同一台机器可能会被当成新设备，界面上能看出来。
+ * 读本机身份。
+ *
+ * 文件坏了或者读不了时退回一份临时身份，不阻塞采集——这时同一台机器可能会
+ * 被当成新设备，界面上能看出来。
+ *
+ * 临时身份在进程内是固定的：原来每次调用都重新 randomUUID()，同一进程里
+ * 设备 id 会一直漂移，一次同步周期里写出去的文件就分属不同设备。
  */
+let fallback: DeviceInfo | null = null;
+
+/** 校验读到的内容是不是一份身份。字段类型不对就当没有。 */
+function parseDevice(raw: unknown): DeviceInfo | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.id !== 'string' || !o.id.trim()) return null;
+  return {
+    id: o.id.trim(),
+    name: typeof o.name === 'string' && o.name.trim() ? o.name : hostname(),
+    platform: typeof o.platform === 'string' && o.platform ? o.platform : process.platform
+  };
+}
+
 export function loadDevice(): DeviceInfo {
   const file = deviceFile();
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DeviceInfo>;
-    if (typeof raw.id === 'string' && raw.id) {
-      return {
-        id: raw.id,
-        name: raw.name || hostname(),
-        platform: raw.platform || process.platform
-      };
-    }
+    const parsed = parseDevice(JSON.parse(readFileSync(file, 'utf8')));
+    if (parsed) return parsed;
   } catch {
     // 首次运行，或者文件坏了，下面重新生成
   }
 
-  const info: DeviceInfo = { id: randomUUID(), name: hostname(), platform: process.platform };
+  if (!fallback) {
+    fallback = { id: randomUUID(), name: hostname(), platform: process.platform };
+  }
   try {
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(info, null, 2) + '\n');
+    writeFileAtomic(file, JSON.stringify(fallback, null, 2) + '\n');
   } catch {
     // 写不了就先用内存里的这份
   }
-  return info;
+  return fallback;
 }
 
 /** 改本机设备名，写回 device.json。返回更新后的身份。 */
 export function saveDeviceName(name: string): DeviceInfo {
   const current = loadDevice();
-  const next: DeviceInfo = { ...current, name };
+  const trimmed = name.trim();
+  if (!trimmed) return current;
+  const next: DeviceInfo = { ...current, name: trimmed };
   try {
-    const file = deviceFile();
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+    writeFileAtomic(deviceFile(), JSON.stringify(next, null, 2) + '\n');
   } catch {
     // 写不了就只改内存里的，下次启动会退回旧名字
   }

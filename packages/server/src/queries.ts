@@ -221,6 +221,8 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
   }) as any[];
   const titles = repo.sessionTitles();
   const deviceNames = new Map(repo.devices().map((d: any) => [d.id as string, d.name as string]));
+  // 目录颜色跟首页一致：用 dir_color 表里已经分配好的，没有才临时算。
+  const colors = colorMap(repo);
 
   const items = list.map(c => {
     const meta = titles.get(`${c.device}:${c.agent}:${c.session_id}`);
@@ -234,7 +236,7 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
       sessionId: c.session_id,
       dir: c.cwd,
       dirName: dirName(c.cwd),
-      color: dirColor(c.cwd),
+      color: colors.get(c.cwd) ?? dirColor(c.cwd),
       model: c.model,
       vendor: c.provider,
       title: c.title ?? meta?.title ?? null,
@@ -251,8 +253,6 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
     byDir.get(it.dir)!.push(it);
   }
 
-  // 目录颜色跟首页一致：用 dir_color 表里已经分配好的，没有才临时算。
-  const colors = colorMap(repo);
   const groups = [...byDir.entries()].map(([dir, its]) => ({
     dir: { path: dir, name: dirName(dir), color: colors.get(dir) ?? dirColor(dir) },
     total: its.reduce((s, x) => s + x.tokens, 0),

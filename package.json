@@ -38,7 +38,7 @@
     "serve": "npm run build:web && node packages/cli/src/index.ts serve",
     "serve:no-build": "node packages/cli/src/index.ts serve",
     "typecheck": "tsc --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
-    "test": "node --test packages/*/src/*.test.ts",
+    "test": "node --test \"packages/**/*.test.ts\"",
     "desktop": "electron .",
     "dist:mac": "node scripts/dist.mjs --mac",
     "dist:win": "node scripts/dist.mjs --win",

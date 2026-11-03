@@ -100,14 +100,26 @@ function drawTornEdge(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
 /** 点线引导：左侧文字、右侧数值，中间一串点。 */
 function leader(ctx: CanvasRenderingContext2D, left: string, right: string, x: number, y: number, w: number, size: number): void {
   ctx.font = font(size);
+
+  // 右侧数值先量宽度：左侧文字要给它留出位置。
+  ctx.textAlign = 'right';
+  const rw = ctx.measureText(right).width;
+
+  // 左侧文字太长就截断。不截的话模型名会直接压到百分比上，甚至伸出纸面。
   ctx.textAlign = 'left';
+  const room = w - rw - 24;
+  let text = left;
+  if (ctx.measureText(text).width > room) {
+    while (text.length > 1 && ctx.measureText(text + '…').width > room) text = text.slice(0, -1);
+    text += '…';
+  }
   ctx.fillStyle = C.ink;
-  ctx.fillText(left, x, y);
-  const lw = ctx.measureText(left).width;
+  ctx.fillText(text, x, y);
+  const lw = ctx.measureText(text).width;
+
   ctx.textAlign = 'right';
   ctx.fillStyle = C.muted;
   ctx.fillText(right, x + w, y);
-  const rw = ctx.measureText(right).width;
   const from = x + lw + 12;
   const to = x + w - rw - 12;
   if (to <= from) return;
@@ -252,19 +264,25 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   y += h.chartHead + 12;
 
   // 柱子
-  const n = Math.max(1, data.bars.length);
-  // 柱子越多间隔越小，而且要保证每根至少 2px，否则会算出负宽度
+  const bars = data.bars ?? [];
+  const n = bars.length;
+  // 柱子越多间隔越小，而且要保证每根至少 2px，否则会算出负宽度。
+  // 柱子特别多时（区间跨年，按天能到几百根），还得保证总宽度不超出内容区，
+  // 否则柱子会画出纸面。
   const gap = n > 60 ? 0 : n > 30 ? 2 : n > 12 ? 4 : 9;
-  const bw = Math.max(2, (CONTENT_W - gap * (n - 1)) / n);
+  const bw = n === 0 ? 0 : Math.min(CONTENT_W / n, Math.max(2, (CONTENT_W - gap * (n - 1)) / n));
   const baseY = y + h.chart;
   for (let i = 0; i < n; i++) {
-    const b = data.bars[i]!;
+    const b = bars[i]!;
     const bx = x + i * (bw + gap);
     if (b.empty) {
       ctx.fillStyle = C.wash;
       ctx.fillRect(bx, baseY - 6, bw, 6);
     } else {
-      const bh = Math.max(8, b.v * h.chart);
+      // 比例夹在 0 到 1。接口那边可能传出 NaN 或大于 1 的值，
+      // 直接算会让柱子超出图表区，或者画不出来。
+      const v = Number.isFinite(b.v) ? Math.min(1, Math.max(0, b.v)) : 0;
+      const bh = Math.max(8, v * h.chart);
       ctx.fillStyle = b.hot ? C.accent : C.bar;
       ctx.fillRect(bx, baseY - bh, bw, bh);
     }
@@ -317,7 +335,8 @@ export function drawCard(canvas: HTMLCanvasElement, data: CardData, scale = 1): 
   ctx.stroke();
   y += h.modelsHead;
   for (const m of data.models) {
-    leader(ctx, m.label, m.pct.toFixed(1) + '%', x, y + 32, CONTENT_W, 27);
+    const pct = (Number.isFinite(m.pct) ? Math.min(100, Math.max(0, m.pct)) : 0).toFixed(1) + '%';
+    leader(ctx, m.label, pct, x, y + 32, CONTENT_W, 27);
     y += h.row / Math.max(1, rows);
   }
   y += h.gapD;

@@ -12,9 +12,11 @@ export const DIR_PALETTE = [
 
 /** 路径的稳定哈希。用 FNV-1a，分布比简单求和均匀。 */
 export function hashPath(s: string): number {
+  // path 可能是 null/undefined（来源没给目录）。直接取长度会抛 TypeError。
+  const str = typeof s === 'string' ? s : '';
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
@@ -38,10 +40,16 @@ export function assignColors(
   for (const p of pending) {
     if (result.has(p)) continue;
     const start = hashPath(p) % DIR_PALETTE.length;
-    let pick = DIR_PALETTE[start];
+    let pick = DIR_PALETTE[start]!;
     for (let i = 0; i < DIR_PALETTE.length; i++) {
-      const c = DIR_PALETTE[(start + i) % DIR_PALETTE.length];
+      const c = DIR_PALETTE[(start + i) % DIR_PALETTE.length]!;
       if (!used.has(c)) { pick = c; break; }
+    }
+    // 色板用满了（30 个颜色）。原来这里会静默撞色，破坏「目录之间不撞色」
+    // 的约定。撞了就退回哈希色，并且不再占用它。
+    if (used.has(pick)) {
+      result.set(p, pick);
+      continue;
     }
     used.add(pick);
     result.set(p, pick);
@@ -49,7 +57,15 @@ export function assignColors(
   return result;
 }
 
-/** 兜底：没进表的目录临时算一个色。 */
-export function dirColor(path: string): string {
-  return DIR_PALETTE[hashPath(path) % DIR_PALETTE.length];
+/**
+ * 兜底：没进表的目录临时算一个色。
+ *
+ * 和正式分配用同一个起点（路径哈希），所以同一个目录在两处的颜色是一致的。
+ * 这里不知道哪些颜色已经被别的目录占了，所以正式分配的表里如果有它，
+ * 优先用表里的。
+ */
+export function dirColor(path: string, assigned?: Map<string, string>): string {
+  const known = assigned?.get(path);
+  if (known) return known;
+  return DIR_PALETTE[hashPath(path) % DIR_PALETTE.length]!;
 }
