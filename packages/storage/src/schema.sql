@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS session_title (
   first_ts   INTEGER,
   last_ts    INTEGER,
   updated_at INTEGER NOT NULL,
-  PRIMARY KEY (agent, session_id)
+  -- 主键带 device：两台设备上出现同一个 session_id 时标题不该互相覆盖
+  PRIMARY KEY (device, agent, session_id)
 );
 
 -- 会话汇总。本机和同步进来的远端设备都写这里，会话页按 device 展示。

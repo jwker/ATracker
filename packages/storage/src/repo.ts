@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 export interface StoredEvent {
   eventId: string;
@@ -91,9 +91,22 @@ export class Repo {
 
     // 3：加设备维度。明细表补 device 列，聚合表主键带上 device 后重建，
     // 历史行统一归到本机（本机 id 在 open 之后由服务器/CLI 调 markLocalDevice 写入）。
+    //
+    // 会话汇总的 model / vendor 两列要先补上：下面这次重建聚合会调
+    // rebuildSessionUsage，它的 INSERT 无条件写这两列。列还不存在的话
+    // 老库（停在 v2）直接起不来。
+    if (from < 3) {
+      const cols = (this.db.prepare('PRAGMA table_info(session_usage)').all() as any[]).map(c => c.name);
+      if (!cols.includes('model')) this.db.exec('ALTER TABLE session_usage ADD COLUMN model TEXT;');
+      if (!cols.includes('vendor')) this.db.exec('ALTER TABLE session_usage ADD COLUMN vendor TEXT;');
+    }
+
     if (from < 3) {
       this.ensureDeviceColumn('usage_event');
       this.ensureDeviceColumn('session_title');
+      // 会话汇总也要补 device 列：下面重建聚合会调 rebuildSessionUsage，
+      // 它的 INSERT 和 DELETE 都按 device 走。
+      this.ensureDeviceColumn('session_usage');
       for (const table of ['agg_day_agent', 'agg_day_dir', 'agg_day_model', 'agg_day_agent_model']) {
         this.db.exec(`DROP TABLE IF EXISTS ${table};`);
       }
@@ -126,6 +139,62 @@ export class Repo {
       if (!cols.includes('model')) this.db.exec('ALTER TABLE session_usage ADD COLUMN model TEXT;');
       if (!cols.includes('vendor')) this.db.exec('ALTER TABLE session_usage ADD COLUMN vendor TEXT;');
       this.rebuildAggregates([]);
+    }
+
+    // 7：会话的主键补上 device。原来是 (agent, session_id)，两台设备上出现
+    // 同一个 session_id 时标题会互相覆盖、会话汇总会串台。重建这两张表，
+    // 内容本身不丢。
+    if (from < 7) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS session_title_new (
+          device     TEXT NOT NULL DEFAULT '',
+          agent      TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          title      TEXT,
+          cwd        TEXT,
+          first_ts   INTEGER,
+          last_ts    INTEGER,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (device, agent, session_id)
+        );
+        INSERT OR REPLACE INTO session_title_new
+          (device, agent, session_id, title, cwd, first_ts, last_ts, updated_at)
+        SELECT device, agent, session_id, title, cwd, first_ts, last_ts, updated_at FROM session_title;
+        DROP TABLE session_title;
+        ALTER TABLE session_title_new RENAME TO session_title;
+      `);
+
+      // 会话汇总：老库还没有 device 列的话先补上，再按新主键重建
+      this.ensureDeviceColumn('session_usage');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS session_usage_new (
+          device      TEXT NOT NULL DEFAULT '',
+          agent       TEXT NOT NULL,
+          session_id  TEXT NOT NULL,
+          month       TEXT NOT NULL,
+          title       TEXT,
+          dir         TEXT,
+          model       TEXT,
+          vendor      TEXT,
+          events      INTEGER NOT NULL DEFAULT 0,
+          tokens      INTEGER NOT NULL DEFAULT 0,
+          input       INTEGER NOT NULL DEFAULT 0,
+          output      INTEGER NOT NULL DEFAULT 0,
+          cache_read  INTEGER NOT NULL DEFAULT 0,
+          cache_write INTEGER NOT NULL DEFAULT 0,
+          first_ts    INTEGER,
+          last_ts     INTEGER,
+          PRIMARY KEY (device, agent, session_id)
+        );
+        INSERT OR REPLACE INTO session_usage_new
+          (device, agent, session_id, month, title, dir, model, vendor,
+           events, tokens, input, output, cache_read, cache_write, first_ts, last_ts)
+        SELECT device, agent, session_id, month, title, dir, model, vendor,
+               events, tokens, input, output, cache_read, cache_write, first_ts, last_ts
+        FROM session_usage;
+        DROP TABLE session_usage;
+        ALTER TABLE session_usage_new RENAME TO session_usage;
+      `);
     }
 
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
@@ -297,7 +366,7 @@ export class Repo {
     const stmt = this.db.prepare(
       `INSERT INTO session_title (device, agent, session_id, title, cwd, first_ts, last_ts, updated_at)
        VALUES (?,?,?,?,?,?,?,?)
-       ON CONFLICT(agent, session_id) DO UPDATE SET
+       ON CONFLICT(device, agent, session_id) DO UPDATE SET
          title=COALESCE(excluded.title, session_title.title),
          cwd=COALESCE(excluded.cwd, session_title.cwd),
          first_ts=COALESCE(excluded.first_ts, session_title.first_ts),
@@ -317,9 +386,23 @@ export class Repo {
     }
   }
 
+  /**
+   * 会话标题。键是 `设备:来源:会话`，带设备是为了两台机器上出现同一个
+   * session_id 时不串台。
+   */
   sessionTitles(): Map<string, { title: string | null; cwd: string | null }> {
-    const rows = this.db.prepare('SELECT agent, session_id, title, cwd FROM session_title').all() as any[];
-    return new Map(rows.map(r => [`${r.agent}:${r.session_id}`, { title: r.title, cwd: r.cwd }]));
+    const rows = this.db.prepare('SELECT device, agent, session_id, title, cwd FROM session_title').all() as any[];
+    return new Map(rows.map(r => [`${r.device}:${r.agent}:${r.session_id}`, { title: r.title, cwd: r.cwd }]));
+  }
+
+  /** 取一个会话的标题。device 不给就在所有设备里找，找到就用。 */
+  sessionTitle(device: string | null, agent: string, sessionId: string): { title: string | null; cwd: string | null } | null {
+    const titles = this.sessionTitles();
+    if (device) return titles.get(`${device}:${agent}:${sessionId}`) ?? null;
+    for (const [key, v] of titles) {
+      if (key.endsWith(`:${agent}:${sessionId}`)) return v;
+    }
+    return null;
   }
 
   /* ---------- 文件游标 ---------- */
@@ -682,22 +765,31 @@ export class Repo {
   }
 
   /** 同步过来的会话汇总（本机没有明细的那些）。 */
-  sessionSummary(agent: string, sessionId: string): any {
+  /**
+   * 会话汇总。device 给了就只找那台设备的——两台设备上出现同一个
+   * session_id 时，不带设备参数会随机拿到其中一台。
+   */
+  sessionSummary(agent: string, sessionId: string, device?: string | null): any {
+    if (device) {
+      return this.db.prepare(
+        'SELECT * FROM session_usage WHERE device = ? AND agent = ? AND session_id = ? LIMIT 1'
+      ).get(device, agent, sessionId) ?? null;
+    }
     return this.db.prepare(
       'SELECT * FROM session_usage WHERE agent = ? AND session_id = ? LIMIT 1'
     ).get(agent, sessionId) ?? null;
   }
 
   /** 单个会话的逐条明细。limit 给 0 表示不限。 */
-  sessionEvents(sessionId: string, limit = 0): { events: any[]; total: number } {
-    const total = (this.db.prepare(
-      'SELECT COUNT(*) n FROM usage_event WHERE session_id = ?'
-    ).get(sessionId) as any).n;
-    const sql = `SELECT * FROM usage_event WHERE session_id = ? ORDER BY ts DESC` +
+  sessionEvents(sessionId: string, limit = 0, device?: string | null): { events: any[]; total: number } {
+    const where = device ? 'session_id = ? AND device = ?' : 'session_id = ?';
+    const args: any[] = device ? [sessionId, device] : [sessionId];
+    const total = (this.db.prepare(`SELECT COUNT(*) n FROM usage_event WHERE ${where}`).get(...args) as any).n;
+    const sql = `SELECT * FROM usage_event WHERE ${where} ORDER BY ts DESC` +
       (limit > 0 ? ' LIMIT ?' : '');
     const rows = (limit > 0
-      ? this.db.prepare(sql).all(sessionId, limit)
-      : this.db.prepare(sql).all(sessionId)) as any[];
+      ? this.db.prepare(sql).all(...args, limit)
+      : this.db.prepare(sql).all(...args)) as any[];
     return { events: rows.reverse(), total };
   }
 

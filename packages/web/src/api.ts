@@ -47,7 +47,8 @@ export const api = {
     vendor?: string | null;
     q?: string | null;
   }) => request<ConversationsPayload>('/api/conversations', filter),
-  conversation: (id: string) => request<ConversationDetail>('/api/conversation', { id }),
+  conversation: (id: string, device?: string | null) =>
+    request<ConversationDetail>('/api/conversation', { id, device }),
   logs: (filter: {
     batch?: number | null;
     level?: string | null;

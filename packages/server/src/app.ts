@@ -402,7 +402,9 @@ export class ATrackerServer {
       if (p === '/api/conversation') {
         const id = q.get('id') ?? '';
         if (!id) return json({ error: '缺少 id' }, 400);
-        return json(conversationPayload(this.repo, id));
+        // 带 device 的话只查那台设备的会话。列表页把本机和远端的会话混在一起，
+        // 不带设备参数会拿到另一台设备上同名 session_id 的数据。
+        return json(conversationPayload(this.repo, id, 200, q.get('device')));
       }
       if (p === '/api/logs') {
         const batch = q.get('batch');

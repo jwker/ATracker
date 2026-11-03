@@ -371,13 +371,18 @@ export function App() {
   }, [view, conv, convFilter.dir, convFilter.agent, convFilter.model, convFilter.vendor, convQ, convId]);
 
   // 单个会话详情
+  //
+  // 带上选中会话的设备：列表把本机和远端的会话混在一起，不按设备限定的话，
+  // 两台机器上出现同一个 session_id 时会拿到另一台的数据。
   useEffect(() => {
     if (view !== 'conv' || !convId) {
       setConvDetail(null);
       return;
     }
+    const selected = conv?.groups.flatMap(g => g.list).find(c => c.id === convId);
+    const convDevice = selected?.device ?? null;
     let alive = true;
-    api.conversation(convId)
+    api.conversation(convId, convDevice)
       .then(data => {
         if (!alive) return;
         setConvDetail(data);
@@ -387,7 +392,7 @@ export function App() {
         if (alive) setError((err as Error).message);
       });
     return () => { alive = false; };
-  }, [view, convId, refreshToken]);
+  }, [view, convId, conv, refreshToken]);
 
   // 日志与来源状态
   useEffect(() => {

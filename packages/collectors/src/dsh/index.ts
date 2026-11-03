@@ -20,6 +20,9 @@ function versionOf(name: string): number {
 
 export const dshCollector: Collector = {
   id: 'dsh',
+  // v1：解析规则版本。改了怎么解析就往上加一位，
+  // 游标里存的版本对不上时这个来源的文件会全部重扫一遍。
+  version: '1',
   label: 'DeepSeek Harness',
   roots: () => [join(homedir(), '.dsh', 'sessions')],
 

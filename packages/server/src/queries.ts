@@ -223,7 +223,7 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
   const deviceNames = new Map(repo.devices().map((d: any) => [d.id as string, d.name as string]));
 
   const items = list.map(c => {
-    const meta = titles.get(`${c.agent}:${c.session_id}`);
+    const meta = titles.get(`${c.device}:${c.agent}:${c.session_id}`);
     return {
       id: `${c.agent}:${c.session_id}`,
       device: c.device,
@@ -262,16 +262,16 @@ export function conversationsPayload(repo: Repo, filter: { dir?: string | null; 
   return { groups, total: items.length };
 }
 
-export function conversationPayload(repo: Repo, id: string, limit = 200) {
+export function conversationPayload(repo: Repo, id: string, limit = 200, device?: string | null) {
+  const dev = device ?? null;
   const agent = id.includes(':') ? id.slice(0, id.indexOf(':')) : '';
   const sessionId = id.includes(':') ? id.slice(id.indexOf(':') + 1) : id;
-  const { events, total } = repo.sessionEvents(sessionId, limit);
-  const titles = repo.sessionTitles();
-  const meta = titles.get(`${agent}:${sessionId}`);
+  const { events, total } = repo.sessionEvents(sessionId, limit, dev);
+  const meta = repo.sessionTitle(dev, agent, sessionId);
 
   // 本机没有这个会话的明细时，看是不是同步过来的远端会话
   if (events.length === 0) {
-    const remote = repo.sessionSummary(agent, sessionId);
+    const remote = repo.sessionSummary(agent, sessionId, dev);
     if (remote) {
       const b = {
         input: remote.input, output: remote.output,
@@ -479,7 +479,7 @@ export function dayPayload(repo: Repo, dateQ?: string | null, device?: string, l
       agent: s.agent,
       sessionId: s.session_id,
       // 远端会话的标题在 session_usage 里，本机的在 session_title 里
-      title: s.title ?? titles.get(`${s.agent}:${s.session_id}`)?.title ?? null,
+      title: s.title ?? titles.get(`${s.device}:${s.agent}:${s.session_id}`)?.title ?? null,
       dir: s.cwd,
       dirName: dirName(s.cwd),
       color: colors.get(s.cwd) ?? dirColor(s.cwd),
