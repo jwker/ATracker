@@ -1,4 +1,4 @@
-// 接口载荷类型。字段形状对齐 packages/server/src/queries.ts。
+// 接口载荷类型。字段形状对齐 packages/service/src/queries.ts。
 // 只包含 token 与归属信息，不含金额。
 
 export interface TokenBuckets {
@@ -255,13 +255,13 @@ export interface SyncPayload {
 }
 
 /**
- * 和 packages/core/src/build.ts 里的 BuildInfo 一一对应。
+ * 和 packages/core/src/api.ts 里的 BuildInfo 一一对应。
  *
  * 直接复用 core 的类型：web 包为浏览器构建不引 core 的运行时，
  * 但类型是编译期的东西，import type 不会打进产物。
  * 手抄一份的话 core 那边加字段这边不会有任何编译错误，两边会悄悄漂移。
  */
-export type { BuildInfo } from '../../core/src/build.ts';
+export type { BuildInfo } from '../../core/src/api.ts';
 
 export interface DevicesPayload {
   /** 本机身份 */

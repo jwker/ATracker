@@ -14,11 +14,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
+  "exclude": ["out", "packages/web/dist", "release"],
   "include": [
+    "electron.vite.config.ts",
     "packages/core/**/*.ts",
     "packages/storage/**/*.ts",
     "packages/collectors/**/*.ts",
-    "packages/server/**/*.ts",
+    "packages/service/**/*.ts",
     "packages/cli/**/*.ts",
     "packages/desktop/**/*.ts"
   ]

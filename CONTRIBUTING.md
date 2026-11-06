@@ -7,16 +7,16 @@
 需要 Node 24 以上。`npm install` 之后：
 
 ```bash
-npm run typecheck    # 服务端和前端各跑一遍 tsc，CI 会跑这个
-npm run serve        # 构建前端并起服务，默认 4178
-npm run dev:web      # 只起 Vite，改前端时更快
+npm run typecheck    # 服务层和前端各跑一遍 tsc，CI 会跑这个
+npm run desktop      # 起 Electron，改前端有热更新、改主进程自动重启
+npm run build        # 只构建，不启动
 ```
 
 ## 提交之前
 
 1. `npm run typecheck` 通过。
 2. 改了采集器的话，跑 `node packages/cli/src/index.ts reconcile`，把对账结果贴进 PR 描述。它拿各来源自己写在日志里的汇总数据和采集结果逐项比，不一致说明口径错了。
-3. 不要提交 `data/`、`release/`、`packages/web/dist/`、`build/buildinfo.json`——都在 `.gitignore` 里，别用 `-f` 绕过。
+3. 不要提交 `data/`、`release/`、`out/`、`.dev-userdata/`、`build/buildinfo.json`——都在 `.gitignore` 里，别用 `-f` 绕过。
 
 ## 改采集器的注意事项
 
@@ -33,7 +33,7 @@ npm run dev:web      # 只起 Vite，改前端时更快
 - 采集器只读，不写任何 agent 的目录。
 - 单位换算只在 `packages/core/src/units.ts`，时间分桶只在 `packages/core/src/time.ts`，别在组件里自己算。
 - 前端不引图表库，柱状图和热力图用 CSS 和表格画。
-- 服务端和前端之间只通过 `packages/server/src/queries.ts` 的载荷形状通信。
+- 前端只通过 IPC 接口取数，载荷形状定义在 `packages/service/src/queries.ts`。
 
 ## 提交信息
 

@@ -1,23 +1,50 @@
-// 桌面外壳：启动本地服务，窗口指向它。
+// 主进程入口：窗口、菜单、单实例、自定义协议。
 //
-// 服务端代码原样复用，不重写、不走 IPC：Electron 45 内置的 Node 24 能直接
-// 跑项目里的 .ts，`node:sqlite` 也在，所以 main 进程里 import ATrackerServer
-// 就能用。窗口只是把这个本地服务当普通网页打开。
+// 不需要再起一个本地 HTTP 服务：应用服务（数据库、扫描、监听、同步）就在这个进程里，
+// 页面通过 preload 暴露的 IPC 取数。构建产物在 out/，由 electron-vite 生成。
 
-import { app, BrowserWindow, dialog, Menu, screen, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, Menu, protocol, screen, shell, type MenuItemConstructorOptions } from 'electron';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { extname, isAbsolute, join, normalize, relative } from 'node:path';
 
-import { ATrackerServer } from '../../server/src/app.ts';
-import { iCloudAvailable, iCloudRoot, iCloudSyncDir, loadConfig, saveConfig } from '../../core/src/config.ts';
-import { buildInfo } from '../../core/src/build.ts';
+import { ATrackerService } from '../../../service/src/service.ts';
+import { registerIpc } from './ipc.ts';
+import { iCloudAvailable, iCloudRoot, iCloudSyncDir, loadConfig, saveConfig } from '../../../core/src/config.ts';
+import { buildInfo } from '../../../core/src/build.ts';
 
 /** 打包后是 .../Resources/app.asar，开发时是仓库根目录。 */
 const ROOT = app.getAppPath();
-const WEB_DIR = join(ROOT, 'packages', 'web', 'dist');
+/** electron-vite 的构建产物目录，main / preload / renderer 三段都在里面。 */
+const OUT = join(ROOT, 'out');
+const RENDERER_DIR = join(OUT, 'renderer');
+const PRELOAD_FILE = join(OUT, 'preload', 'index.cjs');
+/** 开发时 electron-vite 会把渲染进程的 Vite 服务器地址放到这个变量里。 */
+const DEV_URL = process.env.ELECTRON_RENDERER_URL;
+/** 冒烟检查：不显示窗口、不弹对话框，跑完打印结果就退出。 */
+const SMOKE_TEST = !!process.env.ATRACKER_SMOKE_TEST;
+/** 生产环境的页面来源。window.location.origin 就是它，localStorage 按它分区。 */
+const APP_ORIGIN = 'app://atracker';
 
-let server: ATrackerServer | null = null;
+// 构建信息不在模块旁边（bundle 之后 import.meta.url 指向 out/main），
+// 显式告诉 core/build.ts 去哪儿找。开发时这个文件不存在，会回落成 dev。
+process.env.ATRACKER_BUILDINFO = join(ROOT, 'build', 'buildinfo.json');
+
+// 开发时把用户数据换到仓库里的一个目录。不这么做的话，`npm run desktop` 会和
+// 「应用程序」里装的那一份抢同一个单实例锁，启动时弹一句「ATracker 已经在运行」，
+// 窗口位置也会跟着一起改。打包后的路径保持不变。
+if (!app.isPackaged) {
+  app.setPath('userData', join(ROOT, '.dev-userdata'));
+}
+
+// 页面用一个自定义协议加载，不用 file://：file:// 没有可用的 origin，
+// localStorage（明暗模式、单位偏好）会失效，也没法在响应头里给 CSP。
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
+
+let service: ATrackerService | null = null;
 let win: BrowserWindow | null = null;
 
 /**
@@ -167,7 +194,7 @@ function applySyncDir(dir: string, opts: { requireICloud: boolean }): boolean {
     return false;
   }
 
-  server?.setSyncDir(dir);
+  service?.setSyncDir(dir);
   saveConfig({ syncDir: dir });
   return true;
 }
@@ -175,7 +202,7 @@ function applySyncDir(dir: string, opts: { requireICloud: boolean }): boolean {
 /** 开关多设备同步，用当前目录（没配过就是 iCloud 默认目录）。 */
 function toggleSync(on: boolean): void {
   if (!on) {
-    server?.setSyncDir(null);
+    service?.setSyncDir(null);
     saveConfig({ syncDir: null });
     buildMenu();
     return;
@@ -232,7 +259,7 @@ function buildMenu(): void {
         {
           label: '重新扫描',
           accelerator: 'CmdOrCtrl+R',
-          click: () => { void server?.triggerScan('manual'); }
+          click: () => { void service?.triggerScan('manual'); }
         },
         {
           label: '打开数据目录',
@@ -322,23 +349,62 @@ function isWebUrl(url: string): boolean {
   }
 }
 
-async function openWindow(): Promise<void> {
-  const config = loadConfig();
-  const instance = new ATrackerServer({
-    dbPath: databasePath(),
-    webDir: WEB_DIR,
-    // 只监听本机回环，端口交给系统分配，避免和已经在跑的 serve 抢 4178。
-    host: '127.0.0.1',
-    port: 0,
-    // 同步开关记在 ~/.atracker/config.json，命令行和桌面版共用
-    syncDir: config.syncDir
+/** 静态文件的内容类型。渲染进程只有这几种文件。 */
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json; charset=utf-8'
+};
+
+/**
+ * 每个响应都带的安全头。以前由 HTTP 服务加，现在由协议处理器加。
+ * 页面里有本机用量，XSS 的后果比一般站点大。
+ */
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy':
+    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+};
+
+/**
+ * 把 out/renderer 挂到 app:// 上。
+ *
+ * 拼出来跑到目录外面的请求一律 404。页面是哈希路由，不需要「找不到就返回
+ * index.html」的兜底，拼错的路径应该如实报错。
+ */
+function serveRenderer(): void {
+  protocol.handle('app', async request => {
+    const url = new URL(request.url);
+    const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
+    const target = normalize(join(RENDERER_DIR, rel));
+    const inside = relative(RENDERER_DIR, target);
+    const notFound = (): Response =>
+      new Response('Not found', { status: 404, headers: SECURITY_HEADERS });
+    if (inside.startsWith('..') || isAbsolute(inside)) return notFound();
+    if (!existsSync(target) || !statSync(target).isFile()) return notFound();
+
+    const body = await readFile(target);
+    return new Response(new Uint8Array(body), {
+      headers: {
+        'Content-Type': MIME[extname(target)] ?? 'application/octet-stream',
+        // 产物文件名带 hash，页面本身不缓存就行
+        'Cache-Control': 'no-cache',
+        ...SECURITY_HEADERS
+      }
+    });
   });
-  server = instance;
-  const addr = await instance.start();
+}
 
-  // 首屏就触发一次扫描，装上就有数据，不用等 5 分钟轮询。
-  void instance.triggerScan('manual');
-
+async function openWindow(): Promise<void> {
   const windowState = loadWindowState();
   win = new BrowserWindow({
     ...windowState,
@@ -348,6 +414,7 @@ async function openWindow(): Promise<void> {
     backgroundColor: '#cfd0cb',
     show: false,
     webPreferences: {
+      preload: PRELOAD_FILE,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -369,22 +436,60 @@ async function openWindow(): Promise<void> {
     return { action: 'deny' };
   });
 
-  // 页面内跳转也一样：只允许留在本地服务上。
+  // 页面内跳转也一样：只允许留在这个页面自己的来源上。
   // 少了这一条，页面里的 target=_self 链接或 302 重定向会把窗口带到外部网站，
   // 而窗口还在应用的菜单和 webContents 上下文里。
+  const origin = DEV_URL ?? APP_ORIGIN;
   win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(addr.url)) event.preventDefault();
+    if (!url.startsWith(origin)) event.preventDefault();
   });
 
   win.once('ready-to-show', () => {
+    if (SMOKE_TEST) return;
     win?.show();
     warnIfDuplicateInstall();
   });
   win.webContents.on('did-finish-load', () => {
-    console.log(`窗口已加载 ${addr.url}`);
+    console.log(`窗口已加载 ${origin}`);
   });
-  await win.loadURL(addr.url);
-  console.log(`ATracker 已启动：${addr.url} · 数据库 ${databasePath()} · 窗口 ${windowState.width}x${windowState.height}`);
+  await win.loadURL(DEV_URL ?? `${APP_ORIGIN}/index.html`);
+  console.log(`ATracker 已启动：${origin} · 数据库 ${databasePath()} · 窗口 ${windowState.width}x${windowState.height}`);
+  if (SMOKE_TEST) await runSmokeTest(win);
+}
+
+/**
+ * 端到端冒烟检查：页面真的挂载了、桥接能调、端口没通也能取数、localStorage 可用。
+ *
+ * 只在设了 `ATRACKER_SMOKE_TEST=1` 时跑，跑完打印一行 JSON 并以退出码报告结果。
+ * 窗口不显示，所以不会打扰正在用电脑的人。用来验证打包产物，不进入日常启动路径。
+ */
+async function runSmokeTest(target: BrowserWindow): Promise<void> {
+  // 给 React 首屏和一次 IPC 往返留时间
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  const result = await target.webContents.executeJavaScript(`(async () => {
+    const bridge = window.atracker;
+    const info = bridge ? await bridge.info() : null;
+    const total = bridge ? await bridge.request({ method: 'GET', path: '/api/total' }) : null;
+    let stored = false;
+    try {
+      localStorage.setItem('__smoke', '1');
+      stored = localStorage.getItem('__smoke') === '1';
+      localStorage.removeItem('__smoke');
+    } catch { stored = false; }
+    return {
+      mounted: document.querySelector('#app')?.children.length ?? 0,
+      bridge: !!bridge,
+      version: info?.version ?? null,
+      commit: info?.build?.commit ?? null,
+      totalStatus: total?.status ?? null,
+      tokens: total?.body?.total ?? null,
+      stored
+    };
+  })()`) as { mounted: number; bridge: boolean; totalStatus: number | null; stored: boolean };
+
+  const ok = result.mounted > 0 && result.bridge && result.totalStatus === 200 && result.stored;
+  console.log(`SMOKE ${ok ? 'PASS' : 'FAIL'} ${JSON.stringify(result)}`);
+  app.exit(ok ? 0 : 1);
 }
 
 // 单实例：两个进程同时写一个 SQLite 文件没必要，也容易互相抢写锁。
@@ -392,6 +497,12 @@ if (!app.requestSingleInstanceLock()) {
   // 拿不到锁说明已经有一个在跑。这里要给出反馈，否则用户只会看到「双击没反应」。
   // 主实例会在 second-instance 事件里把窗口提到前面。
   app.whenReady().then(() => {
+    // 冒烟检查不能停在对话框上等一个永远按不到的按钮，直接报失败
+    if (SMOKE_TEST) {
+      console.error('SMOKE FAIL 已经有另一个实例在运行，换一个 --user-data-dir 再跑');
+      app.exit(1);
+      return;
+    }
     dialog.showMessageBoxSync({
       type: 'info',
       message: 'ATracker 已经在运行',
@@ -420,6 +531,19 @@ if (!app.requestSingleInstanceLock()) {
       credits: `本机 AI 编码 agent 的 token 用量看板\n${b.builtAt ? '构建于 ' + b.builtAt : ''}`
     });
     buildMenu();
+    // 协议处理器要在创建窗口之前注册，否则第一次加载拿不到文件
+    serveRenderer();
+    // 同步开关记在 ~/.atracker/config.json，命令行和桌面版共用
+    const instance = new ATrackerService({
+      dbPath: databasePath(),
+      syncDir: loadConfig().syncDir
+    });
+    service = instance;
+    instance.start();
+    // 首屏就触发一次扫描，装上就有数据，不用等 5 分钟轮询。
+    void instance.triggerScan('manual');
+    // 事件只推给当前窗口。窗口可能关掉，所以每次推之前重新问一遍。
+    registerIpc(instance, () => (win ? [win] : []));
     return openWindow();
   }).catch(err => {
     // 起不来就把原因打出来，别留一个空白窗口。
@@ -437,6 +561,6 @@ if (!app.requestSingleInstanceLock()) {
 
   // 退出前关掉服务和文件监听，让 SQLite 正常收尾。
   app.on('before-quit', () => {
-    void server?.close();
+    void service?.close();
   });
 }

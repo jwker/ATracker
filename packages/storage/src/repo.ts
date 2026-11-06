@@ -65,7 +65,9 @@ export class Repo {
 
   /** 建表 + 按版本补老库。只往前加，不改历史文件。 */
   private migrate(): void {
-    this.db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
+    // 用 this.schemaPath 而不是拼 here：打包成单文件后模块所在目录里没有 schema.sql，
+    // 调用方可以通过 RepoOptions 显式给一个路径。
+    this.db.exec(readFileSync(this.schemaPath, 'utf8'));
     const from = (this.db.prepare('PRAGMA user_version').get() as any).user_version as number;
     if (from >= SCHEMA_VERSION) return;
 

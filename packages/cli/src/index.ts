@@ -7,8 +7,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir, networkInterfaces } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
 
 import { Repo } from '../../storage/src/repo.ts';
 import { COLLECTORS, runScan } from '../../collectors/src/scanner.ts';
@@ -18,7 +17,6 @@ import { exportRollup, importRollups } from '../../storage/src/sync.ts';
 import { localMonth } from '../../core/src/time.ts';
 import { fmtTok } from '../../core/src/units.ts';
 import { reconcile } from './reconcile.ts';
-import { ATrackerServer } from '../../server/src/app.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const DB = join(root, 'data', 'atracker.db');
@@ -31,43 +29,6 @@ function arg(name: string): string | undefined {
 function openRepo(): Repo {
   mkdirSync(dirname(DB), { recursive: true });
   return new Repo(DB);
-}
-
-/**
- * 本机在局域网里的地址。服务监听 0.0.0.0 时，这些地址都能打开。
- * 第一个是默认路由所在的网卡，也就是手机上通常能连上的那个。
- */
-function lanAddresses(): string[] {
-  const all: string[] = [];
-  for (const list of Object.values(networkInterfaces())) {
-    for (const ni of list ?? []) {
-      if (ni.family === 'IPv4' && !ni.internal) all.push(ni.address);
-    }
-  }
-  const primary = primaryAddress();
-  if (!primary) return all;
-  return [primary, ...all.filter(a => a !== primary)];
-}
-
-/** 默认路由所在的网卡地址。拿不到就退到第一个非内部网卡。 */
-function primaryAddress(): string | undefined {
-  // route 是 macOS 的命令。其他平台直接跳过，退到第一个非内部网卡。
-  if (process.platform !== 'darwin') return undefined;
-  try {
-    const out = execFileSync('route', ['-n', 'get', 'default'], { encoding: 'utf8' });
-    const name = out.match(/interface:\s*(\S+)/)?.[1];
-    if (name) {
-      const hit = (networkInterfaces()[name] ?? []).find(ni => ni.family === 'IPv4' && !ni.internal);
-      if (hit) return hit.address;
-    }
-  } catch {
-    // 不是 macOS 或没有默认路由
-  }
-  for (const list of Object.values(networkInterfaces())) {
-    const hit = (list ?? []).find(ni => ni.family === 'IPv4' && !ni.internal);
-    if (hit) return hit.address;
-  }
-  return undefined;
 }
 
 const cmd = process.argv[2] ?? 'help';
@@ -90,7 +51,7 @@ if (cmd === 'scan') {
   }
   const first = repo.recentBatches(1)[0];
   if (first && first.id <= 2) {
-    console.log('\n  起服务看界面：npm run serve   →  http://127.0.0.1:4178');
+    console.log('\n  看界面：npm run desktop（桌面版窗口）');
   }
   repo.close();
 } else if (cmd === 'stats') {
@@ -106,50 +67,6 @@ if (cmd === 'scan') {
     console.log(`  缓存写入  ${fmtTok(t.cache_write, 'zh')}`);
   }
   repo.close();
-} else if (cmd === 'serve') {
-  const port = Number(arg('port') ?? 4178);
-  // 默认只监听本机。服务没有鉴权，接口里有本机的用量、会话标题和目录绝对路径，
-  // 对外开必须显式说一声。
-  const host = arg('host') ?? (process.argv.includes('--lan') ? '0.0.0.0' : '127.0.0.1');
-  // 同步目录优先级：--sync-dir <路径> > --sync（iCloud 默认目录）> 环境变量 > 配置文件
-  const syncArg = arg('sync-dir');
-  const syncDir = syncArg === 'icloud'
-    ? iCloudSyncDir()
-    : syncArg
-      ? syncArg
-      : process.argv.includes('--sync')
-        ? iCloudSyncDir()
-        : process.env.ATRACKER_SYNC_DIR ?? loadConfig().syncDir;
-  const server = new ATrackerServer({
-    dbPath: DB,
-    port,
-    host,
-    watch: !process.argv.includes('--no-watch'),
-    syncDir
-  });
-  const addr = await server.start();
-  console.log(`ATracker 已启动：监听 ${addr.host}:${addr.port}`);
-  const addrs = lanAddresses();
-  if (addr.host === '0.0.0.0') {
-    if (addrs.length) {
-      console.log(`  局域网访问 http://${addrs[0]}:${addr.port}`);
-      if (addrs.length > 1) {
-        console.log(`  其他网卡   ${addrs.slice(1).map(a => `http://${a}:${addr.port}`).join('  ')}`);
-      }
-    } else {
-      console.log('  没有找到局域网地址，只能本机访问');
-    }
-  } else {
-    console.log(`  只给本机访问：${addr.url}`);
-  }
-  console.log(`  数据库 ${DB}`);
-  console.log(syncDir ? `  多设备同步 ${syncDir}` : '  多设备同步 关闭（--sync-dir <目录> 打开）');
-  console.log(`  监听文件变化自动扫描，关掉用 --no-watch`);
-  console.log(`  局域网访问用 --lan（或 --host 0.0.0.0）`);
-  console.log('  Ctrl-C 退出');
-  const shutdown = async () => { console.log('\n正在退出…'); await server.close(); process.exit(0); };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
 } else if (cmd === 'sync') {
   const sub = process.argv[3] ?? 'import';
   const dir = arg('dir') ?? process.env.ATRACKER_SYNC_DIR ?? join(homedir(), '.atracker', 'sync');
@@ -227,7 +144,5 @@ if (cmd === 'scan') {
   atracker stats                                     看累计用量
   atracker sync export|import [--dir <目录>]          多设备同步：导出自己的 rollup / 导入别人的
   atracker reconcile                                 拿各来源的汇总数据对账
-  atracker serve [--port 4178] [--lan] [--host <地址>] [--no-watch] [--sync] [--sync-dir <目录>]   启动本地服务
-                                                                                                   默认只监听本机，--lan 才对外开
   atracker doctor                                    看各来源是否可读`);
 }

@@ -44,19 +44,19 @@
 
 ## 怎么开
 
+桌面版在「文件」菜单里开关：`多设备同步` 勾上就用当前目录，`同步目录…` 换一个文件夹。
+勾上之后每次扫描完写自己的文件，启动时和每 60 秒读别人的文件；目录开不了会弹提示，
+不会静默失败。
+
+命令行只用于手动导一次（不开应用）：
+
 ```bash
-# 服务端自动同步：扫描完写自己的文件，启动时和每 60 秒读别人的文件
-atracker serve --sync
-
-# 指定任意目录（Syncthing、Dropbox、局域网共享盘都行）
-atracker serve --sync-dir ~/Sync/ATracker
-
-# 只想同步一次、不开服务
 atracker sync export [--dir <目录>]
 atracker sync import [--dir <目录>]
 ```
 
-同步目录的优先级：`--sync-dir` > `--sync`（用 iCloud 默认目录 `~/Library/Mobile Documents/com~apple~CloudDocs/ATracker`）> 环境变量 `ATRACKER_SYNC_DIR` > `~/.atracker/config.json` 里的 `syncDir`。都没配置就关掉，不读也不写。
+`--dir` 不传时用环境变量 `ATRACKER_SYNC_DIR`，再没有就用 `~/.atracker/sync`。
+桌面版读的是 `~/.atracker/config.json` 里的 `syncDir`，和命令行这两条入口互不影响。
 
 桌面版在「文件 → 多设备同步」里开关，切换时写进 `~/.atracker/config.json`，不用重启。「文件 → 同步目录…」可以换成任意文件夹，选完自动打开同步，当前路径显示在菜单项右侧。
 

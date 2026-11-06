@@ -33,11 +33,11 @@ if (args.includes('--unsigned')) {
   delete env.APPLE_TEAM_ID;
 }
 
-// 3. 前端构建 + electron-builder
+// 3. 构建 main/preload/renderer + electron-builder
 const passthrough = args.filter(a => a !== '--unsigned');
 // Windows 上 npm / npx 是 .cmd 包装器，直接 execFileSync('npm') 会 ENOENT。
 const bin = (name) => (process.platform === 'win32' ? `${name}.cmd` : name);
-execFileSync(bin('npm'), ['run', 'build:web'], { cwd: root, stdio: 'inherit', env });
+execFileSync(bin('npm'), ['run', 'build'], { cwd: root, stdio: 'inherit', env });
 // 第三方组件声明跟着安装包一起分发，打包前生成
 execFileSync('node', [join(root, 'scripts', 'third-party-notices.mjs')], { cwd: root, stdio: 'inherit' });
 execFileSync(bin('npx'), ['electron-builder', ...passthrough], { cwd: root, stdio: 'inherit', env });

@@ -7,21 +7,25 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export interface BuildInfo {
-  version: string;
-  /** git 短哈希 */
-  commit: string;
-  /** 打包时工作区是否有未提交改动 */
-  dirty: boolean;
-  branch: string;
-  /** ISO 时间 */
-  builtAt: string;
-}
+// 形状定义在 api.ts，和 IPC 契约放一起，渲染进程不需要 import 这个文件。
+import type { BuildInfo } from './api.ts';
+
+export type { BuildInfo };
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-/** 打包后的位置：app.asar/build/buildinfo.json；开发时是仓库根目录下的同一路径 */
-const FILE = join(here, '../../..', 'build', 'buildinfo.json');
+/**
+ * 打包后的位置：app.asar/build/buildinfo.json；开发时是仓库根目录下的同一路径。
+ *
+ * 主进程会被打包成单个 bundle，模块位置不再等于源码位置，所以它启动时用
+ * `ATRACKER_BUILDINFO` 显式指定路径。命令行直接跑源码，走默认拼出来的路径。
+ *
+ * 每次调用时再算，不能写成模块顶层的常量：模块顶层的代码比设置环境变量的那行先执行，
+ * 那样读到的是空值，打包后会静默回落成 dev。
+ */
+function buildInfoFile(): string {
+  return process.env.ATRACKER_BUILDINFO ?? join(here, '../../..', 'build', 'buildinfo.json');
+}
 
 /** 文件不存在或者读不了时返回的兜底值。 */
 function devInfo(fallbackVersion: string): BuildInfo {
@@ -49,7 +53,7 @@ let cached: BuildInfo | null = null;
 export function buildInfo(fallbackVersion = '0.0.0'): BuildInfo {
   if (cached) return cached;
   try {
-    const parsed = parseBuildInfo(JSON.parse(readFileSync(FILE, 'utf8')), fallbackVersion);
+    const parsed = parseBuildInfo(JSON.parse(readFileSync(buildInfoFile(), 'utf8')), fallbackVersion);
     // 内容不对就当没有这个文件。原来是「字段缺失就补默认值」，
     // 一个手改坏的 buildinfo.json 会显示成半真半假的信息。
     cached = parsed ?? devInfo(fallbackVersion);

@@ -1,6 +1,5 @@
-# 桌面打包配置。应用根目录就是这个仓库，main 指向 packages/desktop/src/main.ts。
-# 服务端在 Electron 的 main 进程里直接跑 TypeScript（Electron 45 的 Node 24 支持），
-# 所以包内容就是源码 + 前端构建产物，没有额外的后端构建步骤。
+# 桌面打包配置。main 指向 electron-vite 的构建产物 out/main/index.js，
+# 打进包里的只有 out/ 下的三份产物，外加构建信息和许可声明。
 
 appId: com.jwker.atracker
 productName: ATracker
@@ -19,15 +18,16 @@ files:
   - LICENSE
   - THIRD_PARTY_NOTICES.txt
   - build/buildinfo.json
-  - packages/desktop/src/**
-  - packages/core/src/**
-  - packages/storage/src/**
-  - packages/collectors/src/**
-  - packages/server/src/**
-  - packages/web/dist/**
-  # 运行时不需要任何第三方依赖：electron 是内置的，SQLite 用 node:sqlite
+  # main / preload / renderer 三段产物，schema.sql 也在 out/main 里
+  - out/**
+  # 运行时不需要任何第三方依赖：electron 是内置的，SQLite 用 node:sqlite，
+  # 前端已经被打进 out/renderer
   - "!node_modules/**"
   - "!**/*.map"
+
+# 沙箱化的 preload 从 asar 里解出来，避免「读不到 preload」这类和环境相关的问题
+asarUnpack:
+  - out/preload/**
 
 mac:
   category: public.app-category.developer-tools

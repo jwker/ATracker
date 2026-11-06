@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { api } from './api.ts';
+import { api, events } from './api.ts';
 import { Header } from './components/Header.tsx';
 import { DeviceStrip } from './components/DeviceStrip.tsx';
 import { LedgerView } from './views/LedgerView.tsx';
@@ -434,12 +434,8 @@ export function App() {
     return () => { alive = false; };
   }, [view, dayDate, refreshToken, device]);
 
-  // 扫描完成后刷新所有数据
-  useEffect(() => {
-    const es = new EventSource('/api/events');
-    es.onmessage = () => setRefreshToken(n => n + 1);
-    return () => es.close();
-  }, []);
+  // 扫描完成后刷新所有数据。事件由主进程推过来，载荷暂时不用区分。
+  useEffect(() => events.on(() => setRefreshToken(n => n + 1)), []);
 
   /* ---------- 导航 ---------- */
 

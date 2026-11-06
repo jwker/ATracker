@@ -11,7 +11,9 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vite/client"]
+    // "node" 只给 src 里的 *.test.ts 用（它们跑在 node --test 下，不是渲染进程）。
+    // 页面代码不能用任何 Node API：渲染进程是沙箱，没有 process、fs 这些东西。
+    "types": ["vite/client", "node"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src"]
 }

@@ -1,5 +1,9 @@
-// 取数层。所有请求都走相对路径，服务端和 Vite 代理都会转发。
+// 取数层。所有请求都走 preload 暴露的桥，主进程交给 service/handlers.ts 分发。
+//
+// 形状和以前一样：视图组件调用 api.total(...) 这类方法，不关心底层是 IPC 还是 HTTP。
+// 分发结果里的 status 沿用 HTTP 语义，所以错误处理和以前一致。
 
+import type { ApiCall, ApiResult, AtrackerBridge, PushEvent } from '../../core/src/api.ts';
 import type {
   AggregatePayload,
   BuildInfo,
@@ -15,98 +19,92 @@ import type {
   TotalPayload
 } from './types.ts';
 
-/** 请求超时。服务端卡住时页面不能一直转圈。 */
+/** 请求超时。主进程卡住时页面不能一直转圈。 */
 const TIMEOUT_MS = 15_000;
 
-async function request<T>(
-  path: string,
-  params?: Record<string, string | number | null | undefined>
-): Promise<T> {
-  const url = new URL(path, location.origin);
-  for (const [k, v] of Object.entries(params ?? {})) {
-    if (v !== null && v !== undefined && v !== '') url.searchParams.set(k, String(v));
-  }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  let res: Response;
+/** 桥接对象。页面只在桌面窗口里跑，拿不到就说明 preload 没加载成功。 */
+function bridge(): AtrackerBridge {
+  const b = window.atracker;
+  if (!b) throw new Error('窗口桥接没有加载（preload 没跑起来）');
+  return b;
+}
+
+/** 把失败的结果转成异常，文案沿用以前接口的 error 字段。 */
+function failure(call: ApiCall, result: ApiResult): never {
+  const body = result.body;
+  const message =
+    body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
+      ? (body as { error: string }).error
+      : `${call.path} ${result.status}`;
+  throw new Error(message);
+}
+
+async function invoke<T>(call: ApiCall): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${call.path} 请求超时`)), TIMEOUT_MS);
+  });
   try {
-    res = await fetch(url, { signal: ctrl.signal });
-  } catch (err) {
-    if ((err as Error).name === 'AbortError') throw new Error(`${path} 请求超时`);
-    throw err;
+    const result = await Promise.race([bridge().request(call), timeout]);
+    if (result.status !== 200) failure(call, result);
+    return result.body as T;
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) {
-    // 服务端有时会用 200 返回 { error }，那种要单独挑出来。
-    let msg = `${path} ${res.status}`;
-    try {
-      const body = await res.json();
-      if (body && typeof body.error === 'string') msg = body.error;
-    } catch {
-      // 响应不是 JSON，用状态码
-    }
-    throw new Error(msg);
+}
+
+function get<T>(path: string, params?: ApiCall['params']): Promise<T> {
+  return invoke<T>({ method: 'GET', path, params });
+}
+
+async function post(path: string, body?: unknown): Promise<void> {
+  await invoke({ method: 'POST', path, body });
+}
+
+/** 扫描/同步事件。主进程推过来，页面收到就重新取数。 */
+export const events = {
+  on(listener: (event: PushEvent) => void): () => void {
+    return bridge().onEvent(listener);
   }
-  return res.json() as Promise<T>;
+};
+
+/** 打开数据目录。 */
+export function openDataDir(): Promise<void> {
+  return bridge().openDataDir();
 }
 
 export const api = {
-  status: () => request<{ ok: boolean; build?: BuildInfo; total: TotalPayload }>('/api/status'),
-  total: (device?: string | null) => request<TotalPayload>('/api/total', { device }),
-  calendar: (month: string, device?: string | null) => request<CalendarPayload>('/api/calendar', { month, device }),
+  status: () => get<{ ok: boolean; build?: BuildInfo; total: TotalPayload }>('/api/status'),
+  total: (device?: string | null) => get<TotalPayload>('/api/total', { device }),
+  calendar: (month: string, device?: string | null) => get<CalendarPayload>('/api/calendar', { month, device }),
   aggregate: (from: string, to: string, device?: string | null) =>
-    request<AggregatePayload>('/api/aggregate', { from, to, device }),
+    get<AggregatePayload>('/api/aggregate', { from, to, device }),
   /** 全期汇总。总账页用，服务端按库里的最早/最晚一天取区间。 */
-  aggregateAll: (device?: string | null) => request<AggregatePayload>('/api/aggregate', { all: 1, device }),
+  aggregateAll: (device?: string | null) => get<AggregatePayload>('/api/aggregate', { all: 1, device }),
   matrix: (from: string, to: string, device?: string | null) =>
-    request<MatrixPayload>('/api/matrix', { from, to, device }),
-  matrixAll: (device?: string | null) => request<MatrixPayload>('/api/matrix', { all: 1, device }),
-  day: (date: string, device?: string | null) => request<DayPayload>('/api/day', { date, device }),
+    get<MatrixPayload>('/api/matrix', { from, to, device }),
+  matrixAll: (device?: string | null) => get<MatrixPayload>('/api/matrix', { all: 1, device }),
+  day: (date: string, device?: string | null) => get<DayPayload>('/api/day', { date, device }),
   conversations: (filter: {
     dir?: string | null;
     agent?: string | null;
     model?: string | null;
     vendor?: string | null;
     q?: string | null;
-  }) => request<ConversationsPayload>('/api/conversations', filter),
+  }) => get<ConversationsPayload>('/api/conversations', filter),
   conversation: (id: string, device?: string | null) =>
-    request<ConversationDetail>('/api/conversation', { id, device }),
+    get<ConversationDetail>('/api/conversation', { id, device }),
   logs: (filter: {
     batch?: number | null;
     level?: string | null;
     source?: string | null;
     q?: string | null;
-  }) => request<LogsPayload>('/api/logs', filter),
-  doctor: () => request<DoctorPayload>('/api/doctor'),
-  devices: () => request<DevicesPayload>('/api/devices'),
-  sync: () => request<SyncPayload>('/api/sync'),
-  ignoreDevice: async (id: string): Promise<void> => {
-    const res = await fetch('/api/sync/ignore', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-    if (!res.ok) throw new Error(`/api/sync/ignore ${res.status}`);
-  },
-  restoreDevice: async (id: string): Promise<void> => {
-    const res = await fetch('/api/sync/restore', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-    if (!res.ok) throw new Error(`/api/sync/restore ${res.status}`);
-  },
-  renameLocal: async (name: string): Promise<void> => {
-    const res = await fetch('/api/device/name', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-    if (!res.ok) throw new Error(`/api/device/name ${res.status}`);
-  },
-  scan: async (): Promise<void> => {
-    const res = await fetch('/api/scan', { method: 'POST' });
-    if (!res.ok) throw new Error(`/api/scan ${res.status}`);
-  }
+  }) => get<LogsPayload>('/api/logs', filter),
+  doctor: () => get<DoctorPayload>('/api/doctor'),
+  devices: () => get<DevicesPayload>('/api/devices'),
+  sync: () => get<SyncPayload>('/api/sync'),
+  ignoreDevice: (id: string) => post('/api/sync/ignore', { id }),
+  restoreDevice: (id: string) => post('/api/sync/restore', { id }),
+  renameLocal: (name: string) => post('/api/device/name', { name }),
+  scan: () => post('/api/scan')
 };

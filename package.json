@@ -29,17 +29,15 @@
   "engines": {
     "node": ">=24"
   },
-  "main": "packages/desktop/src/main.ts",
+  "main": "out/main/index.js",
   "scripts": {
     "scan": "node packages/cli/src/index.ts scan",
     "stats": "node packages/cli/src/index.ts stats",
-    "dev:web": "vite packages/web",
-    "build:web": "vite build packages/web",
-    "serve": "npm run build:web && node packages/cli/src/index.ts serve",
-    "serve:no-build": "node packages/cli/src/index.ts serve",
     "typecheck": "tsc --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
     "test": "node --test \"packages/**/*.test.ts\"",
-    "desktop": "electron .",
+    "build": "electron-vite build",
+    "desktop": "electron-vite dev",
+    "desktop:prod": "npm run build && electron .",
     "dist:mac": "node scripts/dist.mjs --mac",
     "dist:win": "node scripts/dist.mjs --win",
     "icon": "electron packages/desktop/scripts/render-icon.mjs",
@@ -55,6 +53,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.1.0",
     "electron-builder": "^26.0.0",
+    "electron-vite": "^6.0.0",
     "typescript": "^5.6.0",
     "vite": "^8.3.4"
   },

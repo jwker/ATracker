@@ -6,6 +6,7 @@
 packages/
   core/src/
     types.ts        UsageEvent 等公共类型
+    api.ts          主进程与页面之间的调用形状（IPC 契约）
     units.ts        三种数字单位，全站只在这里换算
     catalog.ts      模型 → 厂商
     palette.ts      目录 → 颜色，颜色跟随实体不跟随排名
@@ -24,11 +25,16 @@ packages/
     codex/          codex 采集器
     claude-code/    Claude Code 采集器
     pi/  opencode/  dsh/  其余三个
-  server/src/
+  service/src/
+    service.ts      扫描编排、文件监听、多设备同步、事件推送
+    handlers.ts     接口分发：一次调用进，一个结果出
     queries.ts      接口载荷
-    app.ts          HTTP 路由、SSE 推送、文件监听、静态文件
-  web/
-    index.html      Vite 入口
+  desktop/src/
+    main/index.ts   窗口、菜单、单实例、app:// 协议
+    main/ipc.ts     IPC 注册与参数校验
+    preload/index.ts 暴露 window.atracker
+  web/              渲染进程源码
+    index.html      页面入口
     src/
       main.tsx      挂载
       App.tsx       页面状态、取数、路由参数
@@ -39,24 +45,30 @@ packages/
   cli/src/
     index.ts        命令行
     reconcile.ts    拿各来源自带的汇总数据对账
-  desktop/src/
-    main.ts         Electron 壳
 ```
 
-运行时零依赖：服务端只用 Node 自带模块，SQLite 走 `node:sqlite`，采集 zstd 用自己的帧遍历器。`dependencies` 里的 React 只用于构建前端。
+三段的边界：`service` 只管应用逻辑，不知道界面怎么来的；`desktop` 只做窗口、菜单和
+IPC 桥接；`web` 只调用 `window.atracker.request`，不 import 任何 Node 的东西。
+
+构建产物在 `out/main`、`out/preload`、`out/renderer`，由 `electron.vite.config.ts` 生成，
+不进版本库。
 
 ## 常用命令
 
 ```bash
 npm run scan         # 扫一次本机日志
 npm run stats        # 打印累计用量
-npm run typecheck    # 服务端和前端各跑一遍 tsc
+npm run typecheck    # 主进程/服务层和前端各跑一遍 tsc
 npm test             # 跑单元测试（Node 自带的 test runner，不引依赖）
-npm run serve        # 构建前端并起服务，默认 http://127.0.0.1:4178
-npm run dev:web      # 只起 Vite 开发服务器，/api 代理到 4178
+npm run build        # 只构建，不启动
+npm run desktop      # 起 Electron：前端热更新，主进程改动自动重启
+npm run desktop:prod # 用 out/ 里的构建产物跑（验证打包后的加载方式）
 ```
 
-命令行子命令：`scan`、`stats`、`doctor`、`reconcile`、`sync export|import`、`serve`。
+命令行子命令：`scan`、`stats`、`doctor`、`reconcile`、`sync export|import`。
+
+`npm run desktop` 用仓库里的 `data/atracker.db` 和 `.dev-userdata/` 作为用户数据目录，
+和「应用程序」里装的那一份互不影响：不会抢单实例锁，窗口位置也不会互相覆盖。
 
 ## 加一个 agent
 
@@ -64,7 +76,7 @@ npm run dev:web      # 只起 Vite 开发服务器，/api 代理到 4178
 2. 采集器只做一件事：读文件、产出 `UsageEvent`。不碰数据库，不改格式。
 3. 在 `scanner.ts` 的 `COLLECTORS` 数组里加一行注册。
 
-`COLLECTORS` 是显式的数组，不是扫目录再动态 import：打包成单个可执行文件之后，扫目录的假设就不成立了。
+`COLLECTORS` 是显式的数组，不是扫目录再动态 import：打包成单个 bundle 之后，扫目录的假设就不成立了。
 
 新采集器要自己带 fixture 测试，跑通再合并——五个来源的日志格式都改过不止一次。
 
@@ -76,13 +88,22 @@ npm run dev:web      # 只起 Vite 开发服务器，/api 代理到 4178
 
 只在 `packages/core/src/catalog.ts` 的规则表里加一行（模型名 → 厂商）。这张表只在采集器没上报厂商时兜底，上报了原样用。
 
+## 加一个接口
+
+1. 在 `packages/service/src/queries.ts` 里写载荷函数（只查库，不碰界面）。
+2. 在 `handlers.ts` 里加一条 `path` 分发。
+3. 在 `packages/web/src/types.ts` 里声明载荷类型，在 `packages/web/src/api.ts` 里加一个方法。
+
+IPC 通道是固定的，不需要为新接口加通道，也不要为了省事把整个 Node 模块暴露到 preload。
+
 ## 代码规则
 
 - 采集器不许写任何 agent 的目录，只读。
 - 单位换算只在 `core/units.ts` 里做，组件里不许自己除 1e8。
 - 时间分桶只在 `core/time.ts` 里做。
-- 服务端和前端之间只通过 `server/src/queries.ts` 的载荷形状通信，前端不直接拼 SQL。
+- 界面和主进程之间只通过 `service/src/queries.ts` 的载荷形状通信，前端不直接拼 SQL。
 - 前端不引图表库，柱状图和热力图都用 CSS 和表格。
+- 渲染进程是沙箱：没有 `process`、`fs`、`ipcRenderer`。要用主进程的能力，加在 preload 里。
 
 ## 测试
 
@@ -95,3 +116,19 @@ npm run dev:web      # 只起 Vite 开发服务器，/api 代理到 4178
 
 采集器部分靠 `reconcile` 对账：拿各来源自己在日志末尾写的汇总，和采集出来的
 结果逐项比。改采集逻辑之后一定要跑一遍，不一致就说明口径错了。
+
+## 端到端冒烟检查
+
+构建之后，可以让应用自己加载一遍页面并检查桥接、接口和 `localStorage`：
+
+```bash
+npm run build
+ATRACKER_SMOKE_TEST=1 ATRACKER_DB=/tmp/smoke.db npx electron . --user-data-dir=/tmp/smoke-userdata
+```
+
+窗口不显示，跑完打印一行 `SMOKE PASS {...}`，退出码 0 表示通过。检查四件事：页面挂载了、
+`window.atracker` 存在、一次 IPC 取数返回 200、`localStorage` 可读写。打包后的
+`.app` 也能用同样的方式跑，把 `npx electron .` 换成 `release/mac-arm64/ATracker.app/Contents/MacOS/ATracker`。
+
+`--user-data-dir` 必须给一个临时目录：默认目录和「应用程序」里装的那份共用单实例锁，
+不带这个参数会弹一句「ATracker 已经在运行」然后停在那里。

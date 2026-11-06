@@ -284,7 +284,7 @@ CREATE INDEX idx_scan_log_at ON scan_log(at DESC);
 
 `scan_batch` 也有上限：保留最近 30 天、最多 5000 行，超出的在每次扫描收尾时删掉。监听触发很频繁（每 2 秒空闲就会跑一次扫描），不设上限一年能涨到几十万行。删掉只影响日志页和日详情的「扫描次数」，用量聚合不受影响。
 
-**扫描没有进程锁。** `atracker serve` 和 `atracker scan` 同时跑不会写坏数据——写入按 `event_id` 覆盖，游标以最后写入者为准——但两边会重复解析同一批文件。要跑 CLI 扫描之前先停服务更省事。
+**扫描没有进程锁。** 桌面版开着的时候跑 `atracker scan` 不会写坏数据——写入按 `event_id` 覆盖，游标以最后写入者为准——但两边会重复解析同一批文件。要跑 CLI 扫描之前先退出桌面版更省事。
 
 **单个文件解析失败不影响整批。** 错误分级：
 
@@ -454,6 +454,8 @@ CREATE INDEX idx_usage_event_ts ON usage_event(ts);
 
 ### 3.5 日志页要读的接口
 
+接口在主进程里实现，界面通过 IPC 调用；路径只作为调用标识，没有网络端口。
+
 | 接口 | 作用 |
 | --- | --- |
 | `GET /api/scan/batches?limit=20` | 最近的扫描批次 |
@@ -465,17 +467,16 @@ CREATE INDEX idx_usage_event_ts ON usage_event(ts);
 
 ### 3.6 前端怎么知道要刷新
 
-服务端用 SSE 推：
+服务层跑完一次扫描或一次同步导入后，往订阅者推一条事件，主进程把它转发成 `webContents.send`，preload 里变成 `window.atracker.onEvent(cb)`：
 
 ```
-GET /api/events
-data: {"type":"scan_done","batch":42,"affected_days":["2026-10-18"],"duration_ms":63,"warn":1,"err":0}
-data: {"type":"log","batch":42,"level":"warn","source":"pi","message":"pi 会话目录不存在，跳过"}
+{"type":"scan_done","batch":42,"eventsWritten":381,"days":["2026-10-18"],"durationMs":63}
+{"type":"sync_done","devices":["<设备 id>"],"rows":184}
 ```
 
-前端收到后，重新拉受影响的模块。日历只刷新那几格，4.1 和 4.2 刷新数值。
+前端收到后重新取数。这条通知只用来触发刷新，丢了不会损坏数据，最多晚一轮刷新。
 
-首屏：服务端启动时如果库是空的，先跑一次全量扫描再开始监听，前端这段时间显示骨架屏。
+首屏：桌面版启动时就触发一次扫描，装上就有数据，不用等 5 分钟轮询。扫描在后台跑，界面先显示已有数据，扫完再刷新一次。
 
 ## 4. 可扩展与可编辑的代码规则
 
@@ -499,10 +500,15 @@ packages/
     schema.sql      # 建表
     migrations/     # 001_xxx.sql、002_xxx.sql ...
     repo.ts         # 读写与聚合维护
-  server/src/
-    routes.ts
-    events.ts       # SSE
-packages/web/src/   # React 前端
+  service/src/
+    service.ts      # 扫描编排、文件监听、多设备同步、事件推送
+    handlers.ts     # 接口分发：一次调用进，一个结果出
+    queries.ts      # 接口载荷
+  desktop/src/
+    main/index.ts   # 窗口、菜单、单实例、app:// 协议
+    main/ipc.ts     # IPC 注册
+    preload/index.ts# 暴露给页面的 window.atracker
+  web/src/          # React 前端（渲染进程）
 data/atracker.db    # 运行时生成，不进版本库
 ```
 
@@ -670,9 +676,12 @@ localStorage.setItem('atracker-mode', mode);
 
 切换主题只换一份 CSS 变量，组件不重渲染。排布也可以跟着主题走：主题注册时声明默认排布，用户手动改过就以用户的选择为准。
 
-### 5.4 前后端的接口
+### 5.4 界面与主进程的接口
 
-前端只读接口，参数都是日期和筛选条件：
+界面只读，参数都是日期和筛选条件。调用形状是一次 `{ method, path, params, body }`，
+主进程的 `handlers.ts` 按 `path` 分发，返回 `{ status, body }`。`status` 沿用 HTTP
+语义（200 成功、400 参数不对、404 没有这个接口、500 内部错误），界面按它判断成败。
+路径是调用标识，不是网络地址：应用里没有监听端口。
 
 | 接口 | 作用 |
 | --- | --- |
@@ -687,9 +696,11 @@ localStorage.setItem('atracker-mode', mode);
 | `GET /api/scan/batches` | 扫描批次 |
 | `GET /api/doctor` | 各来源可读性 |
 | `POST /api/scan` | 触发一次手动扫描，立刻返回，扫描在后台跑 |
-| `GET /api/events` | SSE。推 `scan_done`（批次号、写了多少条、哪些天变了）和 `log` |
+| 推送（`window.atracker.onEvent`） | `scan_done`、`scan_error`、`sync_done`，见 3.6 |
 
-所有聚合查询都走物化表，不扫明细（见 4.2）。接口返回的字段名要和 `packages/core/src/types.ts` 一致，前端不自己拼单位。
+所有聚合查询都走物化表，不扫明细（见 3.2）。接口返回的字段名要和 `packages/service/src/queries.ts` 一致，前端不自己拼单位。
+
+写接口（`/api/scan`、`/api/sync/ignore`、`/api/sync/restore`、`/api/device/name`）只有窗口能调，调用方是 `window.atracker.request`，页面拿不到 `ipcRenderer`，也就没法往别的通道发消息。
 
 ### 5.5 变量清单
 
@@ -727,13 +738,21 @@ localStorage.setItem('atracker-mode', mode);
 
 ## 6. 前端
 
-前端用 React 19 + Vite + TypeScript。`npm run build:web` 把源码构建到 `packages/web/dist`，服务端直接托管这个目录。开发时先起 `atracker serve`，再跑 `npm run dev:web`（Vite 默认 5173），`/api` 会代理到 4178。
+前端就是 Electron 的渲染进程，React 19 + Vite + TypeScript，源码仍在 `packages/web`。
+`npm run build`（electron-vite）把它构建到 `out/renderer`，主进程用自定义协议 `app://atracker`
+从 `out/renderer` 读文件；`npm run desktop` 起的是 Vite 开发服务器加热更新，
+Electron 加载的是 `ELECTRON_RENDERER_URL` 里的地址（每次启动随机挑一个空闲端口），
+两种情况下页面代码和取数方式完全一样。
+
+为什么不用 `file://`：它没有可用的 origin，`localStorage` 存不进去（明暗模式、单位偏好
+都靠它），也没法在响应头里加 CSP。自定义协议注册成 standard + secure 之后，页面拿到的是
+一个正常来源，路由、存储、安全头都和普通站点一致。
 
 | 文件 | 内容 |
 | --- | --- |
 | `packages/web/index.html` | Vite 入口 |
 | `packages/web/src/main.tsx` | 挂载 React 根节点 |
-| `packages/web/src/App.tsx` | 页面状态、取数、导航、SSE 刷新 |
+| `packages/web/src/App.tsx` | 页面状态、取数、导航、事件推送触发刷新 |
 | `packages/web/src/router.ts` | hash 路由：解析、构建、订阅 |
 | `packages/web/src/components/` | 四桶、交叉表、模型/目录条形图、月历、范围标签 |
 | `packages/web/src/views/` | 总账、月度、今日、会话、日志五个视图 |
@@ -742,7 +761,7 @@ localStorage.setItem('atracker-mode', mode);
 
 **主题和明暗的分工。** CSS 用 `[data-mode="light"]` 和 `[data-mode="dark"]` 两段变量表示明暗，用 `data-theme` 表示风格（现在是 `receipt`）。加新风格就是再加一段 `[data-theme="<id>"]` 的变量，不动组件。
 
-**取数层。** `src/api.ts` 只负责请求接口；`src/format.ts` 负责单位换算。视图组件不自己拼单位。
+**取数层。** `src/api.ts` 只负责调用 `window.atracker.request`，超时和错误文案也在这一层；`src/format.ts` 负责单位换算。视图组件不自己拼单位，也不直接碰 `window.atracker`。
 
 **路由：每个视图一个 hash 路径，状态全在 URL 里。** 五个页面各自占一段地址，互不共享状态：
 
@@ -760,8 +779,11 @@ localStorage.setItem('atracker-mode', mode);
 
 **总账和月度拆开，是因为一页里不该有两种作用域。** 原先一页里顶部有个「当前范围 / 全部记录」切换器，但它只管一个大数字，四桶、交叉表、模型、目录却跟着日历选区走。现在总账固定全期（数据用 `/api/aggregate?all=1`，服务端按库里最早/最晚一天取区间），月度固定「一个月或一个选区」，页面上不再有作用域切换器。
 
-用 hash 而不是 pathname 有两个原因：服务端只做静态文件托管，没有 history 回退规则；打包成桌面版后可能直接用 `file://` 打开页面，hash 路由在两种情况下都能工作。同一页内改筛选条件用 `replaceState`，不往历史里堆记录；跨页用 `pushState`，后退能回上一页。旧链接（`?view=conv&dir=…`）在启动时自动转成新路由。
+用 hash 而不是 pathname 有两个原因：主进程的协议处理器只按路径给文件，没有 history
+回退规则；开发时页面由 Vite 开发服务器托管，两边的加载方式不同，hash 路由在两种情况下
+都能工作。同一页内改筛选条件用 `replaceState`，不往历史里堆记录；跨页用 `pushState`，
+后退能回上一页。旧链接（`?view=conv&dir=…`）在启动时自动转成新路由。
 
-**轮询改推送。** `App.tsx` 用 `EventSource('/api/events')` 订阅，扫描完成后服务端推 `scan_done`，前端重新取数重画。
+**轮询改推送。** `App.tsx` 订阅 `window.atracker.onEvent`，扫描或同步完成后主进程推一条事件，前端重新取数重画。
 
-**前端源码只有一份。** 页面代码在 `packages/web/src`，`packages/web/dist` 是构建产物，不手工改。
+**前端源码只有一份。** 页面代码在 `packages/web/src`，`out/renderer` 是构建产物，不手工改。

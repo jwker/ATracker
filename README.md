@@ -43,15 +43,17 @@ ATracker 只读这些已经落盘的日志，统一成一套口径，写进本�
 ```bash
 npm install
 npm run scan      # 扫描本机日志，写入 data/atracker.db
-npm run serve     # 构建前端并起服务，浏览器打开 http://127.0.0.1:4178
+npm run desktop   # 打开桌面窗口
 ```
 
-服务端运行时零依赖。`npm install` 装的是构建前端用的 React 和 Vite。
+运行时零依赖：SQLite 用 Node 自带的 `node:sqlite`，前端构建完就和应用一起打包。
+`npm install` 装的是构建用的 React、Vite 和 electron-vite。
 
 ### 桌面版
 
 ```bash
-npm run desktop            # 开发时在 Electron 里跑
+npm run desktop            # 开发：改代码即时生效
+npm run desktop:prod       # 用构建产物跑一遍，验证打包后的行为
 npm run dist:mac:unsigned  # 出 dmg 和 zip 到 release/
 ```
 
@@ -74,23 +76,15 @@ npm run dist:mac:unsigned  # 出 dmg 和 zip 到 release/
 ```bash
 npm run scan                    # 手动扫一次
 npm run stats                   # 打印累计用量
-npm run typecheck               # 服务端和前端各跑一遍 tsc
+npm run typecheck               # 主进程、服务层和前端各跑一遍 tsc
+npm run build                   # 构建 main / preload / renderer 到 out/
 node packages/cli/src/index.ts doctor      # 看各来源是否可读
 node packages/cli/src/index.ts reconcile   # 拿各来源自带的汇总数据对账
 node packages/cli/src/index.ts sync export  # 多设备同步，手动导一次
 ```
 
-服务默认只监听本机（`127.0.0.1`）。要给同一局域网里的手机看，加 `--lan`：
-
-```bash
-node packages/cli/src/index.ts serve --lan
-```
-
-启动时会打出本机的局域网地址，例如 `http://192.168.3.16:4178`。
-
-这个服务是只读的，但里面是本机所有 agent 的用量和目录路径。对外开之后，
-服务会校验写操作的 `Origin`（同源才放行），读接口仍然没有鉴权，
-所以只在可信网络里开。
+界面只在桌面窗口里，不开监听端口，也没有浏览器版。这样本机的用量、
+会话标题和目录路径不会因为一个开着的端口被同网段看到。
 
 ## 文档
 

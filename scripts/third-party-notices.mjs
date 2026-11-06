@@ -1,7 +1,7 @@
 // 生成 THIRD_PARTY_NOTICES.txt。
 //
-// 运行时依赖只有 react 和 react-dom（MIT），它们会被 vite 打进
-// packages/web/dist，跟着安装包一起分发。MIT 要求在副本里保留版权和许可声明，
+// 运行时依赖只有 react 和 react-dom（MIT），它们会被打进 out/renderer，
+// 跟着安装包一起分发。MIT 要求在副本里保留版权和许可声明，
 // 所以这里把依赖的原始声明收集起来。
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';

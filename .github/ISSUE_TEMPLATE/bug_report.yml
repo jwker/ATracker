@@ -52,7 +52,7 @@ body:
       multiple: false
       options:
         - 桌面应用
-        - npm run serve
+        - npm run desktop
         - 命令行（scan / stats / sync）
         - 其它
 

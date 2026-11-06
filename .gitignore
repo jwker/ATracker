@@ -2,7 +2,6 @@ node_modules/
 data/
 *.log
 .DS_Store
-packages/web/dist/
 
 # 本地配置和数据库。ATRACKER_DB 可以把库指到仓库里的任意路径，
 # 这种文件不能进版本库。
@@ -17,6 +16,11 @@ packages/web/dist/
 
 # 桌面打包产物
 release/
+out/
+
+# 开发时 Electron 的用户数据目录。和「应用程序」里那一份分开，
+# 否则两边会抢同一个单实例锁，窗口位置也会互相覆盖。
+.dev-userdata/
 
 # 打包时生成的构建信息，不进版本库
 build/buildinfo.json
