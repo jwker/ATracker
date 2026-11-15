@@ -23,6 +23,27 @@ export interface TotalPayload {
   updatedAt: number;
 }
 
+export interface StatusPayload {
+  ok: boolean;
+  build?: BuildInfo;
+  total: TotalPayload;
+  hasData?: boolean;
+  /** 是否有一轮扫描正在跑 */
+  scanning?: boolean;
+  watched?: number;
+  /** 兜底轮询间隔，界面用它算「多久没更新算不正常」 */
+  pollMs?: number;
+  /** 一轮扫描的时限。超过这个时间还在跑就是卡住了 */
+  scanTimeoutMs?: number;
+  lastScanStartedAt?: number | null;
+  lastScanFinishedAt?: number | null;
+  /** 最后一次推送事件的时刻 */
+  lastEventAt?: number | null;
+  syncing?: boolean;
+  /** 最后一次同步失败或超时的原因 */
+  lastSyncError?: string | null;
+}
+
 export interface CalendarDay {
   day: string;
   total: number;
@@ -242,6 +263,9 @@ export interface SyncPayload {
   lastExportAt: number | null;
   lastExportFiles: string[];
   lastImportAt: number | null;
+  /** 最后一次同步失败/超时的原因（服务层给的，和 lastImport.errors 不重复） */
+  lastError?: string | null;
+  syncing?: boolean;
   lastImport: {
     files: number;
     skippedOwn: number;
@@ -260,8 +284,12 @@ export interface SyncPayload {
  * 直接复用 core 的类型：web 包为浏览器构建不引 core 的运行时，
  * 但类型是编译期的东西，import type 不会打进产物。
  * 手抄一份的话 core 那边加字段这边不会有任何编译错误，两边会悄悄漂移。
+ *
+ * 用 import 而不是 export type {}：前面 StatusPayload 要引这个名字，
+ * re-export 不会在当前模块里建一个可用的绑定。
  */
-export type { BuildInfo } from '../../core/src/api.ts';
+import type { BuildInfo } from '../../core/src/api.ts';
+export type { BuildInfo };
 
 export interface DevicesPayload {
   /** 本机身份 */

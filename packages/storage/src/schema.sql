@@ -56,6 +56,26 @@ CREATE TABLE IF NOT EXISTS file_cursor (
   last_error    TEXT
 );
 
+-- 会话元信息的读取进度。
+--
+-- file_cursor 记的是「用量读到哪个字节了」，这里记的是「标题和首末时间读到哪个字节了」。
+-- 两者必须分开：同一个文件扫一遍时，元信息和用量都要读，共用一套游标会让后读的一方
+-- 永远读不到前面的内容（事件被永久跳过）。
+CREATE TABLE IF NOT EXISTS session_meta_cursor (
+  path         TEXT PRIMARY KEY,
+  source       TEXT NOT NULL,
+  size         INTEGER NOT NULL,
+  mtime_ms     INTEGER NOT NULL,
+  inode        INTEGER NOT NULL,
+  offset       INTEGER NOT NULL DEFAULT 0,
+  session_id   TEXT,
+  cwd          TEXT,
+  title        TEXT,
+  first_ts     INTEGER,
+  last_ts      INTEGER,
+  updated_at   INTEGER NOT NULL
+);
+
 -- 目录配色。颜色跟随实体，分配一次不再变。
 CREATE TABLE IF NOT EXISTS dir_color (
   path        TEXT PRIMARY KEY,

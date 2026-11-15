@@ -75,11 +75,11 @@ if (cmd === 'scan') {
   repo.touchDevice(device);
 
   if (sub === 'export') {
-    const files = exportRollup(repo, device, dir);
+    const files = await exportRollup(repo, device, dir);
     console.log(`已导出 ${files.length} 个文件到 ${dir}`);
     for (const f of files) console.log(`  ${f}`);
   } else if (sub === 'import') {
-    const s = importRollups(repo, dir, device.id);
+    const s = await importRollups(repo, dir, device.id);
     console.log(`读取 ${s.files} 个文件，跳过自己的 ${s.skippedOwn} 个；导入 ${s.aggRows} 条聚合、${s.sessionRows} 条会话`);
     for (const d of s.devices) console.log(`  ${d.name}（${d.id.slice(0, 8)}）：${d.months.join(', ') || '无月份'}`);
     for (const e of s.errors) console.log(`  错误：${e}`);

@@ -39,6 +39,11 @@ export interface ScanOptions {
   only?: string[];
   /** 本机身份。不传就按 ~/.atracker/device.json 现读。 */
   device?: DeviceInfo;
+  /**
+   * 中止信号。服务层扫描超时时会 abort：
+   * 已经在读的文件会在下一个检查点退出，不再继续走完整棵树。
+   */
+  signal?: AbortSignal;
 }
 
 export interface ScanSummary {
@@ -55,6 +60,8 @@ export async function runScan(
   opts: ScanOptions
 ): Promise<ScanSummary> {
   const device = opts.device ?? loadDevice();
+  const signal = opts.signal ?? new AbortController().signal;
+  const aborted = (): boolean => signal.aborted;
   repo.touchDevice(device);
 
   const collectors = COLLECTORS.filter(c => !opts.only || opts.only.includes(c.id));
@@ -70,6 +77,14 @@ export async function runScan(
   const seenPaths = new Set<string>();
   /** 读取时观察到的文件指纹。 */
   const preRead = new Map<string, { size: number; mtimeMs: number; inode: number }>();
+  /**
+   * 同一批次内复用目录枚举结果。
+   *
+   * 每个采集器的 sessions() 和 scan() 都要列一次目录，而 ~/.pi/agent/sessions 底下有
+   * 近六千个子目录，两轮下来就是每轮多几百毫秒的纯遍历。一次扫描里树几乎不会变，
+   * 缓存到本轮结束为止；这一轮看不到的新文件，下一轮补。
+   */
+  const walkCache = new Map<string, Promise<string[]>>();
   let eventsRead = 0;
   let eventsWritten = 0;
   let errors = 0;
@@ -77,26 +92,38 @@ export async function runScan(
   let dirErrors = 0;
 
   const ctx: ScanContext = {
+    signal,
+
     async files(root, filter) {
-      const out: string[] = [];
-      async function walk(dir: string) {
-        let entries;
-        try {
-          entries = await readdir(dir, { withFileTypes: true });
-        } catch (err) {
-          // 目录读不到（权限、正在被删、软链接断了）不能当成「这里没有文件」。
-          // 静默吞掉的话，缺数据很难排查。
-          repo.log(batchId, Date.now(), 'warn', curSource, `目录读不到：${dir}（${(err as Error).message}）`);
-          dirErrors++;
-          return;
-        }
-        for (const e of entries) {
-          const p = join(dir, e.name);
-          if (e.isDirectory()) await walk(p);
-          else if (e.isFile() && (!filter || filter(p))) out.push(p);
-        }
+      let walked = walkCache.get(root);
+      if (!walked) {
+        walked = (async (): Promise<string[]> => {
+          const out: string[] = [];
+          async function walk(dir: string) {
+            if (aborted()) throw new Error('扫描已中止');
+            let entries;
+            try {
+              entries = await readdir(dir, { withFileTypes: true });
+            } catch (err) {
+              // 目录读不到（权限、正在被删、软链接断了）不能当成「这里没有文件」。
+              // 静默吞掉的话，缺数据很难排查。
+              repo.log(batchId, Date.now(), 'warn', curSource, `目录读不到：${dir}（${(err as Error).message}）`);
+              dirErrors++;
+              return;
+            }
+            for (const e of entries) {
+              const p = join(dir, e.name);
+              if (e.isDirectory()) await walk(p);
+              else if (e.isFile()) out.push(p);
+            }
+          }
+          await walk(root);
+          return out;
+        })();
+        walkCache.set(root, walked);
       }
-      await walk(root);
+      const all = await walked;
+      const out = filter ? all.filter(p => filter(p)) : all.slice();
       return out.sort();
     },
 
@@ -113,36 +140,45 @@ export async function runScan(
      */
     async *lines(path, fromOffset) {
       const stream = createReadStream(path, { start: fromOffset });
-      let consumed = fromOffset;
-      let pending: Buffer = Buffer.alloc(0);
-      for await (const chunk of stream) {
-        const buf = chunk as Buffer;
-        pending = pending.length ? Buffer.concat([pending, buf]) : buf;
-        let nl: number;
-        while ((nl = pending.indexOf(0x0a)) !== -1) {
-          // 行尾是 \r\n 的话，\r 不算行内容，但算消耗的字节。
-          const body = pending[0] === 0x0d ? pending.subarray(1, nl) : pending.subarray(0, nl);
-          consumed += nl + 1;
-          pending = pending.subarray(nl + 1);
-          yield { line: body.toString('utf8'), endOffset: consumed, partial: false };
+      try {
+        let consumed = fromOffset;
+        let pending: Buffer = Buffer.alloc(0);
+        for await (const chunk of stream) {
+          if (aborted()) throw new Error('扫描已中止');
+          const buf = chunk as Buffer;
+          pending = pending.length ? Buffer.concat([pending, buf]) : buf;
+          let nl: number;
+          while ((nl = pending.indexOf(0x0a)) !== -1) {
+            // 行尾是 \r\n 的话，\r 不算行内容，但算消耗的字节。
+            const body = pending[0] === 0x0d ? pending.subarray(1, nl) : pending.subarray(0, nl);
+            consumed += nl + 1;
+            pending = pending.subarray(nl + 1);
+            yield { line: body.toString('utf8'), endOffset: consumed, partial: false };
+          }
         }
-      }
-      if (pending.length) {
-        // 末尾的半行：可能是还没写完，也可能就是最后一行没有换行符。
-        // 字节不完整（多字节字符被截断）时不交，避免解出半个字符。
-        try {
-          new TextDecoder('utf-8', { fatal: true }).decode(pending);
-        } catch {
-          return;
+        if (pending.length) {
+          // 末尾的半行：可能是还没写完，也可能就是最后一行没有换行符。
+          // 字节不完整（多字节字符被截断）时不交，避免解出半个字符。
+          try {
+            new TextDecoder('utf-8', { fatal: true }).decode(pending);
+          } catch {
+            return;
+          }
+          consumed += pending.length;
+          yield { line: pending.toString('utf8'), endOffset: consumed, partial: true };
         }
-        consumed += pending.length;
-        yield { line: pending.toString('utf8'), endOffset: consumed, partial: true };
+      } finally {
+        // 中止时也要把文件句柄放掉，不能等 GC
+        stream.destroy();
       }
     },
 
     async *zstdLines(path) {
       const buf = await readFile(path);
-      for (const line of zstdLines(buf)) yield { line };
+      for (const line of zstdLines(buf)) {
+        if (aborted()) throw new Error('扫描已中止');
+        yield { line };
+      }
     },
 
     log(level: LogLevel, source: string, message: string) {
@@ -216,62 +252,112 @@ export async function runScan(
       } catch {
         // 文件没了就不记
       }
+    },
+
+    meta(path) {
+      const c = repo.getMetaCursor(path);
+      if (!c) return null;
+      return {
+        offset: c.offset,
+        sessionId: c.sessionId,
+        cwd: c.cwd,
+        title: c.title,
+        firstTs: c.firstTs,
+        lastTs: c.lastTs
+      };
+    },
+
+    commitMeta(path, patch) {
+      try {
+        const seen = preRead.get(path);
+        const st = seen ?? { size: statSync(path).size, mtimeMs: Math.floor(statSync(path).mtimeMs), inode: statSync(path).ino };
+        repo.setMetaCursor({
+          path,
+          source: curSource,
+          size: st.size,
+          mtimeMs: st.mtimeMs,
+          inode: st.inode,
+          offset: patch.offset,
+          sessionId: patch.sessionId,
+          cwd: patch.cwd,
+          title: patch.title,
+          firstTs: patch.firstTs,
+          lastTs: patch.lastTs
+        });
+      } catch {
+        // 文件没了就不记
+      }
     }
   };
 
-  for (const collector of collectors) {
-    curSource = collector.version ? `${collector.id}:${collector.version}` : collector.id;
+  let abortedError: string | null = null;
+  try {
+    for (const collector of collectors) {
+      if (aborted()) throw new Error('扫描已中止');
+      curSource = collector.version ? `${collector.id}:${collector.version}` : collector.id;
 
-    // 会话元信息要先读。scan 跑完会把文件游标推进到新位置，
-    // 之后同一个文件再问 shouldParse 就是「指纹没变」，元信息会被整个跳过。
-    if (collector.sessions) {
-      const sessionRows: SessionMeta[] = [];
+      // 会话元信息要先读。scan 跑完会把文件游标推进到新位置，
+      // 之后同一个文件再问 shouldParse 就是「指纹没变」，元信息会被整个跳过。
+      if (collector.sessions) {
+        const sessionRows: SessionMeta[] = [];
+        try {
+          for await (const meta of collector.sessions(ctx)) {
+            sessionRows.push(meta);
+          }
+        } catch (err) {
+          // 中止不是「采集失败」：已经采到的部分要保住，交给下面统一收尾
+          if (aborted()) throw err;
+          // 这条路的元信息是缺的，要计入错误数，否则批次摘要显示「全部成功」，
+          // 实际有一路的会话标题没拿到。
+          errors++;
+          repo.log(batchId, Date.now(), 'warn', collector.id, `会话信息读取失败：${(err as Error).message}`);
+        }
+        if (sessionRows.length) repo.upsertSessions(sessionRows.map(r => ({ ...r, device: device.id })));
+      }
+
+      if (aborted()) throw new Error('扫描已中止');
+      const collected: StoredEvent[] = [];
       try {
-        for await (const meta of collector.sessions(ctx)) {
-          sessionRows.push(meta);
+        for await (const ev of collector.scan(ctx)) {
+          eventsRead++;
+          const day = localDay(ev.ts);
+          affectedDays.add(day);
+          collected.push({
+            eventId: ev.eventId,
+            device: device.id,
+            agent: ev.agent,
+            sessionId: ev.sessionId,
+            parentSessionId: ev.parentSessionId,
+            isChild: ev.isChild,
+            ts: ev.ts,
+            localDay: day,
+            localMonth: day.slice(0, 7),
+            cwd: ev.cwd,
+            model: ev.model || '(未知模型)',
+            provider: ctx.vendor(ev.model, ev.provider),
+            input: ev.buckets.input,
+            output: ev.buckets.output,
+            cacheRead: ev.buckets.cacheRead,
+            cacheWrite: ev.buckets.cacheWrite,
+            reasoning: ev.buckets.reasoning,
+            thinkingLevel: ev.thinkingLevel
+          });
         }
       } catch (err) {
-        // 这条路的元信息是缺的，要计入错误数，否则批次摘要显示「全部成功」，
-        // 实际有一路的会话标题没拿到。
+        if (aborted()) throw err;
         errors++;
-        repo.log(batchId, Date.now(), 'warn', collector.id, `会话信息读取失败：${(err as Error).message}`);
+        repo.log(batchId, Date.now(), 'err', collector.id, `采集失败：${(err as Error).message}`);
       }
-      if (sessionRows.length) repo.upsertSessions(sessionRows.map(r => ({ ...r, device: device.id })));
-    }
 
-    const collected: StoredEvent[] = [];
-    try {
-      for await (const ev of collector.scan(ctx)) {
-        eventsRead++;
-        const day = localDay(ev.ts);
-        affectedDays.add(day);
-        collected.push({
-          eventId: ev.eventId,
-          device: device.id,
-          agent: ev.agent,
-          sessionId: ev.sessionId,
-          parentSessionId: ev.parentSessionId,
-          isChild: ev.isChild,
-          ts: ev.ts,
-          localDay: day,
-          localMonth: day.slice(0, 7),
-          cwd: ev.cwd,
-          model: ev.model || '(未知模型)',
-          provider: ctx.vendor(ev.model, ev.provider),
-          input: ev.buckets.input,
-          output: ev.buckets.output,
-          cacheRead: ev.buckets.cacheRead,
-          cacheWrite: ev.buckets.cacheWrite,
-          reasoning: ev.buckets.reasoning,
-          thinkingLevel: ev.thinkingLevel
-        });
-      }
-    } catch (err) {
-      errors++;
-      repo.log(batchId, Date.now(), 'err', collector.id, `采集失败：${(err as Error).message}`);
+      if (collected.length) eventsWritten += repo.upsertEvents(collected);
     }
-
-    if (collected.length) eventsWritten += repo.upsertEvents(collected);
+  } catch (err) {
+    // 只有中止会走到这里：采集器自己的错误已经在上面吞掉了。
+    // 不直接往外抛，先让批次和聚合正常收尾，保持库里的账对得上。
+    if (!aborted()) throw err;
+    abortedError = (err as Error).message;
+    errors++;
+    repo.log(batchId, Date.now(), 'warn', curSource, `扫描中止：${abortedError}`);
   }
 
   // 「文件」这一列统计这一批看过多少文件，和有没有新事件无关。
@@ -282,14 +368,17 @@ export async function runScan(
   // 收尾的几步放进 try/finally：任何一处抛错都要保证 finishBatch 被调用，
   // 否则 scan_batch 里会留下一条永远「在跑」的批次。
   try {
-    // 没有变化就不重算聚合
-    if (affectedDays.size) repo.rebuildAggregates([...affectedDays]);
-
-    // 给这批出现的目录分配颜色，已经有的保持不变。
-    // 只看这批涉及的目录，不扫全表。
-    const paths = repo.dirsOf(affectedDays.size ? [...affectedDays] : undefined);
-    const assigned = assignColors(repo.dirColors(), paths);
-    repo.setDirColors(assigned);
+    // 没有变化就不重算聚合，也不重新分配目录颜色。
+    //
+    // 颜色那段以前是「没变化也跑一遍」：dirsOf() 不给日期就是全表
+    // SELECT DISTINCT cwd（每轮一次全表扫 + 临时 B 树）。目录只会随新事件出现，
+    // 有变化的那一轮补色就够了。
+    if (affectedDays.size) {
+      repo.rebuildAggregates([...affectedDays]);
+      const paths = repo.dirsOf([...affectedDays]);
+      const assigned = assignColors(repo.dirColors(), paths);
+      repo.setDirColors(assigned);
+    }
   } catch (err) {
     errors++;
     repo.log(batchId, Date.now(), 'err', curSource, `收尾失败：${(err as Error).message}`);
@@ -303,6 +392,10 @@ export async function runScan(
       errors
     });
   }
+
+  // 批次已经正常收尾，这时才把中止当作错误报给调用方：
+  // scan_batch 里不会留下永远「在跑」的批次。
+  if (abortedError) throw new Error(abortedError);
 
   return { batchId, filesScanned, eventsRead, eventsWritten, errors, days: [...affectedDays] };
 }

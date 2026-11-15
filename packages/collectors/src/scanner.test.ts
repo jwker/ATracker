@@ -59,22 +59,31 @@ function fakeCollector(id: string, files: () => string[]) {
   };
 }
 
+/**
+ * 临时把采集器清单换成指定的几个。
+ *
+ * runScan 用的是模块里的 COLLECTORS 数组，只能就地改。恢复时要把原来的元素推回去，
+ * 所以先拷贝一份：直接引用原数组的话，清空之后它自己也空了，后面的用例就集体看不到采集器。
+ */
+async function withCollectors<T>(collectors: any[], run: () => Promise<T>): Promise<T> {
+  const scanners = await import('./scanner.ts');
+  const original = [...scanners.COLLECTORS];
+  (scanners as any).COLLECTORS.length = 0;
+  (scanners as any).COLLECTORS.push(...collectors);
+  try {
+    return await run();
+  } finally {
+    (scanners as any).COLLECTORS.length = 0;
+    (scanners as any).COLLECTORS.push(...original);
+  }
+}
+
 /** 跑一次扫描，返回新库。 */
 async function scanWith(collector: any): Promise<Repo> {
   const dir = tmpRoot();
   const repo = new Repo(join(dir, 'a.db'));
   const opts: ScanOptions = { trigger: 'manual' };
-  // 临时替换采集器清单
-  const scanners = await import('./scanner.ts');
-  const original = scanners.COLLECTORS;
-  (scanners as any).COLLECTORS.length = 0;
-  (scanners as any).COLLECTORS.push(collector);
-  try {
-    await runScan(repo, opts);
-  } finally {
-    (scanners as any).COLLECTORS.length = 0;
-    (scanners as any).COLLECTORS.push(...original);
-  }
+  await withCollectors([collector], () => runScan(repo, opts));
   return repo;
 }
 
@@ -254,4 +263,42 @@ test('时间解析不出来返回 null，不兜底成现在', () => {
   assert.equal(parseTimestamp('不是时间'), null);
   assert.equal(parseTimestamp(undefined), null);
   assert.equal(parseTimestamp(''), null);
+});
+
+test('扫描被中止时，批次照样收尾，不会留下永远「在跑」的记录', async () => {
+  const dir = tmpRoot();
+  const repo = new Repo(join(dir, 'a.db'));
+  const ac = new AbortController();
+
+  // 模拟「一轮扫描跑不完」：卡在这个 await 上，直到外面 abort。
+  // 真实场景是卡在文件系统的读上，位置一样。
+  const stuck = {
+    id: 'stuck',
+    label: 'stuck',
+    version: '1',
+    roots: () => ['/nonexistent'],
+    async *scan(ctx: any) {
+      await new Promise<void>(resolve => {
+        if (ctx.signal.aborted) resolve();
+        else ctx.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      if (ctx.signal.aborted) throw new Error('扫描已中止');
+      yield {} as any;
+    }
+  };
+
+  const done = withCollectors([stuck], async () => {
+    const timer = setTimeout(() => ac.abort(), 10);
+    try {
+      await runScan(repo, { trigger: 'manual', signal: ac.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
+  await assert.rejects(done, /中止/);
+  const row = repo.db.prepare('SELECT finished_at FROM scan_batch ORDER BY id DESC LIMIT 1').get() as any;
+  assert.ok(row, '要留下批次记录');
+  assert.ok(row.finished_at !== null, '批次必须收尾，否则日志页上会有一条永远在扫的记录');
+  repo.close();
 });

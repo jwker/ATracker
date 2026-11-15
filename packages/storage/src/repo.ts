@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * 库结构版本。改过 schema.sql 里已有表的形状就往上加一位，
  * 在 Repo.migrate() 里补上对应的重建步骤。
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 export interface StoredEvent {
   eventId: string;
@@ -46,6 +46,21 @@ export interface FileCursor {
   lastError: string | null;
 }
 
+/** 会话元信息的读取进度。字段和 session_meta_cursor 表一一对应。 */
+export interface MetaCursor {
+  path: string;
+  source: string;
+  size: number;
+  mtimeMs: number;
+  inode: number;
+  offset: number;
+  sessionId: string | null;
+  cwd: string | null;
+  title: string | null;
+  firstTs: number | null;
+  lastTs: number | null;
+}
+
 export type LogLevel = 'ok' | 'info' | 'warn' | 'err';
 
 export interface RepoOptions {
@@ -56,6 +71,8 @@ export interface RepoOptions {
 export class Repo {
   readonly db: DatabaseSync;
   private readonly schemaPath: string;
+  /** 距上次清理 scan_log 插了几条。见 log()。 */
+  private logInsertions = 0;
 
   constructor(path: string, opts: RepoOptions = {}) {
     this.db = new DatabaseSync(path);
@@ -146,6 +163,10 @@ export class Repo {
     // 7：会话的主键补上 device。原来是 (agent, session_id)，两台设备上出现
     // 同一个 session_id 时标题会互相覆盖、会话汇总会串台。重建这两张表，
     // 内容本身不丢。
+    //
+    // 8：加 session_meta_cursor（会话元信息的读取进度）。只是新表，schema.sql
+    // 里的 CREATE TABLE IF NOT EXISTS 已经建好，这里不需要额外步骤；老版本
+    // 读到这个库会忽略这张表，回滚安全。
     if (from < 7) {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS session_title_new (
@@ -246,8 +267,12 @@ export class Repo {
   log(batchId: number, at: number, level: LogLevel, source: string, message: string): void {
     this.db.prepare('INSERT INTO scan_log (batch_id, at, level, source, message) VALUES (?,?,?,?,?)')
       .run(batchId, at, level, source, message);
-    // 只留最近 5000 条
-    this.db.prepare(`DELETE FROM scan_log WHERE id < (SELECT MAX(id) - 5000 FROM scan_log)`).run();
+    // 只留最近 5000 条。每插一条就删一次太费：监听扫描每 2 秒一轮，一轮有好几条日志，
+    // 而这条 DELETE 每次都要走一遍索引。攒够一批再清，多留几十条不影响界面。
+    if (++this.logInsertions >= 50) {
+      this.logInsertions = 0;
+      this.db.prepare(`DELETE FROM scan_log WHERE id < (SELECT MAX(id) - 5000 FROM scan_log)`).run();
+    }
   }
 
   recentBatches(limit: number): any[] {
@@ -452,6 +477,41 @@ export class Repo {
          offset=excluded.offset, complete=excluded.complete, last_scan_at=excluded.last_scan_at,
          last_error=excluded.last_error`
     ).run(c.path, c.source, c.size, c.mtimeMs, c.inode, c.offset, c.complete, c.lastScanAt, c.lastError ?? null);
+  }
+
+  /* ---------- 会话元信息游标 ---------- */
+
+  getMetaCursor(path: string): MetaCursor | undefined {
+    const r = this.db.prepare('SELECT * FROM session_meta_cursor WHERE path = ?').get(path) as any;
+    if (!r) return undefined;
+    return {
+      path: r.path,
+      source: r.source,
+      size: r.size,
+      mtimeMs: r.mtime_ms,
+      inode: r.inode,
+      offset: r.offset,
+      sessionId: r.session_id ?? null,
+      cwd: r.cwd ?? null,
+      title: r.title ?? null,
+      firstTs: r.first_ts ?? null,
+      lastTs: r.last_ts ?? null
+    };
+  }
+
+  setMetaCursor(c: MetaCursor): void {
+    this.db.prepare(
+      `INSERT INTO session_meta_cursor
+        (path, source, size, mtime_ms, inode, offset, session_id, cwd, title, first_ts, last_ts, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(path) DO UPDATE SET
+         source=excluded.source, size=excluded.size, mtime_ms=excluded.mtime_ms, inode=excluded.inode,
+         offset=excluded.offset, session_id=excluded.session_id, cwd=excluded.cwd, title=excluded.title,
+         first_ts=excluded.first_ts, last_ts=excluded.last_ts, updated_at=excluded.updated_at`
+    ).run(
+      c.path, c.source, c.size, c.mtimeMs, c.inode, c.offset,
+      c.sessionId, c.cwd, c.title, c.firstTs, c.lastTs, Date.now()
+    );
   }
 
   /* ---------- 明细写入 ---------- */

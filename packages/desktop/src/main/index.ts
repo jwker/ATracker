@@ -560,7 +560,17 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   // 退出前关掉服务和文件监听，让 SQLite 正常收尾。
-  app.on('before-quit', () => {
-    void service?.close();
+  //
+  // 这里拦一下再自己退：不拦的话 app.quit() 会在 close() 还没跑完时就退，WAL
+  // 可能来不及收尾；拦了又必须给上限——同步目录在 iCloud 上时，close() 里的收尾
+  // 一旦卡在文件系统上，用户就只能去「强制退出」了。最多等 3 秒，到点直接退。
+  let quitting = false;
+  app.on('before-quit', event => {
+    if (!service || quitting) return;
+    event.preventDefault();
+    quitting = true;
+    const svc = service;
+    const giveUp = new Promise<void>(resolve => { setTimeout(resolve, 3_000); });
+    void Promise.race([svc.close(), giveUp]).finally(() => app.exit(0));
   });
 }

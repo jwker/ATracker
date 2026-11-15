@@ -113,17 +113,28 @@ export const claudeCodeCollector: Collector = {
     const root = this.roots()[0];
     const files = await ctx.files(root, p => p.endsWith('.jsonl'));
     for (const path of files) {
-      // 元信息要整读（要拿到会话头），但没变化的文件直接跳过
-      if (!ctx.shouldParse(path).parse) continue;
-      let sessionId = '';
-      let cwd = '';
-      let title: string | null = null;
-      let firstTs: number | null = null;
-      let lastTs: number | null = null;
+      // 没变化的文件直接跳过（指纹不变就不读）
+      const st = ctx.shouldParse(path);
+      if (!st.parse) continue;
 
-      for await (const { line } of ctx.lines(path, 0)) {
+      // 和 pi 一样：只读新增的段落，不再每轮从 offset 0 整份重读。
+      // st.offset 为 0 表示新文件、被重写或解析规则变了，累积值作废。
+      const reset = st.offset === 0;
+      const prev = reset ? null : ctx.meta(path);
+      let offset = prev?.offset ?? 0;
+      let sessionId = prev?.sessionId ?? '';
+      let cwd = prev?.cwd ?? '';
+      let title = prev?.title ?? null;
+      let firstTs = prev?.firstTs ?? null;
+      let lastTs = prev?.lastTs ?? null;
+
+      for await (const { line, endOffset, partial } of ctx.lines(path, offset)) {
         const rec = parseRecord(line);
-        if (!rec) continue;
+        if (!rec) {
+          if (!partial) offset = endOffset;
+          continue;
+        }
+        offset = endOffset;
         const ts = parseTimestamp(rec.timestamp);
         if (ts) {
           if (firstTs === null || ts < firstTs) firstTs = ts;
@@ -136,6 +147,8 @@ export const claudeCodeCollector: Collector = {
         if (rec.cwd) cwd = rec.cwd;
         if (rec.sessionId) sessionId = rec.sessionId;
       }
+
+      ctx.commitMeta(path, { offset, sessionId: sessionId || null, cwd: cwd || null, title, firstTs, lastTs });
       if (!sessionId) continue;
       yield { agent: 'claude-code', sessionId, title, cwd: cwd || null, firstTs, lastTs };
     }

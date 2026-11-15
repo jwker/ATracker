@@ -42,7 +42,15 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
         hasData: total.total > 0,
         scanning: service.isScanning,
         watched: service.watchCount,
-        pollMs: service.pollInterval
+        pollMs: service.pollInterval,
+        // 下面这几个给页面算「是不是卡住了」：扫描超过 scanTimeoutMs 还没结束，
+        // 或者最后一条事件已经很久没来，就在界面上提醒，不要安静地停在那里。
+        scanTimeoutMs: service.scanTimeout,
+        lastScanStartedAt: service.lastScanStartedAt,
+        lastScanFinishedAt: service.lastScanFinishedAt,
+        lastEventAt: service.lastEventAt,
+        syncing: service.isSyncing,
+        lastSyncError: service.lastSyncError
       });
     }
     if (p === '/api/total') return ok(totalPayload(service.repo, service.deviceFilter(q)));
@@ -88,6 +96,8 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
         lastExportFiles: service.lastExportFiles,
         lastImportAt: service.lastImportAt,
         lastImport: service.lastImport,
+        syncing: service.isSyncing,
+        lastError: service.lastSyncError,
         // 每台设备在本机库里占多少 token：排查「数字翻倍」时一眼能看出是哪台
         devices: service.repo.devices().map((d: any) => ({
           ...d,
@@ -126,7 +136,7 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
       if (!id) return fail('缺少 id');
       service.repo.restoreDevice(id);
       // 立刻尝试导一次，用户不用等下一轮轮询
-      service.importSync();
+      void service.importSync();
       return ok({ ok: true, ignored: false });
     }
     if (p === '/api/device/name' && call.method === 'POST') {
@@ -135,8 +145,21 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
       return ok({ ok: true, device: service.renameDevice(name) });
     }
     if (p === '/api/scan' && call.method === 'POST') {
+      // 不再无条件报「已排队」：扫描卡住时这里要看得出来，
+      // 否则用户点了「重新扫描」以为在跑，实际什么也没发生。
+      const wasScanning = service.isScanning;
+      const runningMs = wasScanning && service.lastScanStartedAt !== null
+        ? Date.now() - service.lastScanStartedAt
+        : 0;
       void service.triggerScan('manual');
-      return ok({ ok: true, queued: true });
+      return ok({
+        ok: true,
+        // queued=false 表示上一次还在跑，这一次只是把「扫完再跑一轮」的标记打开
+        queued: !wasScanning,
+        scanning: service.isScanning,
+        runningMs,
+        scanTimeoutMs: service.scanTimeout
+      });
     }
 
     return { status: 404, body: { error: '没有这个接口', path: p } };

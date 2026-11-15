@@ -85,6 +85,15 @@ function shiftDay(date: string, delta: number): string {
   return `${nd.getUTCFullYear()}-${p(nd.getUTCMonth() + 1)}-${p(nd.getUTCDate())}`;
 }
 
+/** 把一段毫秒说成人话（提示条用，只说大致量级）。 */
+function sinceLabel(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} 分钟`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} 小时`;
+  return `${Math.round(hours / 24)} 天`;
+}
+
 const searchParams = new URLSearchParams(location.search);
 
 /** 旧版 URL 只转换一次。模块级标记，StrictMode 下重复执行也不会重定向。 */
@@ -212,6 +221,39 @@ export function App() {
 
   const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+
+  /**
+   * 扫描卡住的提示。平时页面只靠主进程推的事件刷新，扫描停住以后它不会自己发现，
+   * 看上去和「这段时间没有用量」一模一样。每 45 秒问一次状态，两种异常都报出来：
+   *   scan  —— 有一轮扫描跑超过它的时限（说明卡住了）
+   *   quiet —— 很久没有新数据进来了（监听和轮询都不正常）
+   */
+  const [stalled, setStalled] = useState<{ kind: 'scan' | 'quiet'; ms: number } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const check = async (): Promise<void> => {
+      try {
+        const s = await api.status();
+        if (!alive) return;
+        const now = Date.now();
+        const scanMs = s.scanning && s.lastScanStartedAt ? now - s.lastScanStartedAt : 0;
+        const scanLimit = Math.max(s.scanTimeoutMs ?? 120_000, 30_000);
+        const quietMs = now - (s.lastEventAt ?? s.lastScanFinishedAt ?? now);
+        // 「多久没动静算不正常」：至少两个轮询周期，也不能短于 10 分钟，
+        // 否则夜里没人用 agent 的时候也会报。
+        const quietLimit = Math.max((s.pollMs ?? 300_000) * 2, 600_000);
+        if (scanMs > scanLimit) setStalled({ kind: 'scan', ms: scanMs });
+        else if (quietMs > quietLimit) setStalled({ kind: 'quiet', ms: quietMs });
+        else setStalled(null);
+      } catch {
+        // 主进程没响应（可能正忙），下一轮再看
+      }
+    };
+    void check();
+    const timer = setInterval(() => { void check(); }, 45_000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.mode = theme;
@@ -696,6 +738,18 @@ export function App() {
         onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
       />
       <div className="loadtrack">{refreshing && <i />}</div>
+      {stalled && (
+        <div className="stallbar" role="status">
+          <span>
+            {stalled.kind === 'scan'
+              ? `有一轮扫描已经跑了 ${sinceLabel(stalled.ms)} 还没结束，数据可能不更新。`
+              : `已经 ${sinceLabel(stalled.ms)} 没有新数据进来了，监听可能停了。`}
+          </span>
+          <button type="button" onClick={() => { setStalled(null); api.scan().catch(() => { /* 下一轮状态检查会再报 */ }); }}>
+            重新扫描
+          </button>
+        </div>
+      )}
       {(view === 'home' || view === 'month' || view === 'today') && devices && (
         <DeviceStrip
           devices={devices}

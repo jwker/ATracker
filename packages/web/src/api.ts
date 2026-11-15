@@ -6,7 +6,6 @@
 import type { ApiCall, ApiResult, AtrackerBridge, PushEvent } from '../../core/src/api.ts';
 import type {
   AggregatePayload,
-  BuildInfo,
   CalendarPayload,
   ConversationDetail,
   ConversationsPayload,
@@ -16,6 +15,7 @@ import type {
   DoctorPayload,
   LogsPayload,
   MatrixPayload,
+  StatusPayload,
   TotalPayload
 } from './types.ts';
 
@@ -74,7 +74,7 @@ export function openDataDir(): Promise<void> {
 }
 
 export const api = {
-  status: () => get<{ ok: boolean; build?: BuildInfo; total: TotalPayload }>('/api/status'),
+  status: () => get<StatusPayload>('/api/status'),
   total: (device?: string | null) => get<TotalPayload>('/api/total', { device }),
   calendar: (month: string, device?: string | null) => get<CalendarPayload>('/api/calendar', { month, device }),
   aggregate: (from: string, to: string, device?: string | null) =>

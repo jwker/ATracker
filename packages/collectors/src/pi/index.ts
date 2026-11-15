@@ -124,16 +124,31 @@ export const piCollector: Collector = {
     const root = this.roots()[0];
     const files = await ctx.files(root, p => p.endsWith('.jsonl'));
     for (const path of files) {
-      if (!ctx.shouldParse(path).parse) continue;
-      let sessionId = '';
-      let cwd = '';
-      let title: string | null = null;
-      let firstTs: number | null = null;
-      let lastTs: number | null = null;
+      const st = ctx.shouldParse(path);
+      if (!st.parse) continue;
 
-      for await (const { line } of ctx.lines(path, 0)) {
+      // 元信息只读新增的那一段。以前是从 offset 0 整份重读，而 pi 的会话文件
+      // 单个就能到上百兆，还在持续增长——用 pi 干活时每 2 秒就要重读一遍。
+      //
+      // st.offset 为 0 表示新文件、被重写或解析规则变了，累积值必须作废；
+      // 否则上一个版本的标题和首末时间会跟着串。
+      const reset = st.offset === 0;
+      const prev = reset ? null : ctx.meta(path);
+      let offset = prev?.offset ?? 0;
+      let sessionId = prev?.sessionId ?? '';
+      let cwd = prev?.cwd ?? '';
+      let title = prev?.title ?? null;
+      let firstTs = prev?.firstTs ?? null;
+      let lastTs = prev?.lastTs ?? null;
+
+      for await (const { line, endOffset, partial } of ctx.lines(path, offset)) {
         const rec = parseRecord(line);
-        if (!rec) continue;
+        if (!rec) {
+          // 和用量游标同一套规矩：完整的坏行跳过，末尾半行留到下一轮
+          if (!partial) offset = endOffset;
+          continue;
+        }
+        offset = endOffset;
         const ts = parseTimestamp(rec.timestamp);
         if (ts !== null) {
           if (firstTs === null || ts < firstTs) firstTs = ts;
@@ -146,6 +161,8 @@ export const piCollector: Collector = {
           title = rec.name ?? title;
         }
       }
+
+      ctx.commitMeta(path, { offset, sessionId: sessionId || null, cwd: cwd || null, title, firstTs, lastTs });
       if (!sessionId) continue;
       yield { agent: 'pi', sessionId, title, cwd: cwd || null, firstTs, lastTs };
     }

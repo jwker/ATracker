@@ -152,6 +152,17 @@
   @keyframes loadslide { from { background-position: -45% 0; } to { background-position: 105% 0; } }
   .body { transition: opacity .12s linear; }
   .body.is-refreshing { opacity: .55; }
+  /*
+   * 扫描卡住时的提示条。页面只在收到主进程推的事件时刷新，扫描停住时它就安静地
+   * 停在旧数据上，看上去和「没新用量」完全一样。这条提示是唯一的出口。
+   */
+  .stallbar {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    border: 1px solid var(--accent); background: var(--wash);
+    padding: 6px 10px; font-size: 10px; color: var(--ink);
+  }
+  .stallbar button { margin-left: auto; border: 1px solid var(--accent); background: transparent; color: var(--accent); padding: 2px 8px; font-size: 9.5px; letter-spacing: .06em; cursor: pointer; }
+  .stallbar button:hover { background: var(--accent); color: var(--paper); }
   .sec { margin-top: 16px; }
   .sec-h { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--ink); padding-bottom: 3px; margin-bottom: 9px; }
   .sec-h b { font-size: 10px; letter-spacing: .18em; font-weight: 700; }

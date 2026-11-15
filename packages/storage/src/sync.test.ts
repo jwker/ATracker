@@ -45,7 +45,7 @@ function seedRemote(repo: Repo, month: string, tokens: number): void {
   repo.refreshTotal();
 }
 
-test('导出用临时文件加改名，目录里不会留下半截文件', () => {
+test('导出用临时文件加改名，目录里不会留下半截文件', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   // 导出的是本机自己的数据
@@ -55,7 +55,7 @@ test('导出用临时文件加改名，目录里不会留下半截文件', () =>
   ).run('2026-10-15', LOCAL.id, 'codex', 1000, 1000);
   repo.refreshTotal();
 
-  const files = exportRollup(repo, LOCAL, dir);
+  const files = await exportRollup(repo, LOCAL, dir);
   assert.equal(files.length, 1);
   // 目录里应该只有最终的 .jsonl，没有 .tmp
   const names = readdirSync(dir).filter(n => n.endsWith('.jsonl') || n.endsWith('.tmp'));
@@ -67,7 +67,7 @@ test('导出用临时文件加改名，目录里不会留下半截文件', () =>
   repo.close();
 });
 
-test('文件里有一行坏数据，整个文件都不导入', () => {
+test('文件里有一行坏数据，整个文件都不导入', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   // 本机库里已经有远端 10 月的完整数据
@@ -82,7 +82,7 @@ test('文件里有一行坏数据，整个文件都不导入', () => {
     JSON.stringify(aggLine(REMOTE.id, '2026-10-02', 100))
   ].join('\n') + '\n', 'utf8');
 
-  const summary = importRollups(repo, syncDir, LOCAL.id);
+  const summary = await importRollups(repo, syncDir, LOCAL.id);
   assert.equal(summary.aggRows, 0, '残缺的文件不能导入任何行');
   assert.ok(summary.errors.some(e => e.includes('整个文件已跳过')), '要说明为什么跳过');
 
@@ -92,7 +92,7 @@ test('文件里有一行坏数据，整个文件都不导入', () => {
   repo.close();
 });
 
-test('设备头里的 id 和文件名不一致，整个文件不导入', () => {
+test('设备头里的 id 和文件名不一致，整个文件不导入', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   seedRemote(repo, '2026-10', 5000);
@@ -105,7 +105,7 @@ test('设备头里的 id 和文件名不一致，整个文件不导入', () => {
     JSON.stringify(aggLine(REMOTE.id, '2026-10-01', 1))
   ].join('\n') + '\n', 'utf8');
 
-  const summary = importRollups(repo, syncDir, LOCAL.id);
+  const summary = await importRollups(repo, syncDir, LOCAL.id);
   assert.equal(summary.aggRows, 0);
   assert.ok(summary.errors.some(e => e.includes('id 和文件名不一致')));
 
@@ -114,7 +114,7 @@ test('设备头里的 id 和文件名不一致，整个文件不导入', () => {
   repo.close();
 });
 
-test('数据行的 device 和文件名不一致，整个文件不导入', () => {
+test('数据行的 device 和文件名不一致，整个文件不导入', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   seedRemote(repo, '2026-10', 5000);
@@ -126,13 +126,13 @@ test('数据行的 device 和文件名不一致，整个文件不导入', () => 
     JSON.stringify(aggLine('cccccccc-9999-8888-7777-666666666666', '2026-10-01', 1))
   ].join('\n') + '\n', 'utf8');
 
-  const summary = importRollups(repo, syncDir, LOCAL.id);
+  const summary = await importRollups(repo, syncDir, LOCAL.id);
   assert.equal(summary.aggRows, 0);
   assert.ok(summary.errors.some(e => e.includes('device 和文件名不一致')));
   repo.close();
 });
 
-test('结构不对的行（t 不认识、缺字段）也会被拒', () => {
+test('结构不对的行（t 不认识、缺字段）也会被拒', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   const syncDir = tmpDir();
@@ -142,13 +142,13 @@ test('结构不对的行（t 不认识、缺字段）也会被拒', () => {
     JSON.stringify({ t: 'agg', k: 'agent', device: REMOTE.id, day: '2026-10-01' })  // 缺数值字段
   ].join('\n') + '\n', 'utf8');
 
-  const summary = importRollups(repo, syncDir, LOCAL.id);
+  const summary = await importRollups(repo, syncDir, LOCAL.id);
   assert.equal(summary.aggRows, 0);
   assert.ok(summary.errors.some(e => e.includes('不合法')));
   repo.close();
 });
 
-test('导入完整文件能正常替换那个月的数据', () => {
+test('导入完整文件能正常替换那个月的数据', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   seedRemote(repo, '2026-10', 5000);
@@ -161,7 +161,7 @@ test('导入完整文件能正常替换那个月的数据', () => {
     JSON.stringify(aggLine(REMOTE.id, '2026-10-02', 200))
   ].join('\n') + '\n', 'utf8');
 
-  const summary = importRollups(repo, syncDir, LOCAL.id);
+  const summary = await importRollups(repo, syncDir, LOCAL.id);
   assert.equal(summary.aggRows, 2);
   assert.equal(summary.errors.length, 0);
 
@@ -171,7 +171,7 @@ test('导入完整文件能正常替换那个月的数据', () => {
   repo.close();
 });
 
-test('用户改过的设备名不会被别的机器的旧文件改回去', () => {
+test('用户改过的设备名不会被别的机器的旧文件改回去', async () => {
   const dir = tmpDir();
   const repo = new Repo(join(dir, 'a.db'));
   // 库里已经有这台设备，名字是用户改过的
@@ -184,7 +184,7 @@ test('用户改过的设备名不会被别的机器的旧文件改回去', () =>
     JSON.stringify(aggLine(REMOTE.id, '2026-10-01', 100))
   ].join('\n') + '\n', 'utf8');
 
-  importRollups(repo, syncDir, LOCAL.id);
+  await importRollups(repo, syncDir, LOCAL.id);
   const d = repo.device(REMOTE.id);
   assert.equal(d.name, '办公室那台', '用户在界面上改过的名字要保住');
   repo.close();

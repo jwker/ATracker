@@ -82,8 +82,8 @@ export function SyncPanel({ sync, onChanged }: SyncPanelProps) {
       </div>
       <div className="row">
         <span className="k">错误</span>
-        <span className={'v' + (imp && imp.errors.length ? ' warn' : ' ok')}>
-          {imp && imp.errors.length ? imp.errors.join('；') : '无'}
+        <span className={'v' + (sync.lastError || (imp && imp.errors.length) ? ' warn' : ' ok')}>
+          {sync.lastError ?? (imp && imp.errors.length ? imp.errors.join('；') : '无')}
         </span>
       </div>
 

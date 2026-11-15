@@ -3,8 +3,21 @@ import type { UsageEvent } from '../../core/src/types.ts';
 
 export type LogLevel = 'ok' | 'info' | 'warn' | 'err';
 
+/** 会话元信息的读取进度。和用量游标（file_cursor）是两套，不能混用。 */
+export interface MetaState {
+  /** 这个文件的元信息已经读到哪个字节 */
+  offset: number;
+  sessionId: string | null;
+  cwd: string | null;
+  title: string | null;
+  firstTs: number | null;
+  lastTs: number | null;
+}
+
 export interface ScanContext {
-  /** 列出根目录下的文件（递归）。 */
+  /** 本轮扫描的中止信号。长循环里要周期性检查，超时后才能真的停下来。 */
+  readonly signal: AbortSignal;
+  /** 列出根目录下的文件（递归）。同一批次内同一个 root 只走一遍树。 */
   files(root: string, filter?: (path: string) => boolean): Promise<string[]>;
   /** 读纯文本文件，从 offset 开始逐行。offset 是字节位置。 */
   lines(path: string, fromOffset: number): AsyncGenerator<{ line: string; endOffset: number; partial: boolean }>;
@@ -27,6 +40,14 @@ export interface ScanContext {
   shouldParse(path: string): { parse: boolean; offset: number; reason: string };
   /** 解析完记录新的偏移和指纹。 */
   commitFile(path: string, offset: number, complete: boolean): void;
+
+  /**
+   * 上一次读这个文件时累积的会话元信息。没有记录（第一次读、文件被重写）给 null。
+   * 有了它就不必每次都从文件头重读一遍整份 jsonl。
+   */
+  meta(path: string): MetaState | null;
+  /** 记下这次读到的元信息。游标和 file_cursor 是分开的两套。 */
+  commitMeta(path: string, patch: MetaState): void;
 }
 
 /** 一个会话的元信息。标题各来源都有，但字段位置不同。 */

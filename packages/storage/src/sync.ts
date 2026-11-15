@@ -3,13 +3,17 @@
 // 文件永远是一台设备一份，谁都不改别人的。导入只写自己库里那张表，不碰别人的文件。
 // 「合并」发生在查询阶段：库里每行都带 device，页面按条件做 SUM。
 //
+// 读写一律走异步 fs：同步目录经常是 iCloud、Syncthing、局域网共享盘，
+// 同步调用一旦卡在内核里，主进程的事件循环就停了，界面、扫描、退出全部没反应。
+// 异步化的代价是「等不到结果」，那是调用方的事（service 里给了超时）。
+//
 // 文件命名：atracker-<deviceId>-<YYYY-MM>.jsonl
 // 每行一条 JSON，三种类型：
 //   {"t":"device", ...}                    设备自述，文件头一行
 //   {"t":"agg","k":"agent"|"dir"|...}      日级聚合，四种维度各一行一条
 //   {"t":"session", ...}                   会话汇总
 
-import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdir, readdir, readFile as readFileAsync, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Repo } from './repo.ts';
@@ -73,11 +77,33 @@ export function rollupFileName(deviceId: string, month: string): string {
   return `atracker-${deviceId}-${month}.jsonl`;
 }
 
+export interface ExportOptions {
+  /** 只导出这些月份（YYYY-MM）。不给就导出该设备的所有月份。 */
+  months?: string[];
+  /** 超时才用；卡在文件系统里的调用未必能被打断，所以调用方还要有自己的超时。 */
+  signal?: AbortSignal;
+}
+
+export interface ImportOptions {
+  signal?: AbortSignal;
+}
+
+/** 中止请求。库里已经改动之前调用它，避免超时之后旧的一轮把数据写进去。 */
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error('同步操作已中止');
+}
+
 /* ---------- 导出 ---------- */
 
 /** 把本机数据按「设备 + 月」写成 rollup 文件，返回写出的文件路径。 */
-export function exportRollup(repo: Repo, device: DeviceInfo, dir: string): string[] {
-  mkdirSync(dir, { recursive: true });
+export async function exportRollup(
+  repo: Repo,
+  device: DeviceInfo,
+  dir: string,
+  opts: ExportOptions = {}
+): Promise<string[]> {
+  throwIfAborted(opts.signal);
+  await mkdir(dir, { recursive: true });
   // 月份取两处的并集：聚合表有、但明细被清掉的月份，会话汇总里还留着，
   // 少了它那个月的会话就同步不过去。
   const months = (repo.db.prepare(
@@ -88,8 +114,12 @@ export function exportRollup(repo: Repo, device: DeviceInfo, dir: string): strin
      ) ORDER BY m`
   ).all(device.id, device.id) as any[]).map(r => r.m as string);
 
+  const wanted = opts.months ? new Set(opts.months) : null;
   const written: string[] = [];
   for (const month of months) {
+    if (wanted && !wanted.has(month)) continue;
+    // 每写一个月都要重新确认一次，别在超时之后继续写
+    throwIfAborted(opts.signal);
     const lines: Line[] = [{ t: 'device', id: device.id, name: device.name, platform: device.platform, writtenAt: Date.now() }];
 
     lines.push(...aggLines(repo, device.id, month, 'agent'));
@@ -104,10 +134,10 @@ export function exportRollup(repo: Repo, device: DeviceInfo, dir: string): strin
     // 半截文件被导入时会被整个丢掉，但丢掉之前它已经占着那个名字。
     const tmp = join(dir, `.${rollupFileName(device.id, month)}.tmp`);
     try {
-      writeFileSync(tmp, lines.map(l => JSON.stringify(l)).join('\n') + '\n');
-      renameSync(tmp, file);
+      await writeFile(tmp, lines.map(l => JSON.stringify(l)).join('\n') + '\n', { signal: opts.signal });
+      await rename(tmp, file);
     } catch (err) {
-      try { unlinkSync(tmp); } catch { /* 临时文件可能没建成 */ }
+      try { await unlink(tmp); } catch { /* 临时文件可能没建成 */ }
       throw err;
     }
     written.push(file);
@@ -190,12 +220,17 @@ export interface ImportSummary {
  * 按「设备 + 月」整块替换：先删该设备该月的行再插入，所以重复导入是幂等的。
  * 自己的文件会被跳过——本机数据本来就该从明细重算，导入自己的文件没有意义。
  */
-export function importRollups(repo: Repo, dir: string, localDeviceId: string): ImportSummary {
+export async function importRollups(
+  repo: Repo,
+  dir: string,
+  localDeviceId: string,
+  opts: ImportOptions = {}
+): Promise<ImportSummary> {
   const summary: ImportSummary = { files: 0, skippedOwn: 0, skippedIgnored: 0, devices: [], aggRows: 0, sessionRows: 0, errors: [] };
 
   let names: string[];
   try {
-    names = readdirSync(dir).filter(n => FILE_RE.test(n)).sort();
+    names = (await readdir(dir)).filter(n => FILE_RE.test(n)).sort();
   } catch (err) {
     summary.errors.push(`读不了目录 ${dir}：${(err as Error).message}`);
     return summary;
@@ -215,10 +250,10 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
    * 有一行坏就整个文件不要：导入是「先删这个设备这个月，再插新的」。
    * 收下残缺的文件等于用残缺的数据覆盖对方完整的月份。
    */
-  const readFile = (name: string, fileDevice: string): PayloadLine[] | null => {
+  const readFile = async (name: string, fileDevice: string): Promise<PayloadLine[] | null> => {
     let text: string;
     try {
-      text = readFileSync(join(dir, name), 'utf8');
+      text = await readFileAsync(join(dir, name), { encoding: 'utf8', signal: opts.signal });
     } catch (err) {
       summary.errors.push(`${name}：${(err as Error).message}`);
       return null;
@@ -266,6 +301,7 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
   };
 
   for (const name of names) {
+    throwIfAborted(opts.signal);
     summary.files++;
     const fileDevice = name.match(FILE_RE)![1]!;
     if (fileDevice.toLowerCase() === local) {
@@ -276,7 +312,7 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
       summary.skippedIgnored++;
       continue;
     }
-    const lines = readFile(name, fileDevice);
+    const lines = await readFile(name, fileDevice);
     if (!lines) continue;
 
     const entry = perDevice.get(fileDevice) ?? { name: fileDevice.slice(0, 8), platform: '', months: new Map() };
@@ -290,6 +326,11 @@ export function importRollups(repo: Repo, dir: string, localDeviceId: string): I
   }
 
   // 所有文件都校验过了，现在才开始改库。
+  // 超时中止时不写库：宁可这一轮白读，也不能把半轮的旧数据写进去。
+  if (opts.signal?.aborted) {
+    summary.errors.push('同步已中止，本轮没有写入');
+    return summary;
+  }
   try {
     repo.db.exec('BEGIN');
   } catch (err) {
