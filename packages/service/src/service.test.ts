@@ -152,3 +152,57 @@ test('退出时还在跑的扫描不会抛出没人接的错', async () => {
   assert.equal(unhandled, null, '关库之后写日志抛错会变成没人接的 promise rejection');
   assert.equal(svc.isScanning, false);
 });
+
+test('卡在永不落地的 await 上的扫描，超时后也要放开标记', async () => {
+  // 11 月 18 日的真实情形：一轮扫描从 09:41 挂到发现时已经 5 个小时，
+  // batch 的 finished_at 一直是 NULL。当时的做法是超时就 abort、然后继续 await
+  // 那个 promise —— 卡在不可中断的 await 上时，abort 只是设个标记，永远轮不到
+  // 检查，等于没救。现在超时就不等了。
+  const svc = newService(120);
+
+  const never = {
+    id: 'never',
+    label: 'never',
+    version: '1',
+    roots: () => ['/nonexistent'],
+    async *scan() {
+      // 不看 signal，也不会有任何结果：模拟卡在文件系统的 await 上
+      await new Promise<void>(() => { /* 永不 resolve */ });
+    }
+  };
+
+  await withCollector([never], () => svc.triggerScan('manual'));
+  assert.equal(svc.isScanning, false, '超时后必须放开标记，不能等那个 promise 落地');
+
+  // 被放弃的那一轮也要标成中断，否则日志页上会一直挂着一条「在跑」
+  const abandoned = svc.repo.db.prepare('SELECT finished_at, errors FROM scan_batch ORDER BY id DESC LIMIT 1').get() as any;
+  assert.ok(abandoned.finished_at !== null, '被放弃的批次不能永远停在 NULL');
+  assert.equal(abandoned.errors, 1);
+
+  // 下一轮要真能跑
+  await withCollector([{
+    id: 'fine',
+    label: 'fine',
+    version: '1',
+    roots: () => ['/nonexistent'],
+    async *scan() { /* 什么都不产出 */ }
+  }], () => svc.triggerScan('manual'));
+
+  const last = svc.repo.db.prepare('SELECT finished_at FROM scan_batch ORDER BY id DESC LIMIT 1').get() as any;
+  assert.ok(last?.finished_at, '被放弃的那一轮之后再扫，批次要正常收尾');
+  const err = svc.repo.db.prepare("SELECT message FROM scan_log WHERE level = 'err' ORDER BY id DESC LIMIT 1").get() as any;
+  assert.match(err.message, /未完成/);
+  await svc.close();
+});
+
+test('启动时把上次没结束的批次标成中断', async () => {
+  const svc = newService(5_000);
+  const id = svc.repo.startBatch('watch', Date.now() - 60_000);
+  assert.ok(svc.repo.db.prepare('SELECT finished_at FROM scan_batch WHERE id = ?').get(id));
+
+  svc.start(); // 启动时清理
+  const row = svc.repo.db.prepare('SELECT finished_at, errors FROM scan_batch WHERE id = ?').get(id) as any;
+  assert.ok(row.finished_at !== null, '遗留批次不该一直显示「在跑」');
+  assert.equal(row.errors, 1, '中断也是一种错误，要计入');
+  await svc.close();
+});

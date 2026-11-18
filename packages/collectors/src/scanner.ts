@@ -44,6 +44,23 @@ export interface ScanOptions {
    * 已经在读的文件会在下一个检查点退出，不再继续走完整棵树。
    */
   signal?: AbortSignal;
+  /**
+   * 进度回调。扫描卡住时，服务层靠它才知道卡在哪——
+   * 光看「扫描超过了 120 秒」没法查，得知道是在哪个来源、哪个文件上。
+   */
+  onProgress?: (progress: ScanProgress) => void;
+  /** 批次一开始就回调批号。服务层超时后用它把这一批标成中断。 */
+  onBatch?: (batchId: number) => void;
+}
+
+/** 扫描进度。字段给日志和状态接口用，不改任何行为。 */
+export interface ScanProgress {
+  /** `来源:阶段`，阶段是 sessions 或 scan（用量） */
+  phase: string;
+  /** 正在处理的文件。目录遍历和收尾阶段为空 */
+  path: string;
+  /** 这一轮已经看过的文件数 */
+  files: number;
 }
 
 export interface ScanSummary {
@@ -66,6 +83,7 @@ export async function runScan(
 
   const collectors = COLLECTORS.filter(c => !opts.only || opts.only.includes(c.id));
   const batchId = repo.startBatch(opts.trigger, Date.now());
+  try { opts.onBatch?.(batchId); } catch { /* 观察用的回调，不能影响扫描 */ }
   const sessionStates = new Map<string, Map<string, number>>();
   let curSource = 'unknown';
   const affectedDays = new Set<string>();
@@ -85,6 +103,23 @@ export async function runScan(
    * 缓存到本轮结束为止；这一轮看不到的新文件，下一轮补。
    */
   const walkCache = new Map<string, Promise<string[]>>();
+
+  /** 当前阶段和文件。只在变化时报一次，不打热循环。 */
+  let phase = '启动';
+  let currentPath = '';
+  const report = (): void => {
+    if (!opts.onProgress) return;
+    try {
+      opts.onProgress({ phase, path: currentPath, files: seenPaths.size });
+    } catch {
+      // 进度回调是观察用的，不能因为它把扫描搞挂
+    }
+  };
+  const setPhase = (next: string): void => {
+    phase = next;
+    currentPath = '';
+    report();
+  };
   let eventsRead = 0;
   let eventsWritten = 0;
   let errors = 0;
@@ -139,6 +174,8 @@ export async function runScan(
      * 完整落盘的坏行直接跳过，不卡住后面的行。
      */
     async *lines(path, fromOffset) {
+      currentPath = path;
+      report();
       const stream = createReadStream(path, { start: fromOffset });
       try {
         let consumed = fromOffset;
@@ -174,6 +211,8 @@ export async function runScan(
     },
 
     async *zstdLines(path) {
+      currentPath = path;
+      report();
       const buf = await readFile(path);
       for (const line of zstdLines(buf)) {
         if (aborted()) throw new Error('扫描已中止');
@@ -198,6 +237,8 @@ export async function runScan(
     },
 
     shouldParse(path) {
+      currentPath = path;
+      report();
       let st;
       try {
         st = statSync(path);
@@ -295,6 +336,7 @@ export async function runScan(
     for (const collector of collectors) {
       if (aborted()) throw new Error('扫描已中止');
       curSource = collector.version ? `${collector.id}:${collector.version}` : collector.id;
+      setPhase(`${collector.id}:sessions`);
 
       // 会话元信息要先读。scan 跑完会把文件游标推进到新位置，
       // 之后同一个文件再问 shouldParse 就是「指纹没变」，元信息会被整个跳过。
@@ -316,6 +358,7 @@ export async function runScan(
       }
 
       if (aborted()) throw new Error('扫描已中止');
+      setPhase(`${collector.id}:scan`);
       const collected: StoredEvent[] = [];
       try {
         for await (const ev of collector.scan(ctx)) {
@@ -359,6 +402,8 @@ export async function runScan(
     errors++;
     repo.log(batchId, Date.now(), 'warn', curSource, `扫描中止：${abortedError}`);
   }
+
+  setPhase('收尾');
 
   // 「文件」这一列统计这一批看过多少文件，和有没有新事件无关。
   // 以前只在写出事件时才 +1，没新数据的批次永远显示 0。

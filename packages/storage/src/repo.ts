@@ -264,6 +264,29 @@ export class Repo {
     ).run(Date.now() - 30 * 86400000);
   }
 
+  /**
+   * 把一轮被放弃的扫描标成中断。
+   * 不标的话，日志页上会一直挂着一条「在跑」的批次，看着像现在还在扫。
+   */
+  abortBatch(id: number): void {
+    this.db.prepare(
+      'UPDATE scan_batch SET finished_at = started_at, errors = errors + 1 WHERE id = ? AND finished_at IS NULL'
+    ).run(id);
+  }
+
+  /**
+   * 把上次进程遗留下来、永远停在「在跑」的批次收尾。
+   *
+   * 进程被强制退出或卡死时 finishBatch 没机会执行，日志页上就会留一条永远在扫的记录，
+   * 看起来像「现在还在扫」。启动时把它们标成中断，不是假装成功：错误数 +1。
+   */
+  abortStaleBatches(): number {
+    const r = this.db.prepare(
+      'UPDATE scan_batch SET finished_at = started_at, errors = errors + 1 WHERE finished_at IS NULL'
+    ).run();
+    return Number(r.changes ?? 0);
+  }
+
   log(batchId: number, at: number, level: LogLevel, source: string, message: string): void {
     this.db.prepare('INSERT INTO scan_log (batch_id, at, level, source, message) VALUES (?,?,?,?,?)')
       .run(batchId, at, level, source, message);

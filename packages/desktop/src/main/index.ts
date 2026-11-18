@@ -561,16 +561,29 @@ if (!app.requestSingleInstanceLock()) {
 
   // 退出前关掉服务和文件监听，让 SQLite 正常收尾。
   //
-  // 这里拦一下再自己退：不拦的话 app.quit() 会在 close() 还没跑完时就退，WAL
-  // 可能来不及收尾；拦了又必须给上限——同步目录在 iCloud 上时，close() 里的收尾
-  // 一旦卡在文件系统上，用户就只能去「强制退出」了。最多等 3 秒，到点直接退。
+  // 这里踩过一个坑：app.exit()/process.exit() 最后要走 uv 的线程池清理
+  // （uv__threadpool_cleanup → uv_thread_join）。只要有一个 libuv worker 还卡在文件
+  // 系统里（同步目录在 iCloud 上时会发生，而且这种调用杀不掉），这个 join 就永远等
+  // 不到，进程留在那里——这就是「右键退出后应用还在，必须强制退出」的真正原因，
+  // 不是主线程没空。11 月 18 日那台卡住的实例，主线程栈就是 exit → uv_thread_join。
+  //
+  // 所以收尾做完直接 SIGKILL 自己：SQLite 的 WAL 是崩溃安全的，关完库之后
+  // 不需要 C 库善后（实测关库后 -wal 已经没了，SIGKILL 不丢东西）。
   let quitting = false;
   app.on('before-quit', event => {
     if (!service || quitting) return;
     event.preventDefault();
     quitting = true;
     const svc = service;
-    const giveUp = new Promise<void>(resolve => { setTimeout(resolve, 3_000); });
-    void Promise.race([svc.close(), giveUp]).finally(() => app.exit(0));
+    void Promise.resolve()
+      .then(() => svc.close())
+      .catch(err => { console.error('退出前关掉服务失败：', err); })
+      .finally(() => {
+        try {
+          process.kill(process.pid, 'SIGKILL');
+        } catch {
+          app.exit(0);
+        }
+      });
   });
 }

@@ -49,6 +49,10 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
         lastScanStartedAt: service.lastScanStartedAt,
         lastScanFinishedAt: service.lastScanFinishedAt,
         lastEventAt: service.lastEventAt,
+        // 扫描卡住时告诉页面卡在哪（哪个来源、哪个文件）
+        scanPhase: service.scanProgress?.phase ?? null,
+        scanFile: service.scanProgress?.path ?? null,
+        scanFiles: service.scanProgress?.files ?? 0,
         syncing: service.isSyncing,
         lastSyncError: service.lastSyncError
       });

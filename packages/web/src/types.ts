@@ -39,6 +39,12 @@ export interface StatusPayload {
   lastScanFinishedAt?: number | null;
   /** 最后一次推送事件的时刻 */
   lastEventAt?: number | null;
+  /** 扫描当前干到哪儿了：`来源:阶段`，扫描卡住时用来看位置 */
+  scanPhase?: string | null;
+  /** 正在处理的文件（可能为空） */
+  scanFile?: string | null;
+  /** 这一轮已经看过的文件数 */
+  scanFiles?: number;
   syncing?: boolean;
   /** 最后一次同步失败或超时的原因 */
   lastSyncError?: string | null;

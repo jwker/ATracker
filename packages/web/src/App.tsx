@@ -228,7 +228,7 @@ export function App() {
    *   scan  —— 有一轮扫描跑超过它的时限（说明卡住了）
    *   quiet —— 很久没有新数据进来了（监听和轮询都不正常）
    */
-  const [stalled, setStalled] = useState<{ kind: 'scan' | 'quiet'; ms: number } | null>(null);
+  const [stalled, setStalled] = useState<{ kind: 'scan' | 'quiet'; ms: number; where?: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -243,8 +243,10 @@ export function App() {
         // 「多久没动静算不正常」：至少两个轮询周期，也不能短于 10 分钟，
         // 否则夜里没人用 agent 的时候也会报。
         const quietLimit = Math.max((s.pollMs ?? 300_000) * 2, 600_000);
-        if (scanMs > scanLimit) setStalled({ kind: 'scan', ms: scanMs });
-        else if (quietMs > quietLimit) setStalled({ kind: 'quiet', ms: quietMs });
+        if (scanMs > scanLimit) {
+          const where = s.scanPhase ? `（${s.scanPhase}${s.scanFile ? ' · ' + s.scanFile.split('/').pop() : ''}）` : '';
+          setStalled({ kind: 'scan', ms: scanMs, where });
+        } else if (quietMs > quietLimit) setStalled({ kind: 'quiet', ms: quietMs });
         else setStalled(null);
       } catch {
         // 主进程没响应（可能正忙），下一轮再看
@@ -742,7 +744,7 @@ export function App() {
         <div className="stallbar" role="status">
           <span>
             {stalled.kind === 'scan'
-              ? `有一轮扫描已经跑了 ${sinceLabel(stalled.ms)} 还没结束，数据可能不更新。`
+              ? `有一轮扫描已经跑了 ${sinceLabel(stalled.ms)} 还没结束${stalled.where ?? ''}，数据可能不更新。`
               : `已经 ${sinceLabel(stalled.ms)} 没有新数据进来了，监听可能停了。`}
           </span>
           <button type="button" onClick={() => { setStalled(null); api.scan().catch(() => { /* 下一轮状态检查会再报 */ }); }}>
