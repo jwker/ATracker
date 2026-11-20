@@ -46,6 +46,7 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
         // 下面这几个给页面算「是不是卡住了」：扫描超过 scanTimeoutMs 还没结束，
         // 或者最后一条事件已经很久没来，就在界面上提醒，不要安静地停在那里。
         scanTimeoutMs: service.scanTimeout,
+        scanCooldownMs: service.scanCooldownRemaining,
         lastScanStartedAt: service.lastScanStartedAt,
         lastScanFinishedAt: service.lastScanFinishedAt,
         lastEventAt: service.lastEventAt,
@@ -155,7 +156,7 @@ export async function handleApi(service: ATrackerService, call: ApiCall): Promis
       const runningMs = wasScanning && service.lastScanStartedAt !== null
         ? Date.now() - service.lastScanStartedAt
         : 0;
-      void service.triggerScan('manual');
+      void service.triggerScan('manual', { force: true });
       return ok({
         ok: true,
         // queued=false 表示上一次还在跑，这一次只是把「扫完再跑一轮」的标记打开

@@ -34,6 +34,37 @@ export const COLLECTORS: Collector[] = [
   piCollector
 ].sort((a, b) => a.id.localeCompare(b.id));
 
+/** 一次文件操作最多允许多久。超过就当作运行时坏了，不再傻等。 */
+const FS_STALL_MS = 15_000;
+
+/**
+ * 文件系统卡住了。
+ *
+ * 不是某个文件读不到（那会抛 ENOENT/EPERM），而是调用再也不返回。
+ * 11 月 19 日那次：从 21:11:53 起，进程里所有 fs 操作都不回来了（同步也同时卡住），
+ * 而定时器和数据库正常，说明是进程内的线程池坏了，只有重启进程能恢复。
+ * 单独拿出来分类，是因为处理方式不同：不该重试，而是把整个运行时换掉。
+ */
+export class FsStallError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FsStallError';
+  }
+}
+
+/** 给一个可能永远不返回的 fs 调用加时限。超时抛 FsStallError。 */
+function withStall<T>(promise: Promise<T>, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new FsStallError(`${what} 超过 ${FS_STALL_MS / 1000} 秒没有返回`));
+    }, FS_STALL_MS);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      err => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 export interface ScanOptions {
   trigger: 'watch' | 'poll' | 'manual';
   only?: string[];
@@ -52,7 +83,6 @@ export interface ScanOptions {
   /** 批次一开始就回调批号。服务层超时后用它把这一批标成中断。 */
   onBatch?: (batchId: number) => void;
 }
-
 /** 扫描进度。字段给日志和状态接口用，不改任何行为。 */
 export interface ScanProgress {
   /** `来源:阶段`，阶段是 sessions 或 scan（用量） */
@@ -70,6 +100,8 @@ export interface ScanSummary {
   eventsWritten: number;
   errors: number;
   days: string[];
+  /** 这一轮里有文件操作卡死了。服务层据此判断「运行时坏了」，连续两次就重启进程。 */
+  fsStalled: boolean;
 }
 
 export async function runScan(
@@ -138,12 +170,14 @@ export async function runScan(
             if (aborted()) throw new Error('扫描已中止');
             let entries;
             try {
-              entries = await readdir(dir, { withFileTypes: true });
+              entries = await withStall(readdir(dir, { withFileTypes: true }), `读目录 ${dir}`);
             } catch (err) {
               // 目录读不到（权限、正在被删、软链接断了）不能当成「这里没有文件」。
               // 静默吞掉的话，缺数据很难排查。
               repo.log(batchId, Date.now(), 'warn', curSource, `目录读不到：${dir}（${(err as Error).message}）`);
               dirErrors++;
+              // 卡住不是「读不到」：整个运行时出问题了，这一轮没必须继续
+              if (err instanceof FsStallError) throw err;
               return;
             }
             for (const e of entries) {
@@ -176,7 +210,8 @@ export async function runScan(
     async *lines(path, fromOffset) {
       currentPath = path;
       report();
-      const stream = createReadStream(path, { start: fromOffset });
+      // 整份文件给 4 个区的时限：单看一个 chunk 也可能卡住，而流本身不能无限期挂着
+      const stream = createReadStream(path, { start: fromOffset, signal: AbortSignal.timeout(FS_STALL_MS * 4) });
       try {
         let consumed = fromOffset;
         let pending: Buffer = Buffer.alloc(0);
@@ -204,6 +239,12 @@ export async function runScan(
           consumed += pending.length;
           yield { line: pending.toString('utf8'), endOffset: consumed, partial: true };
         }
+      } catch (err) {
+        // 不是这次扫描被中止，而是流自己的时限到了：同样是文件系统卡住
+        if (!aborted() && (err as Error).name === 'AbortError') {
+          throw new FsStallError(`读文件 ${path} 超过 ${(FS_STALL_MS * 4) / 1000} 秒没有返回`);
+        }
+        throw err;
       } finally {
         // 中止时也要把文件句柄放掉，不能等 GC
         stream.destroy();
@@ -213,7 +254,7 @@ export async function runScan(
     async *zstdLines(path) {
       currentPath = path;
       report();
-      const buf = await readFile(path);
+      const buf = await withStall(readFile(path), `读文件 ${path}`);
       for (const line of zstdLines(buf)) {
         if (aborted()) throw new Error('扫描已中止');
         yield { line };
@@ -332,6 +373,8 @@ export async function runScan(
   };
 
   let abortedError: string | null = null;
+  /** 这一轮里有文件操作卡死（不是读不到，是永远不返回）。 */
+  let fsStalled = false;
   try {
     for (const collector of collectors) {
       if (aborted()) throw new Error('扫描已中止');
@@ -347,6 +390,8 @@ export async function runScan(
             sessionRows.push(meta);
           }
         } catch (err) {
+          // 卡住不是「采集失败」：运行时已经坏了，直接收尾
+          if (err instanceof FsStallError) throw err;
           // 中止不是「采集失败」：已经采到的部分要保住，交给下面统一收尾
           if (aborted()) throw err;
           // 这条路的元信息是缺的，要计入错误数，否则批次摘要显示「全部成功」，
@@ -387,6 +432,8 @@ export async function runScan(
           });
         }
       } catch (err) {
+        // 卡住不是「采集失败」：运行时已经坏了，剩下的来源也不可能读到，直接收尾
+        if (err instanceof FsStallError) throw err;
         if (aborted()) throw err;
         errors++;
         repo.log(batchId, Date.now(), 'err', collector.id, `采集失败：${(err as Error).message}`);
@@ -395,12 +442,17 @@ export async function runScan(
       if (collected.length) eventsWritten += repo.upsertEvents(collected);
     }
   } catch (err) {
-    // 只有中止会走到这里：采集器自己的错误已经在上面吞掉了。
-    // 不直接往外抛，先让批次和聚合正常收尾，保持库里的账对得上。
-    if (!aborted()) throw err;
-    abortedError = (err as Error).message;
-    errors++;
-    repo.log(batchId, Date.now(), 'warn', curSource, `扫描中止：${abortedError}`);
+    if (err instanceof FsStallError) {
+      fsStalled = true;
+      errors++;
+      repo.log(batchId, Date.now(), 'err', curSource, `文件系统卡住：${err.message}`);
+    } else if (aborted()) {
+      abortedError = (err as Error).message;
+      errors++;
+      repo.log(batchId, Date.now(), 'warn', curSource, `扫描中止：${abortedError}`);
+    } else {
+      throw err;
+    }
   }
 
   setPhase('收尾');
@@ -442,5 +494,5 @@ export async function runScan(
   // scan_batch 里不会留下永远「在跑」的批次。
   if (abortedError) throw new Error(abortedError);
 
-  return { batchId, filesScanned, eventsRead, eventsWritten, errors, days: [...affectedDays] };
+  return { batchId, filesScanned, eventsRead, eventsWritten, errors, days: [...affectedDays], fsStalled };
 }

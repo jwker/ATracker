@@ -4,7 +4,7 @@
 // 页面通过 preload 暴露的 IPC 取数。构建产物在 out/，由 electron-vite 生成。
 
 import { app, BrowserWindow, dialog, Menu, protocol, screen, shell, type MenuItemConstructorOptions } from 'electron';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, isAbsolute, join, normalize, relative } from 'node:path';
@@ -404,6 +404,48 @@ function serveRenderer(): void {
   });
 }
 
+/**
+ * 自重启。
+ *
+ * 触发条件：扫描连续两轮卡在文件系统上。那意味着进程里的线程池已经坏了，重试没用，
+ * 从进程内部也修不好——唯一的恢复手段是换一个新的进程。
+ *
+ * 为什么不用 app.relaunch()：自重启前的收尾（包括 relaunch 登记）都会走 exit()，
+ * 而 exit() 里的 uv 线程池清理只要有 worker 卡住就永远等不到（见 before-quit 那段注释）。
+ * 所以这里先起一个脱离的 sh 监视本进程，等它真死了再 open，然后自己 SIGKILL。
+ *
+ * 一小时内只重启一次：万一启动就卡，不至于变成重启循环。
+ */
+function restartSelf(reason: string): void {
+  console.error(`连续卡住，自动重启：${reason}`);
+  if (process.platform !== 'darwin') return;
+  const marker = join(app.getPath('userData'), 'self-restart.json');
+  try {
+    const last = JSON.parse(readFileSync(marker, 'utf8')) as { at?: number };
+    if (typeof last.at === 'number' && Date.now() - last.at < 3600_000) {
+      console.error('放弃自动重启：一小时内已经自动重启过一次');
+      return;
+    }
+  } catch {
+    // 没有记录：可以重启
+  }
+  try {
+    writeFileSync(marker, JSON.stringify({ at: Date.now(), reason }));
+  } catch {
+    // 写不了就算了，宁可能重启一次
+  }
+
+  const bundle = app.getPath('exe').replace(/\/Contents\/MacOS\/.*$/, '');
+  const script = `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done; sleep 1; open -a ${JSON.stringify(bundle)}`;
+  try {
+    spawn('/bin/sh', ['-c', script], { detached: true, stdio: 'ignore' }).unref();
+  } catch (err) {
+    console.error(`拉不起重启脚本：${(err as Error).message}`);
+    return;
+  }
+  process.kill(process.pid, 'SIGKILL');
+}
+
 async function openWindow(): Promise<void> {
   const windowState = loadWindowState();
   win = new BrowserWindow({
@@ -536,10 +578,21 @@ if (!app.requestSingleInstanceLock()) {
     // 同步开关记在 ~/.atracker/config.json，命令行和桌面版共用
     const instance = new ATrackerService({
       dbPath: databasePath(),
-      syncDir: loadConfig().syncDir
+      syncDir: loadConfig().syncDir,
+      // 扫描连续卡住说明运行时坏了，自己重启（见 restartSelf）
+      onUnhealthy: restartSelf
     });
     service = instance;
     instance.start();
+    // 上一次是不是自重启恢复的：写进日志页，别让用户以为窗口自己闪了一下
+    try {
+      const mark = JSON.parse(readFileSync(join(app.getPath('userData'), 'self-restart.json'), 'utf8')) as { at?: number; reason?: string };
+      if (typeof mark.at === 'number' && Date.now() - mark.at < 10 * 60_000) {
+        instance.repo.log(0, Date.now(), 'warn', '扫描', `上一次是自动重启才恢复的：${mark.reason ?? '扫描卡住'}`);
+      }
+    } catch {
+      // 没有记录或文件坏了：正常启动
+    }
     // 首屏就触发一次扫描，装上就有数据，不用等 5 分钟轮询。
     void instance.triggerScan('manual');
     // 事件只推给当前窗口。窗口可能关掉，所以每次推之前重新问一遍。

@@ -30,6 +30,13 @@ export interface ServiceOptions {
    * 正常批次是 0.5–3 秒，大文件全量重扫也只是几十秒，超过这个数就是卡住了。
    */
   scanTimeoutMs?: number;
+  /**
+   * 运行时坏掉时的通知。
+   *
+   * 连续两轮扫描都卡在文件系统上（超时或者 fs 操作直接不返回），说明不是某个文件的问题，
+   * 而是进程里的线程池坏了：这时重试没有意义，只能重启进程。桌面版接上这个回调去重启。
+   */
+  onUnhealthy?: (reason: string) => void;
 }
 
 /**
@@ -70,10 +77,16 @@ export class ATrackerService {
   private dirty = false;
   /** 连续超时次数。连续两次之后进入冷却，避免卡住时每两分钟重来一次。 */
   private consecutiveTimeouts = 0;
-  /** 冷却到什么时候。冷却期间不接新的扫描（监听和轮询仍会来，直接返回）。 */
+  /**
+   * 连续「不健康」的轮次数：被看门狗放弃，或者采集时文件系统直接卡死。
+   * 一个健康的轮次会清零。到 2 就认为是运行时坏了，通知外面重启进程。
+   */
+  private unhealthyRounds = 0;
+  /** 冷却到什么时候。冷却期间不接自动扫描（手动重新扫描会绕过它）。 */
   private scanCooldownUntil = 0;
   /** 这一轮扫描目前干到哪儿了。超时时写进日志和状态接口。 */
   scanProgress: ScanProgress | null = null;
+  private readonly onUnhealthy: ((reason: string) => void) | undefined;
   /** 本进程已经完整导出过的月份。导出按月份增量，不再每轮重写全部历史。 */
   private exportedMonths = new Set<string>();
   /** 正在进行的同步。同一时刻只允许一轮：卡住时不能让下一轮再叠上去占线程池。 */
@@ -114,6 +127,7 @@ export class ATrackerService {
     };
     this.syncDir = opts.syncDir ?? null;
     this.syncPollMs = opts.syncPollMs ?? 60_000;
+    this.onUnhealthy = opts.onUnhealthy;
   }
 
   /** 订阅事件。返回取消订阅的函数。 */
@@ -181,6 +195,11 @@ export class ATrackerService {
     return this.opts.scanTimeoutMs;
   }
 
+  /** 冷却还剩多久（毫秒）。0 表示没在冷却。 */
+  get scanCooldownRemaining(): number {
+    return Math.max(0, this.scanCooldownUntil - Date.now());
+  }
+
   /* ---------- 文件监听 ---------- */
 
   private startWatchers(): void {
@@ -223,13 +242,19 @@ export class ATrackerService {
    * （11 月 18 日那次：一轮扫描从 09:41 一直挂到发现时，5 个小时），abort
    * 只能设个标记，根本轮不到检查，所以等于没救。现在的结果是谁先来听谁的。
    */
-  async triggerScan(trigger: 'watch' | 'poll' | 'manual'): Promise<void> {
+  /**
+   * 触发一次扫描。正在扫就记个标记，扫完再跑一次。
+   *
+   * `force` 是手动触发的：冷却期间也照跑。
+   * （不加这个的话，卡住进入冷却后用户点「重新扫描」是没反应的，看上去像按钮坏了。）
+   */
+  async triggerScan(trigger: 'watch' | 'poll' | 'manual', opts: { force?: boolean } = {}): Promise<void> {
     if (this.closed) return;
     if (this.scanning) {
       this.dirty = true;
       return;
     }
-    if (Date.now() < this.scanCooldownUntil) return;
+    if (!opts.force && Date.now() < this.scanCooldownUntil) return;
 
     this.scanning = true;
     const t0 = Date.now();
@@ -280,9 +305,10 @@ export class ATrackerService {
         const message = `扫描超过 ${timeoutMs >= 1000 ? `${Math.round(timeoutMs / 1000)} 秒` : `${timeoutMs} 毫秒`}未完成，已放弃这一轮${where}`;
         this.logLine('err', '扫描', message);
         this.emit({ type: 'scan_error', message });
+        this.markUnhealthy();
         if (this.consecutiveTimeouts >= 2) {
           this.scanCooldownUntil = Date.now() + 10 * 60_000;
-          this.logLine('warn', '扫描', '连续两轮扫描超时，接下来 10 分钟不再自动扫描；先检查同步目录和磁盘');
+          this.logLine('warn', '扫描', '连续两轮扫描超时，接下来 10 分钟不再自动扫描（手动重新扫描不受限）；先检查同步目录和磁盘');
         }
         this.dirty = false;
         return;
@@ -297,6 +323,12 @@ export class ATrackerService {
       }
 
       const summary = outcome.summary;
+      if (summary.fsStalled) {
+        // 批次正常收尾了，但里面有文件操作直接不返回：和超时一样，是运行时坏了
+        this.markUnhealthy();
+      } else {
+        this.unhealthyRounds = 0;
+      }
       // 导出只写这轮动过的月份，历史月份不重写（iCloud 目录每 2 秒重写 6 个文件是灾难）
       await this.exportSync(summary.days);
       this.lastScanFinishedAt = Date.now();
@@ -314,6 +346,25 @@ export class ATrackerService {
         this.dirty = false;
         void this.triggerScan(trigger);
       }
+    }
+  }
+
+  /**
+   * 记一次「这一轮不健康」。连续两次就通知外面：重试解决不了，得重启进程。
+   *
+   * 为什么是两次：单个 120 秒超时也可能真的只是碰到了超大文件的一次性长耗时，
+   * 连续两轮都卡住就不是偶然了。
+   */
+  private markUnhealthy(): void {
+    this.unhealthyRounds++;
+    if (this.unhealthyRounds < 2) return;
+    const reason = `扫描连续 ${this.unhealthyRounds} 轮卡在文件系统上，进程内的文件操作已经不可用`;
+    this.logLine('err', '扫描', `${reason}，需要重启应用才能恢复`);
+    this.unhealthyRounds = 0;
+    try {
+      this.onUnhealthy?.(reason);
+    } catch (err) {
+      this.logLine('warn', '扫描', `重启回调失败：${(err as Error).message}`);
     }
   }
 

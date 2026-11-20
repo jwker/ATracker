@@ -35,6 +35,8 @@ export interface StatusPayload {
   pollMs?: number;
   /** 一轮扫描的时限。超过这个时间还在跑就是卡住了 */
   scanTimeoutMs?: number;
+  /** 冷却还剩多久（毫秒）。冷却期间自动扫描不跑，手动「重新扫描」不受限 */
+  scanCooldownMs?: number;
   lastScanStartedAt?: number | null;
   lastScanFinishedAt?: number | null;
   /** 最后一次推送事件的时刻 */

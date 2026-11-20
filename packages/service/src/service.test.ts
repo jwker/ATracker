@@ -33,7 +33,7 @@ async function withCollector<T>(list: any[], run: () => Promise<T>): Promise<T> 
 }
 
 /** 建一个只跑扫描、不监听也不同步的服务。设备身份写到临时文件，不碰真的 ~/.atracker。 */
-function newService(scanTimeoutMs: number): ATrackerService {
+function newService(scanTimeoutMs: number, extra: { onUnhealthy?: (reason: string) => void } = {}): ATrackerService {
   const dir = mkdtempSync(join(tmpdir(), 'atracker-svc-'));
   process.env.ATRACKER_DEVICE_FILE = join(dir, 'device.json');
   return new ATrackerService({
@@ -41,7 +41,8 @@ function newService(scanTimeoutMs: number): ATrackerService {
     watch: false,
     pollMs: 0,
     syncDir: null,
-    scanTimeoutMs
+    scanTimeoutMs,
+    ...extra
   });
 }
 
@@ -204,5 +205,38 @@ test('启动时把上次没结束的批次标成中断', async () => {
   const row = svc.repo.db.prepare('SELECT finished_at, errors FROM scan_batch WHERE id = ?').get(id) as any;
   assert.ok(row.finished_at !== null, '遗留批次不该一直显示「在跑」');
   assert.equal(row.errors, 1, '中断也是一种错误，要计入');
+  await svc.close();
+});
+
+test('冷却期间手动重新扫描照样跑，按钮不能没反应', async () => {
+  const svc = newService(80);
+  const stuck = stuckCollector();
+
+  // 两轮超时之后进入 10 分钟冷却
+  await withCollector([stuck], () => svc.triggerScan('manual'));
+  await withCollector([stuck], () => svc.triggerScan('manual'));
+  assert.ok(svc.scanCooldownRemaining > 0, '连续两轮超时要进入冷却');
+
+  const before = (svc.repo.db.prepare('SELECT COUNT(*) n FROM scan_batch').get() as any).n;
+  // 自动触发在冷却里应该直接返回
+  await withCollector([{ ...stuck, id: 'auto' }], () => svc.triggerScan('watch'));
+  assert.equal((svc.repo.db.prepare('SELECT COUNT(*) n FROM scan_batch').get() as any).n, before, '冷却期间的自动扫描不该开新批次');
+
+  // 手动（force）必须跑
+  await withCollector([{ ...stuck, id: 'manual' }], () => svc.triggerScan('manual', { force: true }));
+  assert.ok((svc.repo.db.prepare('SELECT COUNT(*) n FROM scan_batch').get() as any).n > before, '手动重新扫描要真的开一轮');
+  await svc.close();
+});
+
+test('连续两轮卡住要通知外面重启进程', async () => {
+  const reasons: string[] = [];
+  const svc = newService(80, { onUnhealthy: r => { reasons.push(r); } });
+  const stuck = stuckCollector();
+
+  await withCollector([stuck], () => svc.triggerScan('manual'));
+  assert.equal(reasons.length, 0, '单次卡住先重试，不重启');
+  await withCollector([stuck], () => svc.triggerScan('manual', { force: true }));
+  assert.equal(reasons.length, 1, '连续两轮卡住说明运行时坏了，要通知重启');
+  assert.match(reasons[0]!, /卡在文件系统/);
   await svc.close();
 });
